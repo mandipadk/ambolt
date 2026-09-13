@@ -56,6 +56,56 @@
     if (chosen) show(chosen);
   });
 
+  // The front page: the bar takes a hairline once the page has scrolled,
+  // the terminal replays its transcript as typing, and the numbers count
+  // up. Each has its resting state on the page already.
+  var topnav = document.getElementById('topnav');
+  if (topnav) {
+    window.addEventListener('scroll', function () { topnav.classList.toggle('scrolled', window.scrollY > 10); }, { passive: true });
+  }
+  var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var term = document.getElementById('term');
+  if (term && !still) {
+    var lines = Array.from(term.children).map(function (span) { return [span.className, span.textContent]; });
+    function render(upto, partial) {
+      var out = '';
+      for (var i = 0; i < upto; i++) { out += '<span class="' + lines[i][0] + '"></span>'; }
+      term.innerHTML = out + '<span class="cursor"></span>';
+      for (var j = 0; j < upto; j++) { term.children[j].textContent = lines[j][1]; }
+      if (partial !== undefined) {
+        var typed = document.createElement('span');
+        typed.className = lines[upto][0];
+        typed.textContent = lines[upto][1].slice(0, partial);
+        term.insertBefore(typed, term.lastChild);
+      }
+    }
+    var li = 0, ch = 0;
+    function tick() {
+      if (li >= lines.length) { setTimeout(function () { li = 0; ch = 0; tick(); }, 4000); return; }
+      var line = lines[li];
+      if (line[0] === 'c') {
+        ch++; render(li, ch);
+        if (ch >= line[1].length) { li++; ch = 0; setTimeout(tick, 500); } else { setTimeout(tick, 38); }
+      } else {
+        render(li + 1); li++;
+        setTimeout(tick, line[0] === 'p' ? 300 : 700);
+      }
+    }
+    tick();
+  }
+  document.querySelectorAll('[data-count]').forEach(function (el) {
+    var end = +el.getAttribute('data-count'), span = el.querySelector('span');
+    if (!span || still || !(end > 0)) return;
+    var t0 = null;
+    function step(ts) {
+      if (!t0) t0 = ts;
+      var p = Math.min(1, (ts - t0) / 1400);
+      span.textContent = Math.round(end * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+
   // The palette: ⌘K or the search box opens it; typing asks /search.json;
   // Enter opens the first hit, or the search page with the same words.
   var opener = document.getElementById('palette-open');

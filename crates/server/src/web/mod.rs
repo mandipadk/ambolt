@@ -2387,11 +2387,22 @@ async fn root(
         // What an account here gets, in numbers: the forge's defaults,
         // which are what a new person is given.
         let quota = app.with_store(|s| s.default_quota());
+        // The numbers on the front page are the forge's own; one that
+        // cannot be counted is left off the page.
+        let numbers = match app.with_store(|s| s.metrics()) {
+            Ok(m) => views::FrontNumbers {
+                landed: Some(m.landed_changes),
+                repos: Some(m.repos),
+                agents: Some(m.agents),
+            },
+            Err(_) => views::FrontNumbers::default(),
+        };
         return views::welcome(
             theme,
             flash.joined.is_some(),
             flash.error.as_deref(),
             &quota,
+            &numbers,
         )
         .into_response();
     };

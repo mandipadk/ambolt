@@ -608,11 +608,41 @@ fn allowance_words(quota: &ambolt_core::Quota) -> String {
     )
 }
 
+/// What the front page can say in numbers, all counted from this forge
+/// so none of them is a claim. A number that cannot be computed is left
+/// out rather than made up.
+#[derive(Default)]
+pub struct FrontNumbers {
+    pub landed: Option<i64>,
+    pub repos: Option<i64>,
+    pub agents: Option<i64>,
+}
+
+/// One rule row inside the front page's drawn change page. The three
+/// that settle in the story carry a class the stylesheet animates.
+fn story_req(story: Option<&str>, met: bool, rule: &str, evidence: Option<&str>) -> Markup {
+    html! {
+        div class={ "req" @if met { " met" } @else { " unmet" } @if let Some(s) = story { " " (s) } } {
+            span class="st" {
+                @if met { (ic("check", "")) } @else { svg class="ic no" { r#use href="#i-x" {} } svg class="ic ok" { r#use href="#i-check" {} } }
+            }
+            div {
+                b { (rule) }
+                @if let Some(evidence) = evidence { div class="why" { (evidence) } }
+            }
+        }
+    }
+}
+
+/// The front page: what this is, shown rather than described, and a way
+/// to be told when it opens up. Everything animated has a resting state
+/// the page shows without a script.
 pub fn welcome(
     theme: Theme,
     joined: bool,
     error: Option<&str>,
     quota: &ambolt_core::Quota,
+    numbers: &FrontNumbers,
 ) -> Markup {
     layout(
         theme,
@@ -621,103 +651,245 @@ pub fn welcome(
         None,
         "ambolt",
         html! {
-            div class="welcome" {
-                header {
-                    div class="mark" {
-                        (mark())
-                        b { "ambolt" }
+            div class="landing" {
+                header class="topnav" id="topnav" { div class="wrap" {
+                    a class="brand" href="/" { (mark()) "ambolt" }
+                    nav { a href="#how" { "How it works" } a href="#why" { "Why Ambolt" } a href="#git" { "Git" } a href="https://github.com/mandipadk/ambolt" { "Source" } }
+                    div class="right" { a href="/login" { "Sign in" } a class="btn sm" href="#join" { "Join the waitlist" } }
+                } }
+
+                section class="hero" {
+                    div class="wrap" {
+                        span class="eyebrow" { i { (ic("check", "")) } "Alpha · self-hosted and free · hosted by invitation" }
+                        h1 { "Git hosting for code that " em { "agents" } " write." }
+                        p class="lede" { "Every change carries its proof: what was claimed, who re-ran it, who approved it, and why it was allowed to land." }
+                        div class="cta" { a class="btn" href="#join" { "Join the waitlist" } a class="btn2" href="#git" { (ic("terminal", "")) "Run it yourself" } }
+                        p class="fine" { "Ordinary git on the wire. One binary. AGPL-3.0." }
                     }
-                    a class="quiet" href="/login" { "Sign in" }
+                    div class="frame" { div class="screen" { div class="ui story" {
+                        aside class="sb" {
+                            div class="org" { i { (mark()) } "Ambolt" }
+                            a href="#" { (ic("home", "")) "Home" }
+                            a href="#" { (ic("inbox", "")) "Inbox" span class="badge" { "5" } }
+                            a href="#" { (ic("tasks", "")) "Tasks" }
+                            a href="#" { (ic("agents", "")) "Agents" }
+                            h5 { "Repositories" }
+                            a class="on" href="#" { (ic("repo", "")) "ambolt / ambolt" }
+                            a href="#" { (ic("repo", "")) "ambolt / console" }
+                            h5 { "Working" }
+                            div class="who" { (avatar("quill", "Quill", true, true)) "Quill · web/mod.rs" }
+                            div class="who" { (avatar("scout", "Scout", true, true)) "Scout · web/" }
+                        }
+                        div class="main" {
+                            div class="head" { span { "ambolt / ambolt" } span { "/" } span { "Changes" } span { "/" } b { "#2" } span class="btn land" { "Land on main" } }
+                            div class="cols" {
+                                div {
+                                    h4 { "Bound the blame page by file size" }
+                                    div class="meta" { span class="chip acc" { "Open" } span class="chip" { "2 attempts" } (avatar("quill", "Quill", true, false)) span { "Quill · opened 2 h ago · into main" } }
+                                    div class="diff" {
+                                        header { (ic("file", "sm")) code { "crates/server/src/web/diff.rs" } span class="pm" { span class="plus" { "+3" } " " span class="minus" { "−0" } } }
+                                        div class="hunk" {
+                                            div class="ln ctx" { span class="no" { "150" } span class="no" { "150" } span class="sign" {} code class="cd" { "    }" } }
+                                            div class="ln ctx" { span class="no" { "151" } span class="no" { "151" } span class="sign" {} code class="cd" { "}" } }
+                                            div class="ln add" { span class="no" {} span class="no" { "152" } span class="sign" { "+" } code class="cd" {} }
+                                            div class="ln add" { span class="no" {} span class="no" { "153" } span class="sign" { "+" } code class="cd" { span class="hl-comment" { "/// Files past this many bytes are cut with a note at the top." } } }
+                                            div class="ln add" { span class="no" {} span class="no" { "154" } span class="sign" { "+" } code class="cd" { span class="hl-keyword" { "pub const" } " BLAME_LIMIT: " span class="hl-keyword" { "usize" } " = 2 << 20;" } }
+                                        }
+                                        div class="thread" {
+                                            div class="h" { (avatar("ada", "Ada", false, false)) b { "Ada" } span class="sec2" { "raised a concern on revision 1" } span class="when" { "2 h ago" } }
+                                            p class="body" { "Where is the note rendered? The constant is here but nothing reads it yet." }
+                                            div class="reply" { (avatar("scout", "Scout", true, false)) span { b { "Scout" } p { "Revision 2 renders it at the top of the file view." } } }
+                                        }
+                                    }
+                                }
+                                div {
+                                    div class="panel readiness" {
+                                        header class="ttl" { h2 class="title-not" { "Not ready to land" } h2 class="title-ready" { "Ready to land" } span class="n" { "7 rules" } }
+                                        div class="pad" {
+                                            div class="progress" { i class="on" {} i class="on" {} i class="on" {} i class="on" {} i class="bad p1" {} i class="bad p2" {} i class="bad p3" {} }
+                                            div class="reqs" {
+                                                (story_req(Some("s1"), false, "Someone other than the author approves it", Some("No approval yet")))
+                                                (story_req(Some("s2"), false, "Tests pass on revision 2", Some("No claim on revision 2 yet")))
+                                                (story_req(Some("s3"), false, "Every concern is resolved", Some("Ada's concern on line 152 is open")))
+                                                (story_req(None, true, "Runner agrees with every claim", None))
+                                                (story_req(None, true, "Nobody has blocked it", None))
+                                                (story_req(None, true, "One attempt is chosen", None))
+                                            }
+                                            span class="btn wide land" { "Land on main" }
+                                        }
+                                    }
+                                    div class="panel" {
+                                        header { h2 { "Claims" } span class="n" { "revision 2" } }
+                                        div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Tests pass" } span class="sec3" { "Scout" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub good" { (ic("rerun", "sm")) "Runner re-ran it · 61 passed" } } }
+                                    }
+                                }
+                            }
+                        }
+                    } } }
                 }
 
-                section class="lede" {
-                    h1 { "A git forge that records how software came to exist." }
-                    p {
-                        "Not who typed which line — what was claimed about the code, who "
-                        "re-ran those claims, who judged it, and why anything was allowed "
-                        "to land. When most of the work arrives from agents, the diff stops "
-                        "being the thing worth reading and the evidence starts."
+                section class="works" { div class="wrap" {
+                    p { "Works with what you already use" }
+                    div class="row" {
+                        span { (ic("branch", "")) "Any git client" }
+                        span { (ic("agents", "")) "Claude Code" }
+                        span { (ic("agents", "")) "Cursor" }
+                        span { (ic("globe", "")) "Anything that speaks MCP" }
+                        span { (ic("rerun", "")) "Your CI as a runner" }
                     }
+                } }
 
-                    @if joined {
-                        p class="joined" { "You are on the list. We will be in touch." }
-                    } @else {
-                        form class="join" method="post" action="/waitlist" {
-                            input name="email" type="email" required
-                                  autocomplete="email" placeholder="you@example.com"
-                                  aria-label="Email";
-                            input name="company" type="text" autocomplete="organization"
-                                  placeholder="for my company (optional)"
-                                  aria-label="Company, if this is for one";
-                            button class="btn" type="submit" { "Join the waitlist" }
+                section class="lsec" id="how" { div class="wrap" {
+                    div class="top" { span class="kicker" { i {} "How it works" } h2 { "Push. Prove. Land." } p class="lede" { "Three steps, all recorded. Nothing lands on trust alone." } }
+                    div class="steps" {
+                        div class="step s1" {
+                            div class="ico" { (ic("terminal", "")) }
+                            h3 { "Push" }
+                            p { "A normal git push opens a change." }
+                            div class="mini" { span class="p" { "$" } " " span class="c" { "git push origin HEAD:refs/for/main" } br; span class="p" { "remote:" } " change #2 opened · revision 1" br; span class="p" { "remote:" } " not ready · 3 of 7 rules met" }
                         }
-                        @if let Some(error) = error {
-                            p class="error" { (error) }
+                        div class="step s2" {
+                            div class="ico" { (ic("rerun", "")) }
+                            h3 { "Prove" }
+                            p { "Claims are commands. A runner re-runs them." }
+                            div class="mini" { b { "claim" } " tests pass · Scout" br; span class="p" { "$" } " " span class="c" { "cargo test --workspace" } div class="sub" { span class="a" { i class="spin" {} "Runner re-running…" } span class="b" { (ic("check", "sm")) "Reproduced · 61 passed" } } }
                         }
-                        p class="fineprint" {
-                            "An account here gets " (allowance_words(quota)) ". "
-                            "Name a company and we make it a forge of its own instead, "
-                            "with its people and organisations as owners."
-                        }
-                        p class="fineprint" {
-                            "One address, kept so we can tell you when this opens up. "
-                            "Ask and it is deleted — it is deliberately not written to the "
-                            "log, because a log that cannot forget is the wrong place for a "
-                            "person's details."
+                        div class="step s3" {
+                            div class="ico" { (ic("receipt", "")) }
+                            h3 { "Land" }
+                            p { "The rules decide. The receipt says why." }
+                            div class="mini sealed" { span class="seal" { (ic("check", "")) "Verified" } b { "#2" } " landed on main" br; "judged: revision 2 · Scout" br; "approved: Ada · Runner" br; span class="p" { "signed 9a59 2453 77e7 3fca" } }
                         }
                     }
-                }
+                } }
 
-                section class="what" {
-                    div class="pair" {
-                        h3 { "Claims are contracts, not comments" }
-                        p {
-                            "\"The tests pass\" is recorded with the command that produced it, "
-                            "so somebody else can run it and say whether they saw the same thing. "
-                            "A claim nobody could reproduce blocks the change until it is settled."
+                section class="lsec tight" id="why" { div class="wrap" {
+                    div class="top" { span class="kicker" { i {} "Why Ambolt" } h2 { "Built for the moment most of your code isn't typed by a person." } }
+                    div class="feats" {
+                        div class="feat" {
+                            div class="cap" { h3 { "Rules you can see" } p { "Every repository says what must be true before anything lands. Every change shows how far it is." } }
+                            div class="stage" { div class="panel readiness" {
+                                header { h2 { "Not ready to land" } span class="n" { "4 of 7" } }
+                                div class="pad" {
+                                    div class="progress" { i class="on" {} i class="on" {} i class="on" {} i class="on" {} i class="bad" {} i class="bad" {} i class="bad" {} }
+                                    div class="reqs" {
+                                        (story_req(None, false, "Someone other than the author approves it", Some("No approval yet")))
+                                        (story_req(None, false, "Every concern is resolved", Some("Ada's concern on line 152 is open")))
+                                        (story_req(None, true, "Runner agrees with every claim", None))
+                                        (story_req(None, true, "Nobody has blocked it", None))
+                                    }
+                                }
+                            } }
+                        }
+                        div class="feat flip" {
+                            div class="stage" { div class="panel" {
+                                div class="ev-row" { (avatar("quill", "Quill", true, false)) div { div class="h" { b { "Tests pass" } span class="chip bad" { (ic("alert", "")) "disputed" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub bad" { (ic("rerun", "sm")) "Runner saw 1 failure: blame::cuts_large_files" } } }
+                                div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Tests pass" } span class="chip good" { (ic("check", "")) "reproduced" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub good" { (ic("check", "sm")) "Runner re-ran it · 61 passed" } } }
+                            } }
+                            div class="cap" { h3 { "Claims are commands, not comments" } p { "\"Tests pass\" carries the command that produced it. A runner re-runs it. A dispute blocks the change." } }
+                        }
+                        div class="feat" {
+                            div class="cap" { h3 { "Attention, ranked" } p { "Your time goes where judgment is needed, and a share of unreviewed work is sampled anyway." } }
+                            div class="stage" { div class="panel" {
+                                div class="row need" { span class="chip bad" { "Disputed" } span class="tt" { span class="t" { "Bound the blame page by file size" } span class="s" { "Runner disagreed with Quill · two attempts" } } span class="avs" {} span class="age" { "2 h" } }
+                                div class="row need" { span class="chip" { "Unreviewed" } span class="tt" { span class="t" { "Write the agent quickstart" } span class="s" { "Scout stopped and left a lesson" } } span class="avs" {} span class="age" { "2 h" } }
+                                div class="row need" { span class="chip acc" { "Spot check" } span class="tt" { span class="t" { "Rename the client crate" } span class="s" { "drawn · nobody has looked" } } span class="avs" {} span class="age" { "4 h" } }
+                            } }
+                        }
+                        div class="feat flip" {
+                            div class="stage" { div class="panel" {
+                                div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Scout" } span class="sec3" { "claude-fable-5-1 · yours" } } div class="grants" { span class="chip g1" { "task" } span class="chip g2" { "push" } span class="chip g3" { "review" } span class="chip off" { "merge" } span class="chip off" { "verify" } } div class="sub" { "12 of 12 claims reproduced · 9 changes landed · 90 days" } } }
+                                div class="ev-row" { (avatar("quill", "Quill", true, false)) div { div class="h" { b { "Quill" } span class="sec3" { "gpt-5 · Ada's" } } div class="grants" { span class="chip" { "task" } span class="chip" { "push" } span class="chip off" { "review" } } div class="sub" { span class="bad-t" { "7 of 8" } " claims reproduced · 5 landed" } } }
+                            } }
+                            div class="cap" { h3 { "Agents with permissions" } p { "Grant exactly what a job needs, everywhere or on one repository. Revoke in one click. Every claim goes on the record." } }
+                        }
+                        div class="feat" {
+                            div class="cap" { h3 { "Signed receipts" } p { "Why it landed, attached to the commit, checkable offline, forever." } }
+                            div class="stage" { div class="receipt" { span class="seal" { (ic("check", "")) "Verified" } b { "#1" } " landed on main as 6f1c9a2" br; "judged: revision 1 · Scout" br; "approved: Ada · correctness" br; "reproduced: Runner · 61 passed, 0 failed" br; "rules: 7 of 7 met" br; span class="sec3" { "signed by this forge · key 9a59 2453 77e7 3fca" } } }
+                        }
+                        div class="feat flip cov" {
+                            div class="stage" { div { div class="big" { "34" small { "% verified" } } div class="cbars" { i class="g" {} i class="r" {} } div class="clegend" { span { i class="s-reproduced" {} "reproduced" } span { i class="s-gap" {} "declared gap" } span { i class="s-imported" {} "imported" } } } }
+                            div class="cap" { h3 { "Coverage that climbs" } p { "Lines backed by a re-run claim, counted. Imported history is debt, paid down task by task." } }
                         }
                     }
-                    div class="pair" {
-                        h3 { "Merges explain themselves" }
-                        p {
-                            "Every merge carries the full evaluation that allowed it — which "
-                            "requirements were met, and on what evidence. Months later the "
-                            "question \"why did this land?\" has an answer that does not depend "
-                            "on anyone remembering."
-                        }
-                    }
-                    div class="pair" {
-                        h3 { "Attention is routed, not scrolled" }
-                        p {
-                            "Open work is ranked by what human judgment is actually worth on "
-                            "it — reviewers disagreeing, a disputed claim, code resting on "
-                            "argument alone — and a fixed share of unreviewed work is sampled "
-                            "regardless, so agent output cannot quietly become unread output."
-                        }
-                    }
-                    div class="pair" {
-                        h3 { "Imported history says so" }
-                        p {
-                            "History that predates the forge is recorded as imported, never "
-                            "dressed up as reviewed. The log would rather admit a gap than "
-                            "invent a decision."
-                        }
-                    }
-                }
+                } }
 
-                footer {
-                    p {
-                        "Early software, self-hosted, and currently hosting itself. "
-                        "It speaks ordinary git: clone and push with the client you already have."
+                section class="lsec" id="git" { div class="wrap gitsec" {
+                    div {
+                        span class="kicker" { i {} "Ordinary git" }
+                        h2 { "Nothing new to install for the people." }
+                        div class="pts" {
+                            div { i { "01" } span { b { "Clone and push" } " with the client you already have" } }
+                            div { i { "02" } span { b { "One binary," } " one database file, one directory" } }
+                            div { i { "03" } span { b { "Agents connect over MCP," } " built in" } }
+                            div { i { "04" } span { b { "Private by default." } " Passkeys, tokens, scopes" } }
+                        }
                     }
-                }
+                    div class="bigterm" {
+                        header { i {} i {} i {} }
+                        // The whole transcript is on the page; the script
+                        // replays it as typing, and without one it is read.
+                        pre id="term" {
+                            span class="p" { "$ " } span class="c" { "git push origin HEAD:refs/for/main\n" }
+                            span class="a" { "remote: change #2 opened · revision 1\n" }
+                            span class="a" { "remote: not ready · 3 of 7 rules met\n" }
+                            span class="p" { "$ " } span class="c" { "ambolt claim --change 2 --test \"cargo test --workspace\"\n" }
+                            span class="a" { "claim recorded · Runner will re-run it\n" }
+                            span class="g" { "runner reproduced it · 61 passed · 4 of 7 rules met\n" }
+                            span class="p" { "$ " } span class="c" { "ambolt land 2\n" }
+                            span class="g" { "#2 landed on main · receipt signed 9a59…3fca\n" }
+                        }
+                    }
+                } }
+
+                section class="lsec tight" { div class="wrap" {
+                    div class="nums" {
+                        div class="numt" { div class="v" { "1" } div class="k" { "binary to run a whole forge" } }
+                        @if let Some(landed) = numbers.landed.filter(|n| *n > 0) {
+                            div class="numt" { div class="v" data-count=(landed) { span { (landed) } } div class="k" { "changes landed on this forge, each with a signed receipt" } }
+                        }
+                        @if let Some(repos) = numbers.repos.filter(|n| *n > 0) {
+                            div class="numt" { div class="v" data-count=(repos) { span { (repos) } } div class="k" { @if repos == 1 { "repository hosted here, including this one" } @else { "repositories hosted here, including this one" } } }
+                        }
+                        @if let Some(agents) = numbers.agents.filter(|n| *n > 0) {
+                            div class="numt" { div class="v" data-count=(agents) { span { (agents) } } div class="k" { @if agents == 1 { "agent on the record" } @else { "agents on the record" } } }
+                        }
+                        div class="numt" { div class="v" { "AGPL" } div class="k" { "free to run, change and fork" } }
+                    }
+                } }
+
+                section class="lsec tight" id="join" { div class="wrap" {
+                    div class="cta-block" {
+                        h2 { "Put your code on the anvil." }
+                        p { "Hosted forges open by invitation, in the order people asked." }
+                        @if joined {
+                            p class="joined" { (ic("check", "")) "You are on the list. We will be in touch." }
+                        } @else {
+                            form class="join" method="post" action="/waitlist" {
+                                input name="email" type="email" required autocomplete="email" placeholder="you@example.com" aria-label="Email";
+                                input name="company" type="text" autocomplete="organization" placeholder="for my company (optional)" aria-label="Company, if this is for one";
+                                button class="btn" type="submit" { "Join the waitlist" }
+                            }
+                            @if let Some(error) = error { p class="error" { (error) } }
+                            p class="alt" { "An account here gets " (allowance_words(quota)) ". Name a company and we make it a forge of its own instead, with its people and organisations as owners." }
+                            p class="alt" { "One address, kept so we can tell you when this opens up. Ask and it is deleted: it is deliberately not written to the log, because a log that cannot forget is the wrong place for a person's details." }
+                        }
+                        p class="alt" { "Or run it now: " code { "cargo install --git https://ambolt.sh/git/ambolt/ambolt ambolt" } }
+                    }
+                } }
+
+                footer { div class="wrap" {
+                    a class="brand" href="/" { (mark()) "ambolt" }
+                    a href="https://github.com/mandipadk/ambolt" { "Source" }
+                    a href="/report" { "Report a problem" }
+                    a href="/login" { "Sign in" }
+                    span class="right" { "© 2026 Ambolt · AGPL-3.0 forge · Apache-2.0 client" }
+                } }
             }
         },
     )
 }
 
-/// A page for somebody who is not signed in: the sign-in frame, a
-/// heading, and whatever the moment needs.
 /// A page for somebody who is not signed in: one card on a quiet page,
 /// the mark above it, the title on it.
 fn outside(theme: Theme, title: &str, body: Markup) -> Markup {
@@ -2648,51 +2820,40 @@ pub fn report(
     filed: Option<i64>,
     error: Option<&str>,
 ) -> Markup {
-    layout(
-        theme,
-        viewer,
-        None,
-        None,
-        "Report",
-        html! {
-            div class="welcome report" {
-                h1 { "Say what broke" }
-                p class="lede-small" {
-                    "What you did, what you expected, and what happened instead. "
-                    "The version of this forge is recorded with it. An address is "
-                    "optional; leave one if you want to hear back."
-                }
-                @if let Some(id) = filed {
-                    p class="joined" { "Recorded as report " (id) ". Thank you." }
-                }
-                form class="report" method="post" action="/report" {
-                    label {
-                        span { "What happened" }
-                        textarea name="what" rows="8" required minlength="10"
-                            placeholder="I pushed a change with … and the page said …" {}
-                    }
-                    label {
-                        span { "Where" }
-                        input name="place" type="text" maxlength="300"
-                            placeholder="a page, a command, a change number";
-                    }
-                    label {
-                        span { "How to reach you" }
-                        input name="contact" type="email" autocomplete="email"
-                            placeholder="optional";
-                    }
-                    button class="btn" type="submit" { "Send the report" }
-                    @if let Some(error) = error {
-                        p class="error" { (error) }
-                    }
-                }
-                p class="fineprint" {
-                    "Reports are kept beside the waitlist and not in the log, so one "
-                    "can be removed when you ask."
-                }
+    let body = html! {
+        p class="hint" { "What you did, what you expected, and what happened instead. The version of this forge is recorded with it. An address is optional; leave one if you want to hear back." }
+        @if let Some(id) = filed {
+            div class="notice" { (ic("check", "")) span { "Recorded as report " (id) ". Thank you." } }
+        }
+        @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+        form class="form" method="post" action="/report" {
+            div class="field" {
+                label for="what" { "What happened" }
+                textarea id="what" name="what" rows="7" required minlength="10" placeholder="I pushed a change with … and the page said …" {}
             }
-        },
-    )
+            div class="field" {
+                label for="place" { "Where" }
+                input id="place" name="place" type="text" maxlength="300" placeholder="A page, a command, a change number";
+            }
+            div class="field" {
+                label for="contact" { "How to reach you" }
+                input id="contact" name="contact" type="email" autocomplete="email" placeholder="Optional";
+            }
+            button class="btn wide" type="submit" { "Send the report" }
+        }
+        p class="hint" { "Reports are kept beside the waitlist and not in the log, so one can be removed when you ask." }
+    };
+    match viewer {
+        Some(viewer) => layout(
+            theme,
+            Some(viewer),
+            None,
+            None,
+            "Report",
+            html! { div class="sec top" { div class="panel narrow" { header { (ic("alert", "")) h2 { "Say what broke" } } div class="pad" { (body) } } } },
+        ),
+        None => outside(theme, "Say what broke", body),
+    }
 }
 
 /// What was reported and not yet dealt with, newest first, for whoever
@@ -2703,44 +2864,48 @@ pub fn reports(
     reports: &[ambolt_core::Report],
     error: Option<&str>,
 ) -> Markup {
-    layout(
+    layout_section(
         theme,
-        Some(viewer),
-        None,
-        None,
+        viewer,
+        "reports",
         "Reports",
         html! {
-            div class="sechead" { b { "Reports" } span { (reports.len()) } }
-            @if reports.is_empty() {
-                p class="empty" { "Nothing reported. The form is at " a href="/report" { "/report" } "." }
-            }
-            @for report in reports {
-                article class="reportrow" {
-                    div class="meta" {
-                        b { "#" (report.id) }
-                        " · " (report.filed.get(..16).unwrap_or(&report.filed).replace('T', " "))
-                        " · " (report.version)
-                        @if let Some(place) = &report.place { " · " (place) }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            div class="sec top" {
+                div class="sh" { h2 { "Reports" } span class="n" { (reports.len()) } }
+                div class="panel" {
+                    @if reports.is_empty() {
+                        div class="empty" { b { "Nothing reported." } "The form is at " a href="/report" { "/report" } "." }
                     }
-                    p class="what" { (report.what) }
-                    div class="who" {
-                        @if let Some(contact) = &report.contact {
-                            a href={ "mailto:" (contact) } { (contact) }
-                            @if let Some(by) = &report.by { ", signed in as " b { (by) } }
-                        } @else if let Some(by) = &report.by {
-                            "signed in as " b { (by) }
-                        } @else {
-                            "no address left"
+                    @for report in reports {
+                        div class="row ls" {
+                            span class="chip" { "#" (report.id) }
+                            span class="tt" {
+                                span class="t" {
+                                    (report.filed.get(..16).unwrap_or(&report.filed).replace('T', " ")) " · " (report.version)
+                                    @if let Some(place) = &report.place { " · " (place) }
+                                }
+                                span class="s wrap" { (report.what) }
+                                span class="s" {
+                                    @if let Some(contact) = &report.contact {
+                                        a href={ "mailto:" (contact) } { (contact) }
+                                        @if let Some(by) = &report.by { ", signed in as " b { (by) } }
+                                    } @else if let Some(by) = &report.by {
+                                        "signed in as " b { (by) }
+                                    } @else {
+                                        "no address left"
+                                    }
+                                }
+                            }
+                            span class="acts" {
+                                form method="post" action="/reports" {
+                                    input type="hidden" name="id" value=(report.id);
+                                    button class="ghost sm" type="submit" { "Dismiss" }
+                                }
+                            }
                         }
                     }
-                    form class="line" method="post" action="/reports" {
-                        input type="hidden" name="id" value=(report.id);
-                        button class="btn" type="submit" { "Dismiss" }
-                    }
                 }
-            }
-            @if let Some(error) = error {
-                p class="error" { (error) }
             }
         },
     )
