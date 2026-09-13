@@ -1,0 +1,160 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ifoundations0124",
+      "id": "c-40jq2ah2x4bh0zb95mmxf2ym06",
+      "landed_oid": "b7bf831ec2ffcc63de1ad32aacf8eff4950a381f",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 125,
+      "opened_at": "2026-09-13T16:23:37.43273546Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-1hkpptrvw4e64dfb9xxn7bv4r4",
+      "title": "Serve the fonts and lay the foundations",
+      "updated_at": "2026-09-13T16:24:39.370327288Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-40jq2ah2x4bh0zb95mmxf2ym06",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-4f4y9q3hsyq8v4ckmbntdm8af4",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1135,
+        "summary": "cargo test --workspace: the suite, with the font, policy, theme and token tests, all green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-40jq2ah2x4bh0zb95mmxf2ym06",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-3c7x31fxwtf8sxhktqpxm6ve3y",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1136,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "b7bf831ec2ffcc63de1ad32aacf8eff4950a381f",
+    "landed_at": "2026-09-13T16:24:39.370327288Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-40jq2ah2x4bh0zb95mmxf2ym06",
+      "commit_oid": "b7bf831ec2ffcc63de1ad32aacf8eff4950a381f",
+      "message": "Serve the fonts and lay the foundations\n\nThe pages are set in two faces with one job each: Familjen Grotesk for\nheadings and Instrument Sans, a step heavier than regular, for everything\nread; JetBrains Mono for code. The three files ride in the binary and are\nserved under content-addressed names beside the stylesheet, which names\nthem through placeholders filled at startup, so nothing on a page asks a\nthird party for anything. The content policy admits fonts from this\norigin and nothing else new.\n\nThe stylesheet gets one token set that exists in three states: light on\nthe root, dark under the system preference unless light was chosen, dark\nagain when chosen. A fresh visitor follows the system; the switch cycles\nlight, dark and auto, and choosing auto forgets the choice. The older\nnames the page rules still read are aliases of the new tokens, and a test\nrefuses a token read anywhere that is not declared on the root.\n\nThe primitives every page will be built from are here too, replacing the\nold button, dot, check, empty and once-only rules in place: buttons,\nfields, inputs, checks, segments, chips, panels, rows, notices, an icon\nsprite rendered once per page, and an avatar that gives each person a\nstable hue and each agent a squircle with a live dot.\n\nChange-Id: Ifoundations0124\nTask: t-1hkpptrvw4e64dfb9xxn7bv4r4\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/assets_flow.rs",
+        "crates/cli/tests/suite/style_flow.rs",
+        "crates/cli/tests/suite/web_flow.rs",
+        "crates/server/src/guard.rs",
+        "crates/server/src/web/fonts/OFL-familjen-grotesk.txt",
+        "crates/server/src/web/fonts/OFL-instrument-sans.txt",
+        "crates/server/src/web/fonts/OFL-jetbrains-mono.txt",
+        "crates/server/src/web/fonts/familjen-grotesk.woff2",
+        "crates/server/src/web/fonts/instrument-sans.woff2",
+        "crates/server/src/web/fonts/jetbrains-mono.woff2",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs"
+      ],
+      "session": null
+    },
+    "seq": 1140,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-4f4y9q3hsyq8v4ckmbntdm8af4, cl-3c7x31fxwtf8sxhktqpxm6ve3y",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-4f4y9q3hsyq8v4ckmbntdm8af4",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 152 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 13 path(s) outside docs/, *.md: crates/cli/tests/suite/assets_flow.rs, crates/cli/tests/suite/style_flow.rs, crates/cli/tests/suite/web_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-40jq2ah2x4bh0zb95mmxf2ym06",
+        "claim": "cl-4f4y9q3hsyq8v4ckmbntdm8af4",
+        "command": "cargo test --workspace",
+        "id": "vr-4p22skrwwcyfmjah2qw8sx3yrw",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1137
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-40jq2ah2x4bh0zb95mmxf2ym06",
+        "claim": "cl-3c7x31fxwtf8sxhktqpxm6ve3y",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-04mqa7zg3kghgtah95pfhgqa62",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.66s",
+        "revision": 1,
+        "seq": 1138
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "SKixg8mDG1wNNpe0/CQD0aZ0ldVGY92IdXjrepMklbT7BMHuUUDj/7IGaHi2FBpFNVtKxe+/DBk5HQdvAxMaDg=="
+  }
+}
