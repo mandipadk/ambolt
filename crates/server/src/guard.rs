@@ -20,9 +20,9 @@ use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// The pages serve their own CSS and one small script from the same
-/// origin, and fetch only from it, so the policy can say exactly that.
-const CSP: &str = "default-src 'none'; style-src 'self'; img-src 'self' data:; \
+/// The pages serve their own CSS, fonts and one small script from the
+/// same origin, and fetch only from it, so the policy can say exactly that.
+const CSP: &str = "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' data:; \
                    script-src 'self'; connect-src 'self'; \
                    form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 

@@ -30,31 +30,97 @@ use std::collections::HashMap;
 /// can switch, and the choice rides in a cookie.
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Theme {
+    /// No choice made: the page follows the system's preference.
+    System,
     Dark,
     Light,
 }
 
 impl Theme {
-    pub fn attr(self) -> &'static str {
+    /// The root attribute a chosen theme stamps; none when following the
+    /// system, so the stylesheet's `prefers-color-scheme` rule decides.
+    pub fn attr(self) -> Option<&'static str> {
         match self {
-            Theme::Dark => "dark",
-            Theme::Light => "light",
+            Theme::System => None,
+            Theme::Dark => Some("dark"),
+            Theme::Light => Some("light"),
         }
     }
 
-    fn other(self) -> &'static str {
+    /// The switch cycles system, light, dark, system.
+    fn next(self) -> &'static str {
         match self {
-            Theme::Dark => "light",
+            Theme::System => "light",
             Theme::Light => "dark",
+            Theme::Dark => "system",
         }
     }
 
     fn switch_label(self) -> &'static str {
         match self {
-            Theme::Dark => "Light",
+            Theme::System => "Light",
             Theme::Light => "Dark",
+            Theme::Dark => "Auto",
         }
     }
+}
+
+/// Every icon the pages use, once per page, referenced by `ic`. Adding an
+/// icon is adding a symbol here; there is no icon font and no per-icon
+/// request.
+const SPRITE: &str = r##"<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol><symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 4h16v16H4z" rx="2"/><path d="M4 13h5l2 3h2l2-3h5"/></symbol><symbol id="i-tasks" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12l3 3 5-6"/></symbol><symbol id="i-agents" viewBox="0 0 24 24"><path d="M12 2v3"/><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 13h.01M15 13h.01M9 17h6"/></symbol><symbol id="i-repo" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol><symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol><symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol><symbol id="i-code" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></symbol><symbol id="i-changes" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v7M18 15.5V10a3 3 0 0 0-3-3h-3M13 4l-3 3 3 3"/></symbol><symbol id="i-review" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol><symbol id="i-coverage" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol><symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></symbol><symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol><symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/></symbol><symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol><symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V5a2 2 0 0 1 2-2h7l9 9-9 9z"/><circle cx="8" cy="8" r="1"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol><symbol id="i-branch" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol><symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol><symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M14 9l3 3"/></symbol><symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12h2M18 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></symbol><symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></symbol><symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-11"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></symbol><symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol><symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol><symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0v5l2 3H4l2-3z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol><symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18"/></symbol><symbol id="i-rerun" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol><symbol id="i-message" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.3A8 8 0 1 1 21 12z"/></symbol><symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></symbol><symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol><symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol><symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2M9 12h11M17 9l3 3-3 3"/></symbol><symbol id="i-palette" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2"/><circle cx="12" cy="7" r="1.2"/><circle cx="16" cy="10" r="1.2"/><path d="M12 21a3 3 0 0 0 0-6h-1a1.5 1.5 0 0 1 0-3h1"/></symbol><symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/></symbol><symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></symbol><symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></symbol><symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol></svg>"##;
+
+fn sprite() -> Markup {
+    PreEscaped(SPRITE.to_owned())
+}
+
+/// A line icon from the sprite, sized by class: `ic` alone is 18 px,
+/// `ic sm` 15, `ic lg` 22. The shell is the first page to draw one.
+#[allow(dead_code)]
+pub fn ic(name: &str, size: &str) -> Markup {
+    html! {
+        svg class={ "ic" @if !size.is_empty() { " " (size) } } {
+            use href={ "#i-" (name) } {}
+        }
+    }
+}
+
+/// Who did a thing, at a glance: initials in a circle for a person, in a
+/// squircle with a live dot for an agent. The hue comes from the id so it
+/// is the same on every page and every day.
+pub fn avatar(id: &str, display: &str, agent: bool, live: bool) -> Markup {
+    let hue = avatar_hue(id);
+    html! {
+        span class={ "av" @if agent { " agent" @if live { " live" } } @else { " h" (hue) } }
+             title=(display) {
+            (initials(display))
+        }
+    }
+}
+
+/// One of five hues, chosen by the id's bytes.
+fn avatar_hue(id: &str) -> u8 {
+    let sum: u32 = id
+        .bytes()
+        .map(u32::from)
+        .fold(7, |acc, b| acc.wrapping_mul(31).wrapping_add(b));
+    (sum % 5) as u8 + 1
+}
+
+/// The first letter of the first two words, or the first two letters of
+/// a single word, upper-cased.
+fn initials(display: &str) -> String {
+    let words: Vec<&str> = display.split_whitespace().collect();
+    let picked: String = match words.as_slice() {
+        [] => "?".to_owned(),
+        [one] => one.chars().take(2).collect(),
+        [first, second, ..] => first
+            .chars()
+            .take(1)
+            .chain(second.chars().take(1))
+            .collect(),
+    };
+    picked.to_uppercase()
 }
 
 /// One line of a file, with everything the graph knows about it.
@@ -203,7 +269,7 @@ fn frame_in(
 ) -> Markup {
     html! {
         (DOCTYPE)
-        html lang="en" data-theme=(theme.attr()) {
+        html lang="en" data-theme=[theme.attr()] {
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
@@ -212,6 +278,7 @@ fn frame_in(
                 script defer src=(super::script_href()) {}
             }
             body {
+                (sprite())
                 @match who {
                     Some(who) => {
                         @let viewer = who.viewer();
@@ -265,7 +332,7 @@ fn topbar(theme: Theme, viewer: Option<&Viewer>) -> Markup {
                 @if viewer.is_some() { a class="quiet" href="/new" { "New" } }
                 a class="quiet menu" href="#nav" { "Menu" }
                 form method="post" action="/theme" {
-                    input type="hidden" name="to" value=(theme.other());
+                    input type="hidden" name="to" value=(theme.next());
                     button class="quiet" type="submit" { (theme.switch_label()) }
                 }
                 @match viewer {
@@ -273,9 +340,7 @@ fn topbar(theme: Theme, viewer: Option<&Viewer>) -> Markup {
                         form method="post" action="/logout" {
                             button class="quiet danger" type="submit" { "Sign out" }
                         }
-                        span class="avatar" title=(viewer.0.as_str()) {
-                            (viewer.0.as_str().chars().next().unwrap_or('?').to_uppercase())
-                        }
+                        (avatar(viewer.0.as_str(), viewer.0.as_str(), false, false))
                     }
                     None => { a class="quiet" href="/login" { "Sign in" } }
                 }
@@ -1063,7 +1128,7 @@ pub fn inbox(theme: Theme, viewer: &Viewer, notices: &[Notice], unread: usize) -
                     div class="day" { (day_label(&this_day)) }
                     ({ day = this_day; "" })
                 }
-                a class={ "trow notice" @if notice.read { " read" } } href=(notice_href(notice)) {
+                a class={ "trow inboxrow" @if notice.read { " read" } } href=(notice_href(notice)) {
                     span class="dot" {}
                     span class="what" { (notice.what) }
                     span class="where" {
@@ -4618,4 +4683,56 @@ pub fn record_words(record: &ambolt_core::Record) -> String {
     }
     words.push_str(&format!(" · {} days", record.window_days));
     words
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initials_take_two_words_or_two_letters() {
+        assert_eq!(initials("Mandip Adhikari"), "MA");
+        assert_eq!(initials("scout"), "SC");
+        assert_eq!(initials("Ada Byron Lovelace"), "AB");
+        assert_eq!(initials(""), "?");
+    }
+
+    #[test]
+    fn a_hue_is_stable_and_one_of_five() {
+        for id in ["mandip", "ada", "scout", "quill", "runner", "x"] {
+            let hue = avatar_hue(id);
+            assert!((1..=5).contains(&hue), "{id}: {hue}");
+            assert_eq!(hue, avatar_hue(id));
+        }
+        assert_ne!(avatar_hue("ada"), avatar_hue("adb"));
+    }
+
+    #[test]
+    fn an_agent_avatar_is_a_squircle_and_a_person_a_circle() {
+        let agent = avatar("scout", "Scout", true, true).into_string();
+        assert!(agent.contains("av agent live"), "{agent}");
+        assert!(agent.contains(">SC<"), "{agent}");
+        let person = avatar("mandip", "Mandip Adhikari", false, false).into_string();
+        assert!(person.contains("av h"), "{person}");
+        assert!(!person.contains("agent"), "{person}");
+    }
+
+    #[test]
+    fn the_theme_cycles_and_only_a_choice_stamps_the_root() {
+        assert_eq!(Theme::System.attr(), None);
+        assert_eq!(Theme::Light.attr(), Some("light"));
+        assert_eq!(Theme::System.next(), "light");
+        assert_eq!(Theme::Light.next(), "dark");
+        assert_eq!(Theme::Dark.next(), "system");
+    }
+
+    #[test]
+    fn every_icon_the_pages_ask_for_is_in_the_sprite() {
+        for name in [
+            "home", "inbox", "tasks", "agents", "repo", "check", "x", "alert",
+        ] {
+            assert!(SPRITE.contains(&format!("id=\"i-{name}\"")), "{name}");
+        }
+        assert!(ic("check", "sm").into_string().contains("#i-check"));
+    }
 }

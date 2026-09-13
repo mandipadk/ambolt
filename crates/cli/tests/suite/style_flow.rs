@@ -75,6 +75,31 @@ fn every_selector_is_declared_once() {
     );
 }
 
+/// Every `var(--x)` the stylesheet reads is declared on `:root`, so no
+/// token exists only inside a media or theme block and silently falls
+/// back to nothing in another state.
+#[test]
+fn every_token_read_is_declared_on_root() {
+    let root_start = STYLE.find(":root {").expect("a :root block");
+    let root_end = STYLE[root_start..].find('}').unwrap() + root_start;
+    let root = &STYLE[root_start..root_end];
+    let mut missing = std::collections::BTreeSet::new();
+    for piece in STYLE.split("var(--").skip(1) {
+        let name: String = piece
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-')
+            .collect();
+        if !root.contains(&format!("--{name}:")) {
+            missing.insert(name);
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "read but not declared on :root: {}",
+        missing.into_iter().collect::<Vec<_>>().join(", ")
+    );
+}
+
 #[test]
 fn the_parser_sees_scopes_and_lists() {
     let css = "/* a { */ .a, .b { color: red } @media (x) { .a { color: blue } } .c{}";

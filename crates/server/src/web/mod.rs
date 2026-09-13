@@ -26,7 +26,52 @@ use axum::routing::{get, post};
 use serde::Deserialize;
 use std::collections::HashMap;
 
-const STYLE: &str = include_str!("style.css");
+const STYLE_SRC: &str = include_str!("style.css");
+
+/// The faces the pages are set in, carried by the binary and served under
+/// content-addressed names like the stylesheet, so a page never asks a
+/// third party for anything. Each is a latin-subset variable font under
+/// the SIL Open Font License; the licence text sits beside each file.
+const FONTS: [(&str, &[u8]); 3] = [
+    (
+        "familjen-grotesk",
+        include_bytes!("fonts/familjen-grotesk.woff2"),
+    ),
+    (
+        "instrument-sans",
+        include_bytes!("fonts/instrument-sans.woff2"),
+    ),
+    (
+        "jetbrains-mono",
+        include_bytes!("fonts/jetbrains-mono.woff2"),
+    ),
+];
+
+fn short_hash(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(bytes);
+    digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
+}
+
+/// Each font's public address: its slug and the hash of its bytes.
+static FONT_HREFS: std::sync::LazyLock<Vec<(&'static str, String)>> =
+    std::sync::LazyLock::new(|| {
+        FONTS
+            .iter()
+            .map(|(slug, bytes)| (*slug, format!("/assets/{slug}.{}.woff2", short_hash(bytes))))
+            .collect()
+    });
+
+/// The stylesheet as served: the source with each `{{font:slug}}` filled in
+/// with that font's hashed address, so the sheet and the fonts it names
+/// are cached together and change together.
+static STYLE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    let mut css = STYLE_SRC.to_owned();
+    for (slug, href) in FONT_HREFS.iter() {
+        css = css.replace(&format!("{{{{font:{slug}}}}}"), href);
+    }
+    css
+});
 /// The largest file rendered in a browser. Comfortably larger than any
 /// source file, far smaller than what would hurt the process: the bytes
 /// are held once as read, again as a string, and again escaped into
@@ -156,17 +201,11 @@ pub fn routes() -> Router<AppState> {
 /// browsers and by whatever sits in front of the forge. Without this a
 /// returning visitor gets last week's layout until some cache expires,
 /// and nobody can tell from the outside why the page looks wrong.
-static STYLE_HASH: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-    use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(STYLE.as_bytes());
-    digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
-});
+static STYLE_HASH: std::sync::LazyLock<String> =
+    std::sync::LazyLock::new(|| short_hash(STYLE.as_bytes()));
 
-static SCRIPT_HASH: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
-    use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(crate::passkeys::SCRIPT.as_bytes());
-    digest.iter().take(6).map(|b| format!("{b:02x}")).collect()
-});
+static SCRIPT_HASH: std::sync::LazyLock<String> =
+    std::sync::LazyLock::new(|| short_hash(crate::passkeys::SCRIPT.as_bytes()));
 
 pub(crate) fn script_href() -> String {
     format!("/assets/passkeys.{}.js", *SCRIPT_HASH)
@@ -176,26 +215,33 @@ pub(crate) fn stylesheet_href() -> String {
     format!("/assets/app.{}.css", *STYLE_HASH)
 }
 
-/// Serve the stylesheet under its hashed name, immutable, or under its
-/// bare name for anything that still asks that way, uncached.
+/// Serve the stylesheet, the script and the fonts under their hashed
+/// names, immutable, or the stylesheet under its bare name for anything
+/// that still asks that way, uncached.
 async fn asset(Path(file): Path<String>) -> Response {
-    let (body, kind, cache) = if file == format!("app.{}.css", *STYLE_HASH) {
-        (
-            STYLE,
-            "text/css; charset=utf-8",
-            "public, max-age=31536000, immutable",
-        )
-    } else if file == "app.css" {
-        (STYLE, "text/css; charset=utf-8", "no-cache")
-    } else if file == format!("passkeys.{}.js", *SCRIPT_HASH) {
-        (
+    const FOREVER: &str = "public, max-age=31536000, immutable";
+    if file == format!("app.{}.css", *STYLE_HASH) {
+        return served(STYLE.as_str(), "text/css; charset=utf-8", FOREVER);
+    }
+    if file == "app.css" {
+        return served(STYLE.as_str(), "text/css; charset=utf-8", "no-cache");
+    }
+    if file == format!("passkeys.{}.js", *SCRIPT_HASH) {
+        return served(
             crate::passkeys::SCRIPT,
             "text/javascript; charset=utf-8",
-            "public, max-age=31536000, immutable",
-        )
-    } else {
-        return not_found();
-    };
+            FOREVER,
+        );
+    }
+    for ((_, bytes), (_, href)) in FONTS.iter().zip(FONT_HREFS.iter()) {
+        if href.strip_prefix("/assets/") == Some(file.as_str()) {
+            return served(*bytes, "font/woff2", FOREVER);
+        }
+    }
+    not_found()
+}
+
+fn served(body: impl IntoResponse, kind: &'static str, cache: &'static str) -> Response {
     (
         [(header::CONTENT_TYPE, kind), (header::CACHE_CONTROL, cache)],
         body,
@@ -1814,7 +1860,8 @@ impl<S: Send + Sync> FromRequestParts<S> for Palette {
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let theme = match cookie(&parts.headers, THEME_COOKIE).as_deref() {
             Some("light") => views::Theme::Light,
-            _ => views::Theme::Dark,
+            Some("dark") => views::Theme::Dark,
+            _ => views::Theme::System,
         };
         Ok(Palette(theme))
     }
@@ -1828,8 +1875,14 @@ struct ThemeForm {
 }
 
 async fn set_theme(headers: HeaderMap, Form(form): Form<ThemeForm>) -> Response {
-    let value = if form.to == "light" { "light" } else { "dark" };
-    let cookie = format!("{THEME_COOKIE}={value}; Path=/; SameSite=Lax; Max-Age=31536000");
+    // Light and dark are remembered for a year; anything else means
+    // "follow the system", which is the absence of a choice.
+    let cookie = match form.to.as_str() {
+        value @ ("light" | "dark") => {
+            format!("{THEME_COOKIE}={value}; Path=/; SameSite=Lax; Max-Age=31536000")
+        }
+        _ => format!("{THEME_COOKIE}=; Path=/; SameSite=Lax; Max-Age=0"),
+    };
     // Return where they were: the referer, or the repo root.
     let back = if form.back.starts_with('/')
         && !form.back.starts_with("//")
@@ -2839,7 +2892,7 @@ pub(crate) fn oops(err: impl std::fmt::Display) -> Response {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         [(FALLBACK, "error")],
-        views::error_page(views::Theme::Dark),
+        views::error_page(views::Theme::System),
     )
         .into_response()
 }
@@ -3033,7 +3086,7 @@ pub(crate) fn not_found() -> Response {
     (
         StatusCode::NOT_FOUND,
         [(FALLBACK, "not-found")],
-        views::not_found_page(views::Theme::Dark),
+        views::not_found_page(views::Theme::System),
     )
         .into_response()
 }
@@ -3049,7 +3102,8 @@ pub(crate) async fn themed_fallbacks(
 ) -> Response {
     let theme = match cookie(request.headers(), THEME_COOKIE).as_deref() {
         Some("light") => views::Theme::Light,
-        _ => views::Theme::Dark,
+        Some("dark") => views::Theme::Dark,
+        _ => views::Theme::System,
     };
     let mut response = next.run(request).await;
     let Some(kind) = response

@@ -246,11 +246,14 @@ async fn web_ui_full_journey() {
     let (status, _, _) = ada.get("/nosuchrepo");
     assert_eq!(status, 404);
 
-    // Dark is what a fresh viewer gets; the toggle switches and sticks.
+    // A fresh viewer follows the system: nothing is stamped on the root,
+    // and the stylesheet's own preference query decides. The toggle
+    // switches and sticks.
     let (_, body, _) = ada.get("/ada/demo");
     assert!(
-        body.contains(r#"data-theme="dark""#),
-        "dark must be the default palette"
+        !body.contains("data-theme="),
+        "no choice made, so no palette stamped: {}",
+        &body[..200]
     );
     assert!(
         body.contains(">Light<"),
@@ -265,6 +268,18 @@ async fn web_ui_full_journey() {
     );
     assert!(body.contains(">Dark<"));
     ada.post_form("/theme", &[("to", "dark"), ("back", "/ada/demo")]);
+    let (_, body, _) = ada.get("/ada/demo");
+    assert!(body.contains(r#"data-theme="dark""#));
+    assert!(
+        body.contains(">Auto<"),
+        "dark offers the way back to the system"
+    );
+    ada.post_form("/theme", &[("to", "system"), ("back", "/ada/demo")]);
+    let (_, body, _) = ada.get("/ada/demo");
+    assert!(
+        !body.contains("data-theme="),
+        "choosing auto forgets the choice"
+    );
 
     // The file view numbers its lines and names the change that landed it.
     let (_, body, _) = ada.get("/ada/demo/tree/greeting.txt");
