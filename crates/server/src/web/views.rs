@@ -517,15 +517,6 @@ fn tab_to(href: &str, icon: &str, label: &str, count: usize, active: bool) -> Ma
     }
 }
 
-fn state_dot(state: ChangeState) -> Markup {
-    let class = match state {
-        ChangeState::Open => "dot idle",
-        ChangeState::Merged => "dot ok",
-        ChangeState::Abandoned => "dot bad",
-    };
-    html! { span class=(class) {} }
-}
-
 fn short(oid: &str) -> &str {
     &oid[..oid.len().min(7)]
 }
@@ -1277,6 +1268,13 @@ pub fn search(
         };
         format!("/search?q={}", super::urlencode(q.trim()))
     };
+    let kind_words = |k: HitKind| match k {
+        HitKind::Change => "Changes",
+        HitKind::Repository => "Repositories",
+        HitKind::Person => "People",
+        HitKind::Task => "Tasks",
+        HitKind::Lesson => "Lessons",
+    };
     layout(
         theme,
         Some(viewer),
@@ -1284,41 +1282,44 @@ pub fn search(
         None,
         "Search",
         html! {
-            div class="sechead" { b { "Search" } span { @if !query.trim().is_empty() { (hits.len()) } } }
-            form class="searchbig" method="get" action="/search" {
-                input name="q" type="search" value=(query) autofocus
-                      placeholder="Repositories, changes, people — or #12, repo:demo, by:scout" aria-label="Search";
-            }
-            @if !query.trim().is_empty() {
-                div class="tabs filters" {
-                    a class={ "tab" @if kind.is_none() { " active" } } href=(with(None)) { "All" }
-                    @for k in [HitKind::Change, HitKind::Repository, HitKind::Person, HitKind::Task, HitKind::Lesson] {
-                        a class={ "tab" @if kind == Some(k) { " active" } } href=(with(Some(k))) {
-                            (match k {
-                                HitKind::Change => "Changes",
-                                HitKind::Repository => "Repositories",
-                                HitKind::Person => "People",
-                                HitKind::Task => "Tasks",
-                                HitKind::Lesson => "Lessons",
-                            })
+            div class="sec top" {
+                form class="search-in big" method="get" action="/search" {
+                    (ic("search", ""))
+                    input class="input" name="q" type="search" value=(query) autofocus
+                          placeholder="Repositories, changes, people, or #12, repo:demo, by:scout" aria-label="Search";
+                    button class="btn2" type="submit" { "Search" }
+                }
+                @if !query.trim().is_empty() {
+                    div class="filters" {
+                        a class=[kind.is_none().then_some("on")] href=(with(None)) { "All" }
+                        @for k in [HitKind::Change, HitKind::Repository, HitKind::Person, HitKind::Task, HitKind::Lesson] {
+                            a class=[(kind == Some(k)).then_some("on")] href=(with(Some(k))) { (kind_words(k)) }
                         }
+                        span class="gap" {}
+                        span class="sec3" { (hits.len()) @if hits.len() == 1 { " result" } @else { " results" } }
                     }
                 }
-            }
-            @if query.trim().is_empty() {
-                p class="empty" {
-                    "Type to search repositories, changes, tasks, lessons and people. "
-                    "Narrow with " code { "repo:" } ", " code { "state:open" } ", " code { "by:" } " or " code { "kind:" } "; "
-                    code { "#12" } " opens a change by number."
-                }
-            } @else if hits.is_empty() {
-                p class="empty" { "Nothing matches " b { (query) } "." }
-            }
-            @for hit in hits {
-                a class="trow hits" href=(hit.href) {
-                    span class="sec3" { (hit.kind) }
-                    span class="strong" { (hit.label) }
-                    span class="sec3" { (hit.detail) }
+                div class="panel" {
+                    @if query.trim().is_empty() {
+                        div class="empty" {
+                            b { "Type to search repositories, changes, tasks, lessons and people." }
+                            "Narrow with " code { "repo:" } ", " code { "state:open" } ", " code { "by:" } " or " code { "kind:" } "; "
+                            code { "#12" } " opens a change by number."
+                        }
+                    } @else if hits.is_empty() {
+                        div class="empty" { "Nothing matches " b { (query) } "." }
+                    }
+                    @for hit in hits {
+                        a class="row need" href=(hit.href) {
+                            span class="chip" { (hit.kind) }
+                            span class="tt" {
+                                span class="t" { (hit.label) }
+                                span class="s" { (hit.detail) }
+                            }
+                            span class="avs" {}
+                            span class="age" { (ic("chev", "sm")) }
+                        }
+                    }
                 }
             }
         },
@@ -1396,16 +1397,23 @@ pub fn you(theme: Theme, viewer: &Viewer, mine: &[(String, Change)]) -> Markup {
         "you",
         "Your changes",
         html! {
-            div class="sechead" { b { "Your open changes" } span { (mine.len()) } }
-            @if mine.is_empty() {
-                p class="empty" { "Nothing of yours is open." }
-            }
-            @for (repo, change) in mine {
-                a class="trow" href={ "/" (repo) "/changes/" (change.number) }
-                  class="mine" {
-                    span class="sec3" { (repo) " #" (change.number) }
-                    span class="strong" { (change.title) }
-                    span class="sec3" { "revision " (change.latest_revision) }
+            div class="sec top" {
+                div class="sh" { h2 { "Your open changes" } span class="n" { (mine.len()) } }
+                div class="panel" {
+                    @if mine.is_empty() {
+                        div class="empty" { b { "Nothing of yours is open." } "Push to a repository's " code { "refs/for/main" } " and the change appears here." }
+                    }
+                    @for (repo, change) in mine {
+                        a class="row need" href={ "/" (repo) "/changes/" (change.number) } {
+                            span class="chip acc" { (ic("changes", "")) "Revision " (change.latest_revision) }
+                            span class="tt" {
+                                span class="t" { (change.title) }
+                                span class="s" { (repo) " #" (change.number) " · into " (change.target) }
+                            }
+                            span class="avs" {}
+                            span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
+                        }
+                    }
                 }
             }
         },
@@ -2233,16 +2241,20 @@ pub fn transfer_offer(theme: Theme, viewer: &Viewer, repo: &Repo, error: Option<
         None,
         "Ownership offered",
         html! {
-            div class="narrowcol" {
-                div class="sechead" { b { "Ownership offered" } span { (repo.name) } }
-                @if let Some(error) = error { p class="error" { (error) } }
-                p class="note" {
-                    b { (repo.owner.as_str()) } " has offered you " b { (repo.name) } ". "
-                    "If you accept, you hold every capability on it from then on, and they hold none unless you grant it."
-                }
-                form class="inline" method="post" action={ "/" (repo.name) "/transfer" } {
-                    button class="btn" type="submit" name="action" value="accept" { "Accept" }
-                    button class="vbtn" type="submit" name="action" value="decline" { "Decline" }
+            div class="sec top" {
+                div class="panel narrow" {
+                    header { (ic("repo", "")) h2 { "Ownership offered" } span class="n" { (repo.name) } }
+                    div class="pad" {
+                        @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+                        p class="what" {
+                            b { (repo.owner.as_str()) } " has offered you " b { (repo.name) } ". "
+                            "If you accept, you hold every capability on it from then on, and they hold none unless you grant it."
+                        }
+                        form class="acts" method="post" action={ "/" (repo.name) "/transfer" } {
+                            button class="btn" type="submit" name="action" value="accept" { "Accept" }
+                            button class="btn2" type="submit" name="action" value="decline" { "Decline" }
+                        }
+                    }
                 }
             }
         },
@@ -3722,8 +3734,8 @@ fn hunk_range(hunk: &super::diff::Hunk) -> String {
 }
 
 /// The list of a repository's changes: newest first, filtered by state,
-/// a page at a time, each row saying when it was opened and when it last
-/// moved.
+/// a page at a time, each row saying who opened it, when, and when it
+/// was last touched.
 pub fn changes(
     theme: Theme,
     who: Reading<'_>,
@@ -3731,10 +3743,16 @@ pub fn changes(
     changes: &[Change],
     filter: Option<ChangeState>,
     older: Option<i64>,
+    people: &People,
 ) -> Markup {
     let filter_href = |state: Option<ChangeState>| match state {
         Some(state) => format!("/{repo}/changes?state={}", state.as_str()),
         None => format!("/{repo}/changes"),
+    };
+    let state_words = |state: ChangeState| match state {
+        ChangeState::Open => "Open",
+        ChangeState::Merged => "Landed",
+        ChangeState::Abandoned => "Abandoned",
     };
     layout_reading(
         theme,
@@ -3743,38 +3761,45 @@ pub fn changes(
         Some(Tab::Changes),
         "Changes",
         html! {
-            div class="sechead" {
-                b { "Changes" }
-                span { (changes.len()) @if older.is_some() { " shown" } }
-            }
-            div class="tabs filters" {
-                a class={ "tab" @if filter.is_none() { " active" } } href=(filter_href(None)) { "All" }
-                @for state in [ChangeState::Open, ChangeState::Merged, ChangeState::Abandoned] {
-                    a class={ "tab" @if filter == Some(state) { " active" } } href=(filter_href(Some(state))) { (state.as_str()) }
-                }
-            }
-            @if changes.is_empty() {
-                @match filter {
-                    None => { p class="empty" { "No changes yet. Push to " code { "refs/for/main" } " to open one." } }
-                    Some(state) => { p class="empty" { "No " (state.as_str()) " changes." } }
-                }
-            }
-            div class="ctable" {
-                @for change in changes {
-                    a class="trow changes" href={ "/" (repo) "/changes/" (change.number) } {
-                        (state_dot(change.state))
-                        span class="sec3" { "#" (change.number) }
-                        span class="strong" { (change.title) }
-                        span class="sec2" { (change.owner) }
-                        span class="sec3" title=(change.opened_at) { "opened " (short_day(&change.opened_at)) }
-                        span class="sec3" title=(change.updated_at) { "moved " (short_day(&change.updated_at)) " " (clock_of(&change.updated_at)) }
-                        span class="sec3 r" { "r" (change.latest_revision) }
+            div class="sec top" {
+                div class="sh" { h2 { "Changes" } span class="n" { (changes.len()) @if older.is_some() { " shown" } } }
+                div class="filters" {
+                    a class=[filter.is_none().then_some("on")] href=(filter_href(None)) { "All" }
+                    @for state in [ChangeState::Open, ChangeState::Merged, ChangeState::Abandoned] {
+                        a class=[(filter == Some(state)).then_some("on")] href=(filter_href(Some(state))) { (state_words(state)) }
                     }
                 }
-            }
-            @if let Some(before) = older {
-                p class="hint pad" {
-                    a class="quiet" href={ (filter_href(filter)) @if filter.is_some() { "&" } @else { "?" } "before=" (before) } { "Older changes" }
+                div class="panel" {
+                    @if changes.is_empty() {
+                        @match filter {
+                            None => { div class="empty" { b { "No changes yet." } "Push to " code { "refs/for/main" } " to open one." } }
+                            Some(state) => { div class="empty" { "No " (state_words(state).to_lowercase()) " changes." } }
+                        }
+                    }
+                    @for change in changes {
+                        @let (display, agent) = people.name(&change.owner);
+                        a class="row need" href={ "/" (repo) "/changes/" (change.number) } {
+                            @match change.state {
+                                ChangeState::Open => { span class="chip acc" { (ic("changes", "")) "Open" } }
+                                ChangeState::Merged => { span class="chip good" { (ic("check", "")) "Landed" } }
+                                ChangeState::Abandoned => { span class="chip" { (ic("x", "")) "Abandoned" } }
+                            }
+                            span class="tt" {
+                                span class="t" { "#" (change.number) " " (change.title) }
+                                span class="s" {
+                                    (display) " · revision " (change.latest_revision)
+                                    " · opened " span title=(change.opened_at) { (short_day(&change.opened_at)) }
+                                }
+                            }
+                            span class="avs" { (avatar(change.owner.as_str(), display, agent, false)) }
+                            span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
+                        }
+                    }
+                    @if let Some(before) = older {
+                        div class="foot" {
+                            a class="btn2 sm" href={ (filter_href(filter)) @if filter.is_some() { "&" } @else { "?" } "before=" (before) } { "Older changes" }
+                        }
+                    }
                 }
             }
         },
@@ -3845,7 +3870,7 @@ impl ThreadAt {
             Self::Change => "on the change".into(),
             Self::Line { path, line, .. } => format!("at {path}:{line}"),
             Self::Claim(_) => "on a claim".into(),
-            Self::Verdict(_) => "on a verdict".into(),
+            Self::Verdict(_) => "on a review".into(),
         }
     }
 }
@@ -4924,7 +4949,7 @@ fn anchor_words(anchor: &Anchor) -> String {
         Anchor::Change => String::new(),
         Anchor::Line { path, line, .. } => format!(" at {path}:{line}"),
         Anchor::Claim { .. } => " on a claim".into(),
-        Anchor::Verdict { .. } => " on a verdict".into(),
+        Anchor::Verdict { .. } => " on a review".into(),
     }
 }
 
@@ -5268,7 +5293,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::TaskStateChanged { state, .. } => (
             "dot idle",
             html! {
-                b { (actor) } " moved a task to " (state.as_str())
+                b { (actor) } " marked a task " (state.as_str())
             },
         ),
         Event::ClaimVerified { change, agrees, .. } => (

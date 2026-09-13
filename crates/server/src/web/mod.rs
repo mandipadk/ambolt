@@ -3672,7 +3672,17 @@ async fn changes_page(
             let older = (changes.len() as i64 == CHANGES_PER_PAGE)
                 .then(|| changes.last().map(|c| c.number))
                 .flatten();
-            views::changes(theme, who.reading(), &repo, &changes, filter, older).into_response()
+            let people = people_named(&app, changes.iter().map(|c| c.owner.as_str()));
+            views::changes(
+                theme,
+                who.reading(),
+                &repo,
+                &changes,
+                filter,
+                older,
+                &people,
+            )
+            .into_response()
         }
         Err(err) => oops(err),
     }
