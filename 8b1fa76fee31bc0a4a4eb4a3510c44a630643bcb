@@ -1,0 +1,151 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ifront0132",
+      "id": "c-1nrq2evgzkx7d0fbh4z4nxeq7v",
+      "landed_oid": "8b1fa76fee31bc0a4a4eb4a3510c44a630643bcb",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 135,
+      "opened_at": "2026-09-13T22:33:22.669461245Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-11x5hz5kha413xvh561m0yq3yz",
+      "title": "Build the front page in the product's own parts",
+      "updated_at": "2026-09-13T22:34:27.121457443Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-1nrq2evgzkx7d0fbh4z4nxeq7v",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-0szha7jc07bpsm1afxa3a87qfx",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1240,
+        "summary": "cargo test --workspace: the suite, with the front page and report tests, all green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-1nrq2evgzkx7d0fbh4z4nxeq7v",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-3qzr23yep112dy2jfpwqgjq70n",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1241,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "8b1fa76fee31bc0a4a4eb4a3510c44a630643bcb",
+    "landed_at": "2026-09-13T22:34:27.121457443Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-1nrq2evgzkx7d0fbh4z4nxeq7v",
+      "commit_oid": "8b1fa76fee31bc0a4a4eb4a3510c44a630643bcb",
+      "message": "Build the front page in the product's own parts\n\nThe front page shows the product rather than describing it. A hero\nwith one sentence, two buttons and the change page drawn from the same\nparts the real page uses, where three rules settle and the landing\nbutton wakes, in stylesheet motion that rests in one state without a\nscript and under reduced motion. Then what it works with; Push, Prove,\nLand with the connector running between them and a small terminal\nunder each; six features, each one stage beside a short caption; the\nordinary-git list beside a terminal whose transcript is on the page\nand which the script replays as typing; a row of numbers counted from\nthis forge, so each is true, and one left off if it cannot be counted;\nand the call to join, with the allowance in words and the way to run\nit now. Under two hundred words of prose in all.\n\nThe report form is the same card as sign-in for a stranger and a panel\nfor someone signed in; the reports list is rows with a dismiss.\n\nChange-Id: Ifront0132\nTask: t-11x5hz5kha413xvh561m0yq3yz\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/server/src/web/app.js",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs"
+      ],
+      "session": null
+    },
+    "seq": 1245,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-0szha7jc07bpsm1afxa3a87qfx, cl-3qzr23yep112dy2jfpwqgjq70n",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-3qzr23yep112dy2jfpwqgjq70n",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 174 judged claims, 95% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 4 path(s) outside docs/, *.md: crates/server/src/web/app.js, crates/server/src/web/mod.rs, crates/server/src/web/style.css",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-1nrq2evgzkx7d0fbh4z4nxeq7v",
+        "claim": "cl-0szha7jc07bpsm1afxa3a87qfx",
+        "command": "cargo test --workspace",
+        "id": "vr-1fk7708das9grg0hx95haq6c19",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1242
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-1nrq2evgzkx7d0fbh4z4nxeq7v",
+        "claim": "cl-3qzr23yep112dy2jfpwqgjq70n",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-0z6b44d77fntqf6rh8wbkhfj7d",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.85s",
+        "revision": 1,
+        "seq": 1243
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "RCsg0Hniw+kl94PDsakm7bFTJNBRBkFL34AIVbbCKOdrEjxfUwnWC/LaJqu+WiL2rUq6bF7MDoDQk4SsYh2BDg=="
+  }
+}
