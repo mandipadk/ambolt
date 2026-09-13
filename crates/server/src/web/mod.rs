@@ -594,10 +594,35 @@ async fn inbox_page(
     match notices {
         Ok(notices) => {
             let unread = notices.iter().filter(|n| !n.read).count();
-            views::inbox(theme, &viewer, &notices, unread).into_response()
+            let people = people_named(&app, notices.iter().map(|n| n.actor.as_str()));
+            views::inbox(theme, &viewer, &notices, unread, &people).into_response()
         }
         Err(err) => oops(err),
     }
+}
+
+/// Everyone a page names, looked up once each: their display name and
+/// whether they are an agent.
+fn people_named<'a>(app: &AppState, ids: impl IntoIterator<Item = &'a str>) -> views::People {
+    let ids: std::collections::BTreeSet<&str> =
+        ids.into_iter().filter(|id| !id.is_empty()).collect();
+    views::People(
+        ids.into_iter()
+            .filter_map(|id| {
+                let found = app
+                    .with_store(|s| s.principal(&PrincipalId(id.to_owned())))
+                    .ok()
+                    .flatten()?;
+                Some((
+                    id.to_owned(),
+                    (
+                        found.display,
+                        found.kind == ambolt_core::PrincipalKind::Agent,
+                    ),
+                ))
+            })
+            .collect(),
+    )
 }
 
 #[derive(Deserialize)]
@@ -1658,16 +1683,25 @@ async fn agents_page(
     });
     let once = take(&app, &viewer.0, flash.once.as_deref());
     match data {
-        Ok((agents, repos, owners)) => views::agents(
-            theme,
-            &viewer,
-            &agents,
-            &repos,
-            &owners,
-            once.secret.as_deref(),
-            flash.error.as_deref(),
-        )
-        .into_response(),
+        Ok((agents, repos, owners)) => {
+            let people = people_named(
+                &app,
+                agents
+                    .iter()
+                    .filter_map(|a| a.principal.owner.as_ref().map(|o| o.as_str())),
+            );
+            views::agents(
+                theme,
+                &viewer,
+                &agents,
+                &repos,
+                &owners,
+                once.secret.as_deref(),
+                flash.error.as_deref(),
+                &people,
+            )
+            .into_response()
+        }
         Err(err) => oops(err),
     }
 }
@@ -4492,7 +4526,21 @@ async fn tasks_page(
         Ok::<_, ambolt_core::CoreError>(tasks)
     });
     match tasks {
-        Ok(tasks) => views::tasks(theme, &viewer, &tasks, filter).into_response(),
+        Ok(tasks) => {
+            let repo = query.repo.as_deref().filter(|r| !r.is_empty());
+            let lessons = app
+                .with_store(|s| s.lessons(repo, None, true, 6))
+                .unwrap_or_default();
+            let people = people_named(
+                &app,
+                tasks
+                    .iter()
+                    .flat_map(|t| t.claimants.iter().chain(t.claimed_by.iter()))
+                    .map(|p| p.as_str())
+                    .chain(lessons.iter().map(|l| l.agent.as_str())),
+            );
+            views::tasks(theme, &viewer, &tasks, filter, repo, &lessons, &people).into_response()
+        }
         Err(err) => oops(err),
     }
 }
@@ -4558,6 +4606,22 @@ async fn task_page(
     };
     let can_close =
         task.created_by == viewer.0 || task.claimants.contains(&viewer.0) || viewer.1.admin;
+    let people = people_named(
+        &app,
+        std::iter::once(task.created_by.as_str())
+            .chain(task.claimants.iter().map(|p| p.as_str()))
+            .chain(task.claimed_by.iter().map(|p| p.as_str()))
+            .chain(sessions.iter().map(|s| s.agent.as_str()))
+            .chain(changes.iter().map(|c| c.owner.as_str()))
+            .chain(focus.iter().flat_map(|f| {
+                f.revisions
+                    .iter()
+                    .map(|r| r.by.as_str())
+                    .chain(f.claims.iter().map(|c| c.by.as_str()))
+                    .chain(f.verifications.iter().map(|v| v.by.as_str()))
+                    .chain(f.preference.iter().map(|p| p.by.as_str()))
+            })),
+    );
     views::task(views::TaskPage {
         theme,
         viewer: &viewer,
@@ -4566,6 +4630,7 @@ async fn task_page(
         changes: &changes,
         focus: focus.as_ref(),
         can_close,
+        people: &people,
     })
     .into_response()
 }

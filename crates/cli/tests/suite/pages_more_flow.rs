@@ -65,7 +65,8 @@ async fn tasks_have_a_page_with_their_runs_and_changes() {
         page.contains(r#"href="/ada/demo/changes/1""#),
         "the change that came of it: {page}"
     );
-    assert!(page.contains("held by scout"), "{page}");
+    // The page names the holder by display name.
+    assert!(page.contains("held by Scout"), "{page}");
     // The creator can close it from the page.
     let (status, location) =
         post_form(app, &format!("/tasks/{task_id}"), &ada, "state=landed").await;

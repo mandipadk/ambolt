@@ -1262,45 +1262,88 @@ pub fn you(theme: Theme, viewer: &Viewer, mine: &[(String, Change)]) -> Markup {
 /// unread row carries a dot and full weight; a read one recedes. Every
 /// row is a link to the thing itself, because a notice that cannot be
 /// acted on from where it is read is a to-do list somebody has to copy.
-pub fn inbox(theme: Theme, viewer: &Viewer, notices: &[Notice], unread: usize) -> Markup {
+pub fn inbox(
+    theme: Theme,
+    viewer: &Viewer,
+    notices: &[Notice],
+    unread: usize,
+    people: &People,
+) -> Markup {
+    // Notices arrive newest first; the page groups them by day.
+    let mut days: Vec<(String, Vec<&Notice>)> = Vec::new();
+    for notice in notices {
+        let day = day_of(&notice.ts);
+        match days.last_mut() {
+            Some((last, group)) if *last == day => group.push(notice),
+            _ => days.push((day, vec![notice])),
+        }
+    }
     layout_section(
         theme,
         viewer,
         "inbox",
         "Inbox",
         html! {
-            div class="sechead" {
-                b { "Inbox" }
-                span { (unread) " unread" }
-                @if unread > 0 {
-                    form method="post" action="/inbox/read" class="right" {
-                        input type="hidden" name="all" value="1";
-                        button class="act" type="submit" { "Mark all read" }
+            div class="sec top" {
+                div class="sh" {
+                    h2 { "Inbox" }
+                    span class="n" { (unread) " unread" }
+                    @if unread > 0 {
+                        div class="right" {
+                            form method="post" action="/inbox/read" {
+                                input type="hidden" name="all" value="1";
+                                button class="btn2 sm" type="submit" { (ic("check", "sm")) "Mark all read" }
+                            }
+                        }
                     }
                 }
-            }
-            @if notices.is_empty() {
-                p class="empty" { "Nothing is waiting on you." }
-            }
-            @let mut day = String::new();
-            @for notice in notices {
-                @let this_day = day_of(&notice.ts);
-                @if this_day != day {
-                    div class="day" { (day_label(&this_day)) }
-                    ({ day = this_day; "" })
+                @if notices.is_empty() {
+                    div class="panel" { div class="empty" { b { "Nothing is waiting on you." } "Replies, reviews and landings of your changes arrive here." } }
                 }
-                a class={ "trow inboxrow" @if notice.read { " read" } } href=(notice_href(notice)) {
-                    span class="dot" {}
-                    span class="what" { (notice.what) }
-                    span class="where" {
-                        @if let Some(repo) = &notice.repo { (repo) }
-                        @if let Some(number) = notice.number { " #" (number) }
+            }
+            @for (day, group) in &days {
+                div class="sec" {
+                    div class="sh" { h2 { (day_label(day)) } }
+                    div class="panel" {
+                        @for notice in group {
+                            @let (display, agent) = people.name(&notice.actor);
+                            a class={ "row ib" @if notice.read { " read" } } href=(notice_href(notice)) {
+                                i class={ "dot" @if !notice.read { " acc" } } {}
+                                (avatar(notice.actor.as_str(), display, agent, false))
+                                span class="tt" {
+                                    span class="t" { (notice.what) }
+                                    span class="s" {
+                                        @if let Some(repo) = &notice.repo { (repo) }
+                                        @if let Some(number) = notice.number { " #" (number) }
+                                    }
+                                }
+                                span class="chip" { (notice_kind_words(&notice.kind)) }
+                                span class="age" title=(notice.ts) { (clock_of(&notice.ts)) }
+                            }
+                        }
                     }
-                    span class="when" { (clock_of(&notice.ts)) }
                 }
             }
         },
     )
+}
+
+/// What kind of thing a notice is, as a chip.
+fn notice_kind_words(kind: &str) -> &str {
+    match kind {
+        "opened" => "Change",
+        "landed" => "Landed",
+        "dequeued" => "Queue",
+        "reply" | "concern" | "question" | "note" | "resolved" => "Discussion",
+        "verdict" | "blocked" => "Review",
+        "claim" | "disputed" => "Claim",
+        "compared" => "Attempts",
+        "drawn" => "Your look",
+        "transfer" => "Transfer",
+        "granted" => "Grant",
+        "reset-request" => "People",
+        other => other,
+    }
 }
 
 /// Where a notice points: the change if it names one, else the
@@ -1391,11 +1434,31 @@ fn day_label(day: &str) -> String {
     }
 }
 
-/// Every task the viewer may see, newest first, filtered by state.
-pub fn tasks(theme: Theme, viewer: &Viewer, tasks: &[Task], filter: Option<TaskState>) -> Markup {
-    let href = |state: Option<TaskState>| match state {
-        Some(state) => format!("/tasks?state={}", state.as_str()),
-        None => "/tasks".to_owned(),
+/// Every task the viewer may see, newest first, filtered by state and,
+/// when asked, by repository; the lessons attempts left behind sit
+/// under the list, because they are read before the next attempt.
+pub fn tasks(
+    theme: Theme,
+    viewer: &Viewer,
+    tasks: &[Task],
+    filter: Option<TaskState>,
+    repo: Option<&str>,
+    lessons: &[ambolt_core::Lesson],
+    people: &People,
+) -> Markup {
+    let href = |state: Option<TaskState>, repo: Option<&str>| {
+        let mut parts = Vec::new();
+        if let Some(state) = state {
+            parts.push(format!("state={}", state.as_str()));
+        }
+        if let Some(repo) = repo {
+            parts.push(format!("repo={repo}"));
+        }
+        if parts.is_empty() {
+            "/tasks".to_owned()
+        } else {
+            format!("/tasks?{}", parts.join("&"))
+        }
     };
     layout_section(
         theme,
@@ -1403,26 +1466,74 @@ pub fn tasks(theme: Theme, viewer: &Viewer, tasks: &[Task], filter: Option<TaskS
         "tasks",
         "Tasks",
         html! {
-            div class="sechead" { b { "Tasks" } span { (tasks.len()) } }
-            div class="tabs filters" {
-                a class={ "tab" @if filter.is_none() { " active" } } href=(href(None)) { "All" }
-                @for state in [TaskState::Open, TaskState::Claimed, TaskState::Landed, TaskState::Abandoned] {
-                    a class={ "tab" @if filter == Some(state) { " active" } } href=(href(Some(state))) { (state.as_str()) }
+            div class="sec top" {
+                div class="sh" {
+                    h2 { "Tasks" }
+                    span class="n" { (tasks.len()) }
+                }
+                div class="filters" {
+                    a class=[filter.is_none().then_some("on")] href=(href(None, repo)) { "All" }
+                    @for state in [TaskState::Open, TaskState::Claimed, TaskState::Landed, TaskState::Abandoned] {
+                        a class=[(filter == Some(state)).then_some("on")] href=(href(Some(state), repo)) { (task_state_words(state)) }
+                    }
+                    @if !viewer.1.repos.is_empty() {
+                        span class="gap" {}
+                        a class=[repo.is_none().then_some("on")] href=(href(filter, None)) { (ic("repo", "sm")) "Every repository" }
+                        @for known in &viewer.1.repos {
+                            a class=[(repo == Some(known.name.as_str())).then_some("on")] href=(href(filter, Some(&known.name))) { (known.name) }
+                        }
+                    }
+                }
+                div class="panel" {
+                    @if tasks.is_empty() {
+                        div class="empty" { b { "No tasks yet." } "An agent or a person opens one: a durable statement of what should be done and why." }
+                    }
+                    @for task in tasks {
+                        a class="row tk" href={ "/tasks/" (task.id.as_str()) } {
+                            (task_chip(task.state))
+                            span class="tt" {
+                                span class="t" { (task.title) }
+                                span class="s" {
+                                    @match &task.repo { Some(repo) => { (repo) } None => { "any repository" } }
+                                    @if task.attempts > 1 {
+                                        " · " (task.claimants.len()) " of " (task.attempts) " attempts taken"
+                                    } @else if let Some(who) = &task.claimed_by {
+                                        " · held by " (people.name(who).0)
+                                    }
+                                }
+                            }
+                            span class="avs" {
+                                @for who in task.claimants.iter().chain(task.claimed_by.iter()).take(3) {
+                                    @let (display, agent) = people.name(who);
+                                    (avatar(who.as_str(), display, agent, false))
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            @if tasks.is_empty() {
-                p class="empty" { "No tasks. An agent or a person opens one over the API: a durable statement of what should be done and why." }
-            }
-            @for task in tasks {
-                a class="trow tasks" href={ "/tasks/" (task.id.as_str()) } {
-                    span class=(task_dot(task.state)) {}
-                    span class="strong" { (task.title) }
-                    span class="sec2" { @if let Some(repo) = &task.repo { (repo) } @else { "any repository" } }
-                    span class="sec3" {
-                        @match &task.claimed_by {
-                            Some(who) => { (task.state.as_str()) " · " (who.as_str()) }
-                            None => { (task.state.as_str()) }
+            @if !lessons.is_empty() {
+                div class="sec" {
+                    div class="sh" {
+                        h2 { "Stopped, with a lesson" }
+                        span class="n" { (lessons.len()) }
+                        @if let Some(repo) = repo {
+                            div class="right" { a href={ "/" (repo) "/lessons" } { "Search the lessons" } }
                         }
+                    }
+                    div class="panel" {
+                        @for lesson in lessons {
+                            @let (display, agent) = people.name(&lesson.agent);
+                            div class="row ls" {
+                                (avatar(lesson.agent.as_str(), display, agent, false))
+                                span class="tt" {
+                                    span class="t" { (lesson.task_title) }
+                                    span class="s wrap" { (lesson.outcome) }
+                                }
+                                span class="age" { (display) }
+                            }
+                        }
+                        div class="foot" { (ic("sparkle", "sm")) "When an agent stops, it says why. Those reasons are searched before the next attempt." }
                     }
                 }
             }
@@ -1430,12 +1541,23 @@ pub fn tasks(theme: Theme, viewer: &Viewer, tasks: &[Task], filter: Option<TaskS
     )
 }
 
-fn task_dot(state: TaskState) -> &'static str {
+fn task_state_words(state: TaskState) -> &'static str {
     match state {
-        TaskState::Open => "dot idle",
-        TaskState::Claimed => "dot open",
-        TaskState::Landed => "dot ok",
-        TaskState::Abandoned => "dot bad",
+        TaskState::Open => "Open",
+        TaskState::Claimed => "Taken",
+        TaskState::Landed => "Landed",
+        TaskState::Abandoned => "Abandoned",
+    }
+}
+
+fn task_chip(state: TaskState) -> Markup {
+    html! {
+        @match state {
+            TaskState::Open => { span class="chip" { (ic("tasks", "")) "Open" } }
+            TaskState::Claimed => { span class="chip acc" { (ic("agents", "")) "Taken" } }
+            TaskState::Landed => { span class="chip good" { (ic("check", "")) "Landed" } }
+            TaskState::Abandoned => { span class="chip" { (ic("x", "")) "Abandoned" } }
+        }
     }
 }
 
@@ -1460,6 +1582,7 @@ pub struct TaskPage<'a> {
     pub changes: &'a [Change],
     pub focus: Option<&'a TaskFocus>,
     pub can_close: bool,
+    pub people: &'a People,
 }
 
 /// One attempt at a task, as the page reads it: an author, their
@@ -1494,135 +1617,171 @@ pub fn task(page: TaskPage<'_>) -> Markup {
         changes,
         focus,
         can_close,
+        people,
     } = page;
     let attempts: Vec<Attempt<'_>> = focus
         .map(|f| attempts(sessions, &f.revisions))
         .unwrap_or_default();
     let competing = focus.is_some_and(|f| f.change.competing);
+    let closable = can_close && matches!(task.state, TaskState::Open | TaskState::Claimed);
     layout_section(
         theme,
         viewer,
         "tasks",
         &task.title,
         html! {
-            div class="chg-title" {
-                div class="line1" {
-                    span class=(task_dot(task.state)) {}
+            div class="pagehead" {
+                div {
                     h1 { (task.title) }
-                }
-                div class="meta" {
-                    span { (task.state.as_str()) }
-                    span class="sep" { "·" }
-                    span { "by " (task.created_by.as_str()) }
-                    @if task.attempts > 1 {
-                        span class="sep" { "·" }
-                        span { "claimed by " (task.claimants.len()) " of " (task.attempts) }
-                    } @else if let Some(who) = &task.claimed_by {
-                        span class="sep" { "·" } span { "held by " (who.as_str()) }
+                    div class="meta" {
+                        (task_chip(task.state))
+                        span class="by" {
+                            @let (display, agent) = people.name(&task.created_by);
+                            (avatar(task.created_by.as_str(), display, agent, false))
+                            b { (display) }
+                        }
+                        @if task.attempts > 1 {
+                            span { "claimed by " (task.claimants.len()) " of " (task.attempts) }
+                        } @else if let Some(who) = &task.claimed_by {
+                            span { "held by " (people.name(who).0) }
+                        }
+                        @if let Some(repo) = &task.repo { span { "in " a href={ "/" (repo) } { (repo) } } }
+                        @if let Some(f) = focus {
+                            span { "change " a href={ "/" (f.change.repo) "/changes/" (f.change.number) } { "#" (f.change.number) } ", " (f.change.state.as_str()) }
+                        }
+                        @if let Some(parent) = &task.parent { span { a href={ "/tasks/" (parent.as_str()) } { "part of a larger task" } } }
                     }
-                    @if let Some(repo) = &task.repo { span class="sep" { "·" } a class="link" href={ "/" (repo) } { (repo) } }
-                    @if let Some(f) = focus {
-                        span class="sep" { "·" }
-                        a class="link" href={ "/" (f.change.repo) "/changes/" (f.change.number) } { "change #" (f.change.number) ", " (f.change.state.as_str()) }
-                    }
-                    @if let Some(parent) = &task.parent { span class="sep" { "·" } a class="link" href={ "/tasks/" (parent.as_str()) } { "part of a larger task" } }
                 }
-                pre class="msg" { (task.spec) }
+                @if closable {
+                    div class="acts" {
+                        form method="post" action={ "/tasks/" (task.id.as_str()) } {
+                            button class="btn2 sm" type="submit" name="state" value="landed" { (ic("check", "sm")) "Mark landed" }
+                            button class="btn2 sm danger" type="submit" name="state" value="abandoned" { (ic("x", "sm")) "Abandon" }
+                        }
+                    }
+                }
             }
+            div class="chg-body" {
+                pre class="msg" { (task.spec) }
 
-            @if let Some(f) = focus {
-                @if !attempts.is_empty() && (competing || task.attempts > 1) {
-                    div class="sechead later" { b { "Attempts" } span { (attempts.len()) " · revisions of #" (f.change.number) } }
-                    div class="attempts" {
-                        @for attempt in &attempts {
-                            @let latest = attempt.revisions.last().expect("an attempt has a revision");
-                            @let chosen = f.change.preferred_revision == Some(latest.number);
-                            div class={ "attempt" @if chosen { " chosen" } } {
-                                div class="who-line" {
-                                    span class="nm" { (attempt.by) }
-                                    @for session in &attempt.sessions {
-                                        span class="sec3" { "session " (short(session.id.as_str())) " · " (session.state.as_str()) }
-                                    }
-                                }
-                                div class="cmd" {
-                                    @for (index, revision) in attempt.revisions.iter().enumerate() {
-                                        @if index > 0 { " · " }
-                                        "r" (revision.number) " " (short(&revision.commit_oid))
-                                        @if !revision.paths.is_empty() { " (" (revision.paths.len()) " files)" }
-                                    }
-                                }
-                                @let claims: Vec<&Claim> = f.claims.iter().filter(|c| c.revision == latest.number).collect();
-                                @if claims.is_empty() { div class="vrow" { span class="s un" { "○" } span { "no claims on r" (latest.number) } } }
-                                @for claim in claims { (claim_row(claim, &f.verifications, &People::default())) }
-                                @for session in attempt.sessions.iter().filter(|s| s.outcome.is_some()) {
-                                    q { (session.outcome.as_deref().unwrap_or("")) }
-                                }
-                            }
-                        }
-                    }
-                    @if let Some(preference) = &f.preference {
-                        @if f.change.preferred_revision.is_some() {
-                            div class="vrow" {
-                                span class="s ok" { "●" }
-                                div {
-                                    div class="who-line" {
-                                        span class="nm" { (preference.by) }
-                                        span class="sec3" { "preferred r" (preference.revision) " over " @for (i, n) in preference.over.iter().enumerate() { @if i > 0 { ", " } "r" (n) } " · " (short_day(&preference.at)) }
-                                    }
-                                    q { (preference.rationale) }
-                                }
-                            }
-                        }
-                    }
-                    @if competing && f.change.preferred_revision.is_none() && f.change.state == ChangeState::Open {
-                        form class="composer" method="post" action={ "/" (f.change.repo) "/changes/" (f.change.number) "/prefer" } {
-                            span class="hint" { "Compare" }
-                            select name="revision" aria-label="Revision" {
+                @if let Some(f) = focus {
+                    @if !attempts.is_empty() && (competing || task.attempts > 1) {
+                        div class="sec" {
+                            div class="sh" { h2 { "Attempts" } span class="n" { (attempts.len()) " · revisions of #" (f.change.number) } }
+                            div class="tries" {
                                 @for attempt in &attempts {
                                     @let latest = attempt.revisions.last().expect("an attempt has a revision");
-                                    option value=(latest.number) { "r" (latest.number) " by " (attempt.by) }
+                                    @let chosen = f.change.preferred_revision == Some(latest.number);
+                                    @let (display, agent) = people.name(attempt.by);
+                                    div class={ "try" @if chosen { " chosen" } } {
+                                        div class="h" {
+                                            (avatar(attempt.by.as_str(), display, agent, false))
+                                            b { (display) }
+                                            @if chosen { span class="chip acc" { (ic("check", "")) "chosen" } }
+                                            @for session in &attempt.sessions {
+                                                span class="chip" { "session " (short(session.id.as_str())) " · " (session.state.as_str()) }
+                                            }
+                                        }
+                                        div class="cmd" {
+                                            @for (index, revision) in attempt.revisions.iter().enumerate() {
+                                                @if index > 0 { " · " }
+                                                "r" (revision.number) " " (short(&revision.commit_oid))
+                                                @if !revision.paths.is_empty() { " (" (revision.paths.len()) " files)" }
+                                            }
+                                        }
+                                        @let claims: Vec<&Claim> = f.claims.iter().filter(|c| c.revision == latest.number).collect();
+                                        @if claims.is_empty() { span class="s" { "No claims on r" (latest.number) " yet." } }
+                                        @for claim in claims { (claim_row(claim, &f.verifications, people)) }
+                                        @for session in attempt.sessions.iter().filter(|s| s.outcome.is_some()) {
+                                            q class="s" { (session.outcome.as_deref().unwrap_or("")) }
+                                        }
+                                    }
                                 }
                             }
-                            input type="text" name="rationale" placeholder="Why this one and not the others" required;
-                            button class="vbtn" type="submit" { "Prefer" }
+                            @if let Some(preference) = &f.preference {
+                                @if f.change.preferred_revision.is_some() {
+                                    @let (display, agent) = people.name(&preference.by);
+                                    div class="panel" {
+                                        div class="ev-row" {
+                                            (avatar(preference.by.as_str(), display, agent, false))
+                                            div {
+                                                div class="h" {
+                                                    b { (display) }
+                                                    span class="sec2" { "preferred r" (preference.revision) " over " @for (i, n) in preference.over.iter().enumerate() { @if i > 0 { ", " } "r" (n) } }
+                                                    span class="sec3" { (short_day(&preference.at)) }
+                                                }
+                                                q { (preference.rationale) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            @if competing && f.change.preferred_revision.is_none() && f.change.state == ChangeState::Open {
+                                form class="review" method="post" action={ "/" (f.change.repo) "/changes/" (f.change.number) "/prefer" } {
+                                    span class="lab" { "Compare" }
+                                    select class="input sm" name="revision" aria-label="Revision" {
+                                        @for attempt in &attempts {
+                                            @let latest = attempt.revisions.last().expect("an attempt has a revision");
+                                            option value=(latest.number) { "r" (latest.number) " by " (attempt.by) }
+                                        }
+                                    }
+                                    input class="input sm" type="text" name="rationale" placeholder="Why this one and not the others" required;
+                                    button class="btn2 sm" type="submit" { "Prefer" }
+                                }
+                            }
+                        }
+                    }
+                    @if let Some(trace) = &f.trace {
+                        div class="sec" {
+                            div class="sh" { h2 { "Readiness of #" (f.change.number) } span class="n" { "revision " (f.change.judged_revision()) } }
+                            div class="panel" {
+                                div class="pad reqs" {
+                                    @for requirement in trace.requirements.iter().filter(|r| !r.satisfied) { (requirement_row(requirement)) }
+                                    @for requirement in trace.requirements.iter().filter(|r| r.satisfied) { (requirement_row(requirement)) }
+                                }
+                            }
                         }
                     }
                 }
-                @if let Some(trace) = &f.trace {
-                    div class="sechead later" { b { "Readiness of #" (f.change.number) } span { "r" (f.change.judged_revision()) } }
-                    @for requirement in &trace.requirements {
-                        div class="vrow" {
-                            span class={ "s" @if requirement.satisfied { " ok" } @else { " bad" } } { "●" }
-                            div { (requirement.description) div class="run" { (requirement.evidence) } }
-                        }
-                    }
-                }
-            }
 
-            div class="sechead later" { b { "Sessions" } span { (sessions.len()) } }
-            @if sessions.is_empty() { p class="empty" { "Nobody has run against this yet." } }
-            @for session in sessions {
-                div class="trow sessions-of-task" {
-                    span class={ @match session.state { SessionState::Active => "dot open", SessionState::Completed => "dot ok", SessionState::Failed => "dot bad" } } {}
-                    span class="strong" { (session.agent.as_str()) }
-                    span class="sec3" { (session.state.as_str()) }
-                    span class="sec2" { @if let Some(outcome) = &session.outcome { (outcome) } }
+                div class="sec" {
+                    div class="sh" { h2 { "Sessions" } span class="n" { (sessions.len()) } }
+                    div class="panel" {
+                        @if sessions.is_empty() { div class="empty" { "Nobody has run against this yet." } }
+                        @for session in sessions {
+                            @let (display, agent) = people.name(&session.agent);
+                            div class="row ls" {
+                                (avatar(session.agent.as_str(), display, agent, session.state == SessionState::Active))
+                                span class="tt" {
+                                    span class="t" { (display) " " span class="sec3" { (session.state.as_str()) } }
+                                    @if let Some(outcome) = &session.outcome { span class="s wrap" { (outcome) } }
+                                }
+                                span class="age" { (short(session.id.as_str())) }
+                            }
+                        }
+                    }
                 }
-            }
-            div class="sechead later" { b { "Changes" } span { (changes.len()) } }
-            @if changes.is_empty() { p class="empty" { "No change names this task yet." } }
-            @for change in changes {
-                a class="trow" href={ "/" (change.repo) "/changes/" (change.number) } {
-                    (state_dot(change.state))
-                    span class="sec3" { (change.repo) " #" (change.number) }
-                    span class="strong" { (change.title) }
-                    span class="sec2" { (change.owner) }
-                }
-            }
-            @if can_close && matches!(task.state, TaskState::Open | TaskState::Claimed) {
-                form class="inline later" method="post" action={ "/tasks/" (task.id.as_str()) } {
-                    button class="vbtn" type="submit" name="state" value="landed" { "Mark landed" }
-                    button class="vbtn danger" type="submit" name="state" value="abandoned" { "Abandon" }
+                div class="sec" {
+                    div class="sh" { h2 { "Changes" } span class="n" { (changes.len()) } }
+                    div class="panel" {
+                        @if changes.is_empty() { div class="empty" { "No change names this task yet." } }
+                        @for change in changes {
+                            @let (display, agent) = people.name(&change.owner);
+                            a class="row need" href={ "/" (change.repo) "/changes/" (change.number) } {
+                                @match change.state {
+                                    ChangeState::Open => { span class="chip acc" { (ic("changes", "")) "Open" } }
+                                    ChangeState::Merged => { span class="chip good" { (ic("check", "")) "Landed" } }
+                                    ChangeState::Abandoned => { span class="chip" { (ic("x", "")) "Abandoned" } }
+                                }
+                                span class="tt" {
+                                    span class="t" { (change.title) }
+                                    span class="s" { (change.repo) " #" (change.number) }
+                                }
+                                span class="avs" { (avatar(change.owner.as_str(), display, agent, false)) }
+                                span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -2662,6 +2821,7 @@ pub fn people(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn agents(
     theme: Theme,
     viewer: &Viewer,
@@ -2672,6 +2832,7 @@ pub fn agents(
     owners: &[String],
     fresh: Option<&str>,
     error: Option<&str>,
+    people: &People,
 ) -> Markup {
     layout_section(
         theme,
@@ -2679,135 +2840,170 @@ pub fn agents(
         "agents",
         "Agents",
         html! {
-            div class="sechead" { b { "Agents" } span { (agents.len()) } }
-            @if let Some(error) = error { p class="error" { (error) } }
-
+            div class="sec top" {
+                div class="sh" {
+                    h2 { "Agents" }
+                    span class="n" { (agents.len()) }
+                    div class="right" { a class="btn sm" href="#add" { (ic("plus", "sm")) "Add an agent" } }
+                }
+                p class="lede" { "An agent is somebody's. It can do exactly what it was granted, everywhere or on one repository, and every claim it makes is on its record." }
+            }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
             @if let Some(secret) = fresh {
                 div class="once" {
                     p { b { "Copy this now." } " It is the agent's only credential, and it is stored as a hash." }
                     code class="secret" { (secret) }
                 }
             }
-
             @if agents.is_empty() {
-                p class="empty" { "None yet. An agent needs a name, a token, and a grant narrow enough to be worth trusting." }
+                div class="panel" { div class="empty" { b { "None yet." } "An agent needs a name, a token, and a grant narrow enough to be worth trusting." } }
             }
-            @for row in agents {
-                div class="agent" {
-                    div class="trow roster" {
-                        span class="strong" { (row.principal.id.as_str()) }
-                        span class="sec3" {
-                            (row.principal.display)
-                            @if !row.principal.active { " · retired" }
-                        }
-                        span class="sec3" { (row.principal.model.as_deref().unwrap_or("")) }
-                        span class="sec3" {
-                            @if let Some(owner) = &row.principal.owner { (owner.as_str()) }
-                        }
-                        span class="sec3" { (record_words(&row.record)) }
-                    }
-                    @for grant in row.grants.iter().filter(|g| !g.revoked) {
-                        div class="grant" {
-                            span class="sec3" {
-                                @for (index, action) in grant.actions.iter().enumerate() {
-                                    @if index > 0 { ", " }
-                                    (action.as_str())
-                                }
-                                @match &grant.repo {
-                                    // A repository the viewer cannot read is not
-                                    // named on their page, even on an agent of theirs:
-                                    // the operator granted it, and the name is the
-                                    // operator's to share.
-                                    Some(repo) if viewer.1.admin || viewer.1.repos.iter().any(|r| &r.name == repo) => { " on " (repo) }
-                                    Some(_) => { " on a repository not yours to see" }
-                                    None => { " everywhere" }
+            div class="grid2" {
+                @for row in agents {
+                    @let id = row.principal.id.as_str();
+                    @let live = viewer.1.working.iter().any(|w| w.who == id);
+                    @let mine = viewer.1.admin || row.principal.owner.as_ref().is_some_and(|o| owners.iter().any(|mine| mine == o.as_str()));
+                    div class="panel agent" {
+                        header {
+                            (avatar(id, &row.principal.display, true, live))
+                            div class="tt" {
+                                h2 { (row.principal.display) }
+                                span class="s" {
+                                    (id)
+                                    @if let Some(model) = &row.principal.model { " · " (model) }
+                                    @if let Some(harness) = &row.principal.harness { " · " (harness) }
+                                    @if let Some(owner) = &row.principal.owner { " · " (people.name(owner).0) "'s" }
+                                    @if !row.principal.active { " · retired" }
                                 }
                             }
-                            // Only a control that will work: revoking is the
-                            // grantor's or the grantee's, or the forge's.
-                            @if viewer.1.admin || grant.grantor == viewer.0 {
-                                form method="post" action="/agents" {
-                                    input type="hidden" name="action" value="revoke";
-                                    input type="hidden" name="grant" value=(grant.id.0);
-                                    button class="quiet danger" type="submit" { "Revoke" }
+                            @if row.principal.active && mine {
+                                div class="right" {
+                                    form method="post" action="/agents" {
+                                        input type="hidden" name="action" value="mint";
+                                        input type="hidden" name="grantee" value=(id);
+                                        button class="ghost sm" type="submit" { (ic("key", "sm")) "New token" }
+                                    }
+                                    form method="post" action="/agents" {
+                                        input type="hidden" name="action" value="retire";
+                                        input type="hidden" name="grantee" value=(id);
+                                        button class="ghost sm danger" type="submit" { (ic("archive", "sm")) "Retire" }
+                                    }
                                 }
                             }
                         }
-                    }
-                    @if row.principal.active && row.grants.iter().all(|g| g.revoked) {
-                        p class="grant sec3" { "No live grant — this agent can do nothing yet." }
-                    }
-
-                    // A retired agent takes no grant and no token; the
-                    // controls that would only refuse are not shown.
-                    @if row.principal.active {
-                    form class="inline" method="post" action="/agents" {
-                        input type="hidden" name="action" value="grant";
-                        input type="hidden" name="grantee" value=(row.principal.id.as_str());
-                        @for capability in ["task", "push", "review", "merge", "verify"] {
-                            label class="tick" {
-                                input type="checkbox" name=(capability) value="on";
-                                (capability)
+                        div class="pad ag" {
+                            div {
+                                span class="lbl" { "Can" }
+                                @if row.principal.active && row.grants.iter().all(|g| g.revoked) {
+                                    div class="s" { "Nothing yet: no live grant." }
+                                }
+                                @for grant in row.grants.iter().filter(|g| !g.revoked) {
+                                    div class="line" {
+                                        @for action in &grant.actions { span class="chip" { (action.as_str()) } }
+                                        span class="s" {
+                                            @match &grant.repo {
+                                                // A repository the viewer cannot read is not
+                                                // named on their page, even on an agent of theirs:
+                                                // the operator granted it, and the name is the
+                                                // operator's to share.
+                                                Some(repo) if viewer.1.admin || viewer.1.repos.iter().any(|r| &r.name == repo) => { "on " (repo) }
+                                                Some(_) => { "on a repository not yours to see" }
+                                                None => { "everywhere" }
+                                            }
+                                        }
+                                        // Only a control that will work: revoking is the
+                                        // grantor's or the grantee's, or the forge's.
+                                        @if viewer.1.admin || grant.grantor == viewer.0 {
+                                            form method="post" action="/agents" {
+                                                input type="hidden" name="action" value="revoke";
+                                                input type="hidden" name="grant" value=(grant.id.0);
+                                                button class="ghost sm danger" type="submit" { "Revoke" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            div {
+                                span class="lbl" { "Record, " (row.record.window_days) " days" }
+                                div class={ "s" @if row.record.disputed > 0 || row.record.blocks > 0 { " bad-t" } } { (record_words(&row.record)) }
+                            }
+                            div {
+                                span class="lbl" { "Now" }
+                                div class="s" {
+                                    @match viewer.1.working.iter().find(|w| w.who == id) {
+                                        Some(work) => {
+                                            "Working"
+                                            @if let Some(repo) = &work.repo { " on " (repo) }
+                                            @if let Some(path) = work.paths.first() { " · " code { (path) } }
+                                        }
+                                        None => { @if row.principal.active { "Idle" } @else { "Retired" } }
+                                    }
+                                }
+                            }
+                            // A retired agent takes no grant; the control that
+                            // would only refuse is not shown.
+                            @if row.principal.active && mine {
+                                details class="fold" {
+                                    summary class="ghost sm" { (ic("plus", "sm")) "Grant something" }
+                                    form class="form" method="post" action="/agents" {
+                                        input type="hidden" name="action" value="grant";
+                                        input type="hidden" name="grantee" value=(id);
+                                        div class="line" {
+                                            @for capability in ["task", "push", "review", "merge", "verify"] {
+                                                label class="check" {
+                                                    input type="checkbox" name=(capability) value="on";
+                                                    span { (capability) }
+                                                }
+                                            }
+                                        }
+                                        div class="line" {
+                                            select class="input sm" name="repo" aria-label="Where" {
+                                                // A grant everywhere is running the forge; offering it
+                                                // to somebody who cannot make it is a control that
+                                                // only ever refuses.
+                                                @if viewer.1.admin { option value="" { "Everywhere" } }
+                                                @for repo in repos { option value=(repo) { (repo) } }
+                                            }
+                                            button class="btn2 sm" type="submit" { "Grant" }
+                                        }
+                                    }
+                                }
                             }
                         }
-                        select name="repo" {
-                            // A grant everywhere is running the forge; offering it
-                            // to somebody who cannot make it is a control that
-                            // only ever refuses.
-                            @if viewer.1.admin { option value="" { "every repository" } }
-                            @for repo in repos { option value=(repo) { (repo) } }
+                    }
+                }
+                div class="panel" id="add" {
+                    header { (ic("plus", "")) h2 { "Add an agent" } }
+                    form class="pad form" method="post" action="/agents" {
+                        input type="hidden" name="action" value="register";
+                        div class="field" {
+                            label for="id" { "Name" }
+                            input id="id" name="id" type="text" autocomplete="off" placeholder="scribe" required;
+                            span class="hint" { "Lowercase letters, digits and hyphens. This is how it signs everything it does." }
                         }
-                        button class="vbtn" type="submit" { "Grant" }
-                    }
-                    // A lost token is otherwise the API's to replace.
-                    form class="inline" method="post" action="/agents" {
-                        input type="hidden" name="action" value="mint";
-                        input type="hidden" name="grantee" value=(row.principal.id.as_str());
-                        button class="quiet" type="submit" { "New token" }
-                    }
-                    // Retiring is how the room an agent takes comes back;
-                    // the token stops with it. Bringing one back is the
-                    // forge's to do.
-                    form class="inline" method="post" action="/agents" {
-                        input type="hidden" name="action" value="retire";
-                        input type="hidden" name="grantee" value=(row.principal.id.as_str());
-                        button class="quiet danger" type="submit" { "Retire" }
-                    }
-                    }
-                }
-            }
-
-            div class="sechead later" { b { "Add an agent" } span {} }
-            form class="stack narrowcol" method="post" action="/agents" {
-                input type="hidden" name="action" value="register";
-                div {
-                    label for="id" { "Name" }
-                    input id="id" name="id" type="text" autocomplete="off"
-                          placeholder="lowercase, digits and hyphens" required;
-                }
-                div {
-                    label for="display" { "Display name" }
-                    input id="display" name="display" type="text" autocomplete="off";
-                }
-                div {
-                    label for="model" { "Model" }
-                    input id="model" name="model" type="text" autocomplete="off"
-                          placeholder="claude-fable-5";
-                }
-                @if owners.len() > 1 {
-                    div {
-                        label for="owner" { "Belongs to" }
-                        select id="owner" name="owner" {
-                            @for owner in owners { option value=(owner) { (owner) } }
+                        div class="field" {
+                            label for="display" { "Display name" }
+                            input id="display" name="display" type="text" autocomplete="off" placeholder="Scribe";
+                        }
+                        div class="field" {
+                            label for="model" { "Model" }
+                            input id="model" name="model" type="text" autocomplete="off" placeholder="claude-fable-5-1";
+                            span class="hint" { "Two agents of different models can approve a change between them; two of the same model cannot." }
+                        }
+                        @if owners.len() > 1 {
+                            div class="field" {
+                                label for="owner" { "Belongs to" }
+                                select id="owner" name="owner" {
+                                    @for owner in owners { option value=(owner) { (owner) } }
+                                }
+                            }
+                        }
+                        div class="acts" {
+                            button class="btn" type="submit" { "Add and mint a token" }
+                            span class="hint" { "The token is shown once. It grants nothing by itself." }
                         }
                     }
                 }
-                p class="hint" {
-                    "The agent is yours, and counts towards what you may have. A token is \
-                     minted at the same time, because an agent without one cannot do \
-                     anything. It grants no capability by itself."
-                }
-                button class="btn" type="submit" { "Add" }
             }
         },
     )
@@ -5189,33 +5385,39 @@ pub fn lessons(
         Some(Tab::Lessons),
         "Lessons",
         html! {
-            div class="sechead" {
-                b { "Lessons" }
-                span { (lessons.len()) }
-                form class="search-form" method="get" action={ "/" (repo) "/lessons" } {
-                    input type="search" name="q" value=[search]
-                          placeholder="Has anyone tried this before?";
-                }
-            }
-            @if lessons.is_empty() {
-                p class="empty" {
-                    @match search {
-                        Some(term) => { "Nothing recorded matches " (term) "." }
-                        None => { "No sessions have ended yet." }
+            div class="sec top" {
+                div class="sh" {
+                    h2 { "Lessons" }
+                    span class="n" { (lessons.len()) }
+                    form class="right search-in" method="get" action={ "/" (repo) "/lessons" } {
+                        (ic("search", "sm"))
+                        input class="input sm" type="search" name="q" value=[search]
+                              placeholder="Has anyone tried this before?";
                     }
                 }
-            }
-            @for lesson in lessons {
-                div class="lesson-row" {
-                    span class={ "dot " @if lesson.state == ambolt_core::SessionState::Failed { "bad" } @else { "ok" } } {}
-                    div {
-                        div class="head" {
-                            span class="t" { (lesson.task_title) }
-                            span class="sec3" { (lesson.agent) }
-                            span class="sec3" { (lesson.state.as_str()) }
+                div class="panel" {
+                    @if lessons.is_empty() {
+                        div class="empty" {
+                            @match search {
+                                Some(term) => { "Nothing recorded matches " (term) "." }
+                                None => { "No sessions have ended yet." }
+                            }
                         }
-                        p { (lesson.outcome) }
                     }
+                    @for lesson in lessons {
+                        div class="row ls" {
+                            (avatar(lesson.agent.as_str(), lesson.agent.as_str(), true, false))
+                            span class="tt" {
+                                span class="t" {
+                                    (lesson.task_title) " "
+                                    @if lesson.state == ambolt_core::SessionState::Failed { span class="chip bad" { "stopped" } } @else { span class="chip good" { "done" } }
+                                }
+                                span class="s wrap" { (lesson.outcome) }
+                            }
+                            span class="age" { (lesson.agent) }
+                        }
+                    }
+                    div class="foot" { (ic("sparkle", "sm")) "When an agent stops, it says why. Those reasons are searched before the next attempt." }
                 }
             }
         },
@@ -5225,15 +5427,26 @@ pub fn lessons(
 /// A principal's record in one quiet line: what the log says a runner
 /// found of their claims, and what humans said of their changes.
 pub fn record_words(record: &ambolt_core::Record) -> String {
-    let mut words = match record.reproduced_percent {
-        Some(percent) => format!("{percent}% of {} judged claims reproduced", record.judged),
-        None if record.claims > 0 => format!("{} claims, none judged yet", record.claims),
-        None => "no claims yet".to_owned(),
+    let mut words = if record.judged > 0 {
+        format!(
+            "{} of {} claims reproduced",
+            record.reproduced, record.judged
+        )
+    } else if record.claims > 0 {
+        format!("{} claims, none re-run yet", record.claims)
+    } else {
+        "no claims yet".to_owned()
     };
-    if record.blocks > 0 {
-        words.push_str(&format!(" · {} human block(s)", record.blocks));
+    if record.disputed > 0 {
+        words.push_str(&format!(" · {} disputed", record.disputed));
     }
-    words.push_str(&format!(" · {} days", record.window_days));
+    if record.blocks > 0 {
+        words.push_str(&format!(
+            " · blocked by a person {} time{}",
+            record.blocks,
+            if record.blocks == 1 { "" } else { "s" }
+        ));
+    }
     words
 }
 
