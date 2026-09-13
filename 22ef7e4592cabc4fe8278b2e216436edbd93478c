@@ -1,0 +1,148 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ifirstrun0126",
+      "id": "c-0zfd0ystwzxvwngthmc0xekkke",
+      "landed_oid": "22ef7e4592cabc4fe8278b2e216436edbd93478c",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 127,
+      "opened_at": "2026-09-13T19:01:42.497034119Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-694cgnyrs5yt19xres7bmr7mpc",
+      "title": "Walk the first run past the coverage page",
+      "updated_at": "2026-09-13T19:02:38.701284552Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-0zfd0ystwzxvwngthmc0xekkke",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-0sqbjam16v8vvjfde5ntj1hyhg",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1155,
+        "summary": "cargo test --workspace: green; scripts/first-run.sh: every expectation met on the laptop",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-0zfd0ystwzxvwngthmc0xekkke",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-6j84wcntkbzv7t1haq43hr1w1h",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1156,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "22ef7e4592cabc4fe8278b2e216436edbd93478c",
+    "landed_at": "2026-09-13T19:02:38.701284552Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-0zfd0ystwzxvwngthmc0xekkke",
+      "commit_oid": "22ef7e4592cabc4fe8278b2e216436edbd93478c",
+      "message": "Walk the first run past the coverage page\n\nThe first-run script checks that a private repository's pages send a\nstranger to sign in. One of the pages it names, debt, was renamed to\ncoverage in the previous change and now answers a permanent redirect\nfirst; the script asks for the page by its new name.\n\nChange-Id: Ifirstrun0126\nTask: t-694cgnyrs5yt19xres7bmr7mpc\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "scripts/first-run.sh"
+      ],
+      "session": null
+    },
+    "seq": 1160,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-0sqbjam16v8vvjfde5ntj1hyhg, cl-6j84wcntkbzv7t1haq43hr1w1h",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-6j84wcntkbzv7t1haq43hr1w1h",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 156 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 1 path(s) outside docs/, *.md: scripts/first-run.sh",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-0zfd0ystwzxvwngthmc0xekkke",
+        "claim": "cl-0sqbjam16v8vvjfde5ntj1hyhg",
+        "command": "cargo test --workspace",
+        "id": "vr-2rrjjp3w3th1hvt40tjene98r6",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1157
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-0zfd0ystwzxvwngthmc0xekkke",
+        "claim": "cl-6j84wcntkbzv7t1haq43hr1w1h",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-6s7ytx09agae4jaw0fbgj8q6t1",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.89s",
+        "revision": 1,
+        "seq": 1158
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "vfPmXC8RQc0C2P1IylOGa2BLC/La3UdQBs0aMbwBgIldCTokCBfgzbekvG1sqfgp4LnhvMkjnTKJtkZ0MuVWCQ=="
+  }
+}
