@@ -110,7 +110,7 @@ get "changes/$CH/receipt" "$TOKEN" >receipt.json
 KEY=$(curl -sS "$URL/api/forge/key" | json "d['key']")
 "$BIN" receipt verify receipt.json --key "$KEY" >/dev/null || { echo "!! the receipt did not verify"; exit 1; }
 expect "$(get repos/ada/demo/debt "$TOKEN" | json "d['counts']['claimed']")" 1 "the debt map counts one claimed line"
-for p in /ada/demo /ada/demo/changes/1 /ada/demo/debt /tasks /agents; do
+for p in /ada/demo /ada/demo/changes/1 /ada/demo/coverage /tasks /agents; do
   expect "$(status "$p")" 303 "a private page sends a stranger to sign in ($p)"
 done
 
