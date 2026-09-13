@@ -1,0 +1,150 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Isweep0133",
+      "id": "c-1pecdeee57xfxxekp7h0nxd6dn",
+      "landed_oid": "ae698934b90ff53560a20549a51f6e1405e91917",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 136,
+      "opened_at": "2026-09-13T22:52:31.675392398Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-42txrdwz29qankp32yw3y5cyrf",
+      "title": "Read every page once more",
+      "updated_at": "2026-09-13T22:53:33.239078495Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-1pecdeee57xfxxekp7h0nxd6dn",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-531ddkz2ghv436zp8bkaext57k",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1250,
+        "summary": "cargo test --workspace: the suite, every page test, all green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-1pecdeee57xfxxekp7h0nxd6dn",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-6yq2hrc3dyhk1rdm1mvaes4849",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1251,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "ae698934b90ff53560a20549a51f6e1405e91917",
+    "landed_at": "2026-09-13T22:53:33.239078495Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-1pecdeee57xfxxekp7h0nxd6dn",
+      "commit_oid": "ae698934b90ff53560a20549a51f6e1405e91917",
+      "message": "Read every page once more\n\nThe last pages still in the old idiom follow the rest: the changes\nlist, search and your changes are filter pills over rows in a panel,\nwith the owner drawn on every change; the ownership offer is a panel\nwith its two answers. Three words that were the log's rather than a\nreader's go: a change is updated, not moved; a thread sits on a\nreview, not a verdict; a task is marked, not moved. The search field's\nclear glyph no longer takes the browser's blue.\n\nChange-Id: Isweep0133\nTask: t-42txrdwz29qankp32yw3y5cyrf\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs"
+      ],
+      "session": null
+    },
+    "seq": 1255,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-531ddkz2ghv436zp8bkaext57k, cl-6yq2hrc3dyhk1rdm1mvaes4849",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-6yq2hrc3dyhk1rdm1mvaes4849",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 176 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 3 path(s) outside docs/, *.md: crates/server/src/web/mod.rs, crates/server/src/web/style.css, crates/server/src/web/views.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-1pecdeee57xfxxekp7h0nxd6dn",
+        "claim": "cl-531ddkz2ghv436zp8bkaext57k",
+        "command": "cargo test --workspace",
+        "id": "vr-17d5812t2q4kx80vw0z0yhx163",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1252
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-1pecdeee57xfxxekp7h0nxd6dn",
+        "claim": "cl-6yq2hrc3dyhk1rdm1mvaes4849",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-7ykshet7t100a1kqf7t7snqwt3",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.40s",
+        "revision": 1,
+        "seq": 1253
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "U4VxzIjJTd8z3y1sx/7u1FWt+3Q0yplhu6EJFICnZbuOFtGjKWAlCY/gVSbzUUJSHxgb6Vul+4da8yfIAWUmDA=="
+  }
+}
