@@ -16,6 +16,7 @@ mod attention_budget_flow;
 mod auth_flow;
 mod burndown_flow;
 mod claim_form_flow;
+mod code_flow;
 mod common;
 mod concurrency_flow;
 mod credential_flow;

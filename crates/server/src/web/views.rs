@@ -2850,7 +2850,10 @@ pub fn repository(
                         }
                     }
                     @if let Some(readme) = readme {
-                        div class="readme" { (markdown(readme)) }
+                        div class="panel readme" {
+                            header { (ic("file", "")) h2 { "README.md" } }
+                            div class="prose" { (markdown(readme)) }
+                        }
                     }
                 }
                 div class="colr" {
@@ -2945,14 +2948,71 @@ fn breadcrumbs(repo: &str, path: &str) -> Markup {
 }
 
 /// README markdown with raw HTML stripped: content renders, markup
-/// from the file never executes.
+/// from the file never executes. Fenced code is highlighted like a file.
 fn markdown(source: &str) -> Markup {
-    use pulldown_cmark::{Event as MdEvent, Parser, html::push_html};
-    let events = Parser::new(source)
-        .filter(|event| !matches!(event, MdEvent::Html(_) | MdEvent::InlineHtml(_)));
+    use pulldown_cmark::{CodeBlockKind, Event as MdEvent, Parser, Tag, TagEnd, html::push_html};
+    let mut events = Vec::new();
+    let mut block: Option<(String, String)> = None;
+    for event in Parser::new(source) {
+        match event {
+            MdEvent::Html(_) | MdEvent::InlineHtml(_) => {}
+            MdEvent::Start(Tag::CodeBlock(kind)) => {
+                let lang = match kind {
+                    CodeBlockKind::Fenced(lang) => lang.to_string(),
+                    CodeBlockKind::Indented => String::new(),
+                };
+                block = Some((lang, String::new()));
+            }
+            MdEvent::Text(text) if block.is_some() => {
+                if let Some((_, code)) = block.as_mut() {
+                    code.push_str(&text);
+                }
+            }
+            MdEvent::End(TagEnd::CodeBlock) => {
+                if let Some((lang, code)) = block.take() {
+                    events.push(MdEvent::Html(code_block(&lang, &code).into()));
+                }
+            }
+            other => events.push(other),
+        }
+    }
     let mut out = String::new();
-    push_html(&mut out, events);
+    push_html(&mut out, events.into_iter());
     PreEscaped(out)
+}
+
+/// A fenced block as the file it would be, by the word after the fence.
+fn code_block(lang: &str, code: &str) -> String {
+    let word = lang
+        .split([' ', ',', '{'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let extension = match word.as_str() {
+        "rust" => "rs",
+        "shell" | "bash" | "sh" | "console" | "zsh" => "sh",
+        "javascript" => "js",
+        "typescript" => "ts",
+        "python" => "py",
+        "markdown" => "md",
+        "yaml" | "yml" => "yaml",
+        "" => "txt",
+        other => other,
+    };
+    let mut coder = super::highlight::Coder::for_path(&format!("block.{extension}"), code.len());
+    let mut html = String::from("<pre><code class=\"src\">");
+    let mut lines = code.split('\n').collect::<Vec<_>>();
+    if lines.last() == Some(&"") {
+        lines.pop();
+    }
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            html.push('\n');
+        }
+        html.push_str(&coder.line(line, &[]));
+    }
+    html.push_str("</code></pre>\n");
+    html
 }
 
 pub fn file(
@@ -2970,6 +3030,9 @@ pub fn file(
         _ => &lines[..],
     };
     let binary = text.contains('\u{0}');
+    let mut coder = super::highlight::Coder::for_path(path, text.len());
+    let language = super::highlight::language(path);
+    let plain = language.is_some() && !coder.highlights();
     layout_reading(
         theme,
         who,
@@ -2978,25 +3041,36 @@ pub fn file(
         path,
         html! {
             div class="crumbs" { (breadcrumbs(repo, path)) }
-            div class="file-bar" {
-                span { (lines.len()) " lines" }
-                @if let Some(change) = landed_by {
-                    span class="sep" { "·" }
-                    span { "last landed by " }
-                    a class="link" href={ "/" (repo) "/changes/" (change.number) } {
-                        "#" (change.number) " " (change.title)
+            div class="code" {
+                header {
+                    (ic("file", ""))
+                    code { (path) }
+                    span class="sec3" {
+                        (lines.len()) " lines"
+                        @if let Some(language) = language { " · " (language) }
+                        @if plain { " · shown plain, over " (super::human_bytes(super::highlight::LIMIT as u64)) }
+                    }
+                    @if let Some(change) = landed_by {
+                        span class="sec3" {
+                            "landed by "
+                            a class="link" href={ "/" (repo) "/changes/" (change.number) } {
+                                "#" (change.number) " " (change.title)
+                            }
+                        }
+                    }
+                    div class="right" {
+                        a class="ghost sm" href={ "/" (repo) "/blame/" (path) } { (ic("review", "sm")) "Blame" }
                     }
                 }
-                a class="right-link link" href={ "/" (repo) "/blame/" (path) } { "Blame" }
-            }
-            @if binary {
-                p class="empty" { "Binary file — nothing to show." }
-            } @else {
-                div class="source" {
-                    @for (index, line) in lines.iter().enumerate() {
-                        div class="cline" {
-                            span class="no" { (index + 1) }
-                            span class={ "src" @if is_comment(line) { " comment" } } { (line) }
+                @if binary {
+                    p class="empty" { "Binary file — nothing to show." }
+                } @else {
+                    pre class="source" {
+                        @for (index, line) in lines.iter().enumerate() {
+                            div class="cline" id={ "L" (index + 1) } {
+                                a class="no" href={ "#L" (index + 1) } { (index + 1) }
+                                code class="src" { (PreEscaped(coder.line(line, &[]))) }
+                            }
                         }
                     }
                 }
@@ -3005,18 +3079,71 @@ pub fn file(
     )
 }
 
-/// Comments read as asides, so they are set in the secondary ink. A
-/// heuristic across languages, kept deliberately conservative: `#` only
-/// counts when followed by a space, so Rust attributes and C includes
-/// stay in full ink.
-fn is_comment(line: &str) -> bool {
-    let t = line.trim_start();
-    t.starts_with("//")
-        || t.starts_with("/*")
-        || t.starts_with('*')
-        || t.starts_with("--")
-        || t.starts_with("# ")
-        || t == "#"
+/// One file of a diff, rendered line by line: the new side and the old
+/// side each walk their own grammar state, and a deleted line paired
+/// with the added line that replaced it carries marks on the words that
+/// differ.
+fn diff_lines(file: &FileDiff) -> Vec<Vec<String>> {
+    let mut old_side = super::highlight::Coder::for_path(&file.path, 0);
+    let mut new_side = super::highlight::Coder::for_path(&file.path, 0);
+    file.hunks
+        .iter()
+        .map(|hunk| {
+            let lines = &hunk.lines;
+            let mut marks: Vec<super::highlight::Marks> = vec![Vec::new(); lines.len()];
+            let mut i = 0;
+            while i < lines.len() {
+                if lines[i].kind != LineKind::Del {
+                    i += 1;
+                    continue;
+                }
+                let dels = i + lines[i..]
+                    .iter()
+                    .take_while(|l| l.kind == LineKind::Del)
+                    .count();
+                let adds = dels
+                    + lines[dels..]
+                        .iter()
+                        .take_while(|l| l.kind == LineKind::Add)
+                        .count();
+                for k in 0..(dels - i).min(adds - dels) {
+                    let (old, new) =
+                        super::highlight::marks(&lines[i + k].text, &lines[dels + k].text);
+                    marks[i + k] = old;
+                    marks[dels + k] = new;
+                }
+                i = adds.max(i + 1);
+            }
+            lines
+                .iter()
+                .zip(marks)
+                .map(|(line, marks)| match line.kind {
+                    LineKind::Del => old_side.line(&line.text, &marks),
+                    LineKind::Add => new_side.line(&line.text, &marks),
+                    LineKind::Context => {
+                        old_side.line(&line.text, &[]);
+                        new_side.line(&line.text, &marks)
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// "lines 12–40": where a hunk sits in the new file, which is the one a
+/// reader has open.
+fn hunk_range(hunk: &super::diff::Hunk) -> String {
+    let new: Vec<i64> = hunk
+        .lines
+        .iter()
+        .filter(|l| l.kind != LineKind::Del)
+        .map(|l| l.number)
+        .collect();
+    match (new.first(), new.last()) {
+        (Some(first), Some(last)) if first != last => format!("lines {first}–{last}"),
+        (Some(first), _) => format!("line {first}"),
+        _ => hunk.header.clone(),
+    }
 }
 
 /// The list of a repository's changes: newest first, filtered by state,
@@ -3283,34 +3410,57 @@ pub fn change(page: ChangePage) -> Markup {
                         p class="nodiff" { "No diff to show for this revision." }
                     }
                     @for file in files {
-                        div class="file-head" { code { (file.path) } }
-                        @for hunk in &file.hunks {
-                            div class="hunk" {
-                                div class="hunk-head" { (hunk.header) }
-                                @for line in &hunk.lines {
-                                    @let (class, sign) = match line.kind {
-                                        LineKind::Add => ("ln add", "+"),
-                                        LineKind::Del => ("ln del", "−"),
-                                        LineKind::Context => ("ln ctx", ""),
-                                    };
-                                    @let side = if line.kind == LineKind::Del { "old" } else { "new" };
-                                    div class=(class) {
-                                        @if can_discuss {
-                                            a class="no" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) "&at=" (side) ":" (line.number) ":" (query_path(&file.path)) "#at" } { (line.number) }
-                                        } @else {
-                                            span class="no" { (line.number) }
+                        @let rendered = diff_lines(file);
+                        @let adds = file.hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == LineKind::Add).count();
+                        @let dels = file.hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == LineKind::Del).count();
+                        div class="diff" {
+                            header {
+                                (ic("file", ""))
+                                code { (file.path) }
+                                span class="pm" {
+                                    span class="plus" { "+" (adds) }
+                                    " "
+                                    span class="minus" { "−" (dels) }
+                                }
+                                div class="right" {
+                                    a class="ghost sm" href={ "/" (repo) "/tree/" (file.path) } { (ic("code", "sm")) "File" }
+                                    a class="ghost sm" href={ "/" (repo) "/blame/" (file.path) } { (ic("review", "sm")) "Blame" }
+                                }
+                            }
+                            @for (h, hunk) in file.hunks.iter().enumerate() {
+                                div class="hunk" {
+                                    div class="hunk-head" { (hunk_range(hunk)) }
+                                    @for (i, line) in hunk.lines.iter().enumerate() {
+                                        @let (class, sign) = match line.kind {
+                                            LineKind::Add => ("ln add", "+"),
+                                            LineKind::Del => ("ln del", "−"),
+                                            LineKind::Context => ("ln ctx", ""),
+                                        };
+                                        @let side = if line.kind == LineKind::Del { "old" } else { "new" };
+                                        @let (old_no, new_no) = match line.kind {
+                                            LineKind::Add => (None, Some(line.number)),
+                                            LineKind::Del => (Some(line.number), None),
+                                            LineKind::Context => (line.old, Some(line.number)),
+                                        };
+                                        div class=(class) {
+                                            span class="no" { @if let Some(n) = old_no { (n) } }
+                                            @if can_discuss {
+                                                a class="no" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) "&at=" (side) ":" (line.number) ":" (query_path(&file.path)) "#at" } { @if let Some(n) = new_no { (n) } @else { (line.number) } }
+                                            } @else {
+                                                span class="no" { @if let Some(n) = new_no { (n) } }
+                                            }
+                                            span class="sign" { (sign) }
+                                            code class="cd" { (PreEscaped(&rendered[h][i])) }
                                         }
-                                        span class="sign" { (sign) }
-                                        span class="code" { (line.text) }
-                                    }
-                                    @if let Some(here) = inline.get(&(file.path.as_str(), side, line.number)) {
-                                        @for thread in here {
-                                            (thread_block(repo, change, shown, thread))
+                                        @if let Some(here) = inline.get(&(file.path.as_str(), side, line.number)) {
+                                            @for thread in here {
+                                                (thread_block(repo, change, shown, thread))
+                                            }
                                         }
-                                    }
-                                    @if composer_line == Some((file.path.as_str(), side, line.number)) {
-                                        @if let Some(at) = &composer {
-                                            (thread_composer(repo, change, shown, at))
+                                        @if composer_line == Some((file.path.as_str(), side, line.number)) {
+                                            @if let Some(at) = &composer {
+                                                (thread_composer(repo, change, shown, at))
+                                            }
                                         }
                                     }
                                 }
@@ -4371,6 +4521,8 @@ pub fn blame(theme: Theme, who: Reading<'_>, repo: &str, path: &str, rows: &[Bla
     let with_gaps = count(ambolt_core::LineState::Gap);
     let argued = count(ambolt_core::LineState::Argued);
     let unattributed = count(ambolt_core::LineState::Imported);
+    let bytes: usize = rows.iter().map(|r| r.text.len() + 1).sum();
+    let mut coder = super::highlight::Coder::for_path(path, bytes);
     layout_reading(
         theme,
         who,
@@ -4379,40 +4531,48 @@ pub fn blame(theme: Theme, who: Reading<'_>, repo: &str, path: &str, rows: &[Bla
         path,
         html! {
             div class="crumbs" { (breadcrumbs(repo, path)) }
-            div class="file-bar" {
-                span { (rows.len()) " lines" }
-                @if reproduced > 0 { span class="sep" { "·" } span { (reproduced) " reproduced" } }
-                @if claimed > 0 { span class="sep" { "·" } span { (claimed) " claimed, never re-run" } }
-                @if with_gaps > 0 { span class="sep" { "·" } span class="warn" { (with_gaps) " under a declared gap" } }
-                @if argued > 0 { span class="sep" { "·" } span { (argued) " argued only" } }
-                @if unattributed > 0 { span class="sep" { "·" } span { (unattributed) " imported" } }
-                a class="link" href={ "/" (repo) "/coverage" } { "Whole repository" }
-                a class="right-link link" href={ "/" (repo) "/tree/" (path) } { "Source" }
-            }
-            div class="source blame" {
-                @for (index, row) in rows.iter().enumerate() {
-                    // Attribution is labelled once per run of lines from
-                    // the same change, the way a reader scans it.
-                    @let starts_run = index == 0
-                        || rows[index - 1].provenance.as_ref().map(|p| p.change.number)
-                            != row.provenance.as_ref().map(|p| p.change.number);
-                    @let state = state_of(row);
-                    div class={ "cline " (state.as_str()) @if starts_run { " run" } } {
-                        span class="who" {
-                            @if starts_run {
-                                @match &row.provenance {
-                                    Some(p) => {
-                                        a class="link" href={ "/" (repo) "/changes/" (p.change.number) }
-                                          title=(attribution(p)) {
-                                            "#" (p.change.number)
+            div class="code blame" {
+                header {
+                    (ic("review", ""))
+                    code { (path) }
+                    span class="sec3" {
+                        (rows.len()) " lines"
+                        @if reproduced > 0 { " · " (reproduced) " reproduced" }
+                        @if claimed > 0 { " · " (claimed) " claimed, never re-run" }
+                        @if with_gaps > 0 { " · " span class="warn" { (with_gaps) " under a declared gap" } }
+                        @if argued > 0 { " · " (argued) " argued only" }
+                        @if unattributed > 0 { " · " (unattributed) " imported" }
+                    }
+                    div class="right" {
+                        a class="ghost sm" href={ "/" (repo) "/coverage" } { (ic("coverage", "sm")) "Whole repository" }
+                        a class="ghost sm" href={ "/" (repo) "/tree/" (path) } { (ic("code", "sm")) "Source" }
+                    }
+                }
+                pre class="source" {
+                    @for (index, row) in rows.iter().enumerate() {
+                        // Attribution is labelled once per run of lines from
+                        // the same change, the way a reader scans it.
+                        @let starts_run = index == 0
+                            || rows[index - 1].provenance.as_ref().map(|p| p.change.number)
+                                != row.provenance.as_ref().map(|p| p.change.number);
+                        @let state = state_of(row);
+                        div class={ "cline " (state.as_str()) @if starts_run { " run" } } {
+                            span class="who" {
+                                @if starts_run {
+                                    @match &row.provenance {
+                                        Some(p) => {
+                                            a class="link" href={ "/" (repo) "/changes/" (p.change.number) }
+                                              title=(attribution(p)) {
+                                                "#" (p.change.number)
+                                            }
                                         }
+                                        None => { span class="sec3" { "—" } }
                                     }
-                                    None => { span class="sec3" { "—" } }
                                 }
                             }
+                            span class="no" title=(state_words(state)) { (row.number) }
+                            code class="src" { (PreEscaped(coder.line(&row.text, &[]))) }
                         }
-                        span class="no" title=(state_words(state)) { (row.number) }
-                        span class={ "src" @if is_comment(&row.text) { " comment" } } { (row.text) }
                     }
                 }
             }

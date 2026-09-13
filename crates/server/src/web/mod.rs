@@ -11,6 +11,7 @@
 //! as the rest of the dev seam.
 
 mod diff;
+mod highlight;
 mod views;
 
 use crate::auth::resolve_bearer;

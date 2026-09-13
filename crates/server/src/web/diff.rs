@@ -14,6 +14,8 @@ pub struct Line {
     pub kind: LineKind,
     /// New-file line number; deletions carry the old-file number.
     pub number: i64,
+    /// The old-file number of a context line, which has both.
+    pub old: Option<i64>,
     pub text: String,
 }
 
@@ -59,28 +61,30 @@ pub fn parse(patch: &str) -> Vec<FileDiff> {
                 });
             }
         } else if let Some(hunk) = files.last_mut().and_then(|f| f.hunks.last_mut()) {
-            let (kind, number, text) = match line.split_at_checked(1) {
+            let (kind, number, old, text) = match line.split_at_checked(1) {
                 Some(("+", rest)) => {
                     let n = new_no;
                     new_no += 1;
-                    (LineKind::Add, n, rest)
+                    (LineKind::Add, n, None, rest)
                 }
                 Some(("-", rest)) => {
                     let n = old_no;
                     old_no += 1;
-                    (LineKind::Del, n, rest)
+                    (LineKind::Del, n, None, rest)
                 }
                 Some((" ", rest)) => {
                     let n = new_no;
+                    let o = old_no;
                     old_no += 1;
                     new_no += 1;
-                    (LineKind::Context, n, rest)
+                    (LineKind::Context, n, Some(o), rest)
                 }
                 _ => continue,
             };
             hunk.lines.push(Line {
                 kind,
                 number,
+                old,
                 text: text.to_owned(),
             });
         }
@@ -136,6 +140,8 @@ index 1111111..2222222 100644
         assert_eq!(lines.len(), 4);
         assert_eq!(lines[0].kind, LineKind::Context);
         assert_eq!(lines[0].number, 18);
+        assert_eq!(lines[0].old, Some(18));
+        assert_eq!(lines[2].old, None);
         assert_eq!(lines[1].kind, LineKind::Del);
         assert_eq!(lines[2].kind, LineKind::Add);
         assert_eq!(lines[2].number, 19);

@@ -286,7 +286,7 @@ async fn web_ui_full_journey() {
     let (_, body, _) = ada.get("/ada/demo/tree/greeting.txt");
     assert!(body.contains("1 lines") || body.contains("2 lines"));
     assert!(
-        body.contains("last landed by"),
+        body.contains("landed by"),
         "a file should link to its change"
     );
     assert!(body.contains(r#"class="cline""#), "lines are numbered rows");

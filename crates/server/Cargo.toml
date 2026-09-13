@@ -20,6 +20,7 @@ ambolt-git = { path = "../git" }
 flate2 = "1.1.9"
 maud = { version = "0.27.0", features = ["axum"] }
 pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+syntect = { version = "5.3.0", default-features = false, features = ["default-syntaxes", "html", "regex-fancy", "dump-load", "yaml-load"] }
 rand = "0.10.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

@@ -20,6 +20,8 @@
   --good: #0E9F6E; --good-soft: rgba(14, 159, 110, 0.12);
   --bad: #DC2626; --bad-soft: rgba(220, 38, 38, 0.10);
   --idle: #C3C9D3;
+  --kw: #2F5BEA; --str: #0E9F6E; --typ: #0E8A83; --cm: #6F7A8B; --num: #BE123C;
+  --mark-add: rgba(14, 159, 110, 0.28); --mark-del: rgba(220, 38, 38, 0.22);
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px -12px rgba(15, 23, 42, 0.18);
   --pop: 0 12px 40px -12px rgba(15, 23, 42, 0.35);
   /* the older page rules read these names; each is one of the above */
@@ -41,6 +43,8 @@
     --good: #34D399; --good-soft: rgba(52, 211, 153, 0.14);
     --bad: #F87171; --bad-soft: rgba(248, 113, 113, 0.14);
     --idle: #3A4150;
+    --kw: #82A9FF; --str: #7EE0A5; --typ: #6EE0D8; --cm: #7E8797; --num: #F9A8B8;
+    --mark-add: rgba(52, 211, 153, 0.28); --mark-del: rgba(248, 113, 113, 0.30);
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px -14px rgba(0, 0, 0, 0.6);
     --pop: 0 20px 60px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.14);
     color-scheme: dark;
@@ -54,6 +58,8 @@
   --good: #34D399; --good-soft: rgba(52, 211, 153, 0.14);
   --bad: #F87171; --bad-soft: rgba(248, 113, 113, 0.14);
   --idle: #3A4150;
+    --kw: #82A9FF; --str: #7EE0A5; --typ: #6EE0D8; --cm: #7E8797; --num: #F9A8B8;
+    --mark-add: rgba(52, 211, 153, 0.28); --mark-del: rgba(248, 113, 113, 0.30);
   --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px -14px rgba(0, 0, 0, 0.6);
   --pop: 0 20px 60px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.14);
   color-scheme: dark;
@@ -355,47 +361,68 @@ a.srow:hover .t { text-decoration: underline; }
 .ftable .dir::after { content: "/"; color: var(--ink3); margin-left: 1px; }
 .ftable .last { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ftable a.last:hover { color: var(--ink); text-decoration: underline; }
-.readme { border-top: 1px solid var(--hair); padding: 22px 22px 30px; }
-.readme > * { max-width: 76ch; }
-.readme h1, .readme h2, .readme h3 { font-size: 15px; font-weight: 600; margin: 16px 0 6px; }
-.readme h1:first-child { margin-top: 0; }
-.readme p { font-size: 13.5px; color: var(--ink2); line-height: 1.65; margin: 6px 0; }
-.readme ul, .readme ol { margin: 6px 0 6px 20px; color: var(--ink2); }
-.readme li { margin: 2px 0; }
-.readme code { font-size: 12px; background: var(--raise); padding: 1px 5px; border-radius: 4px; }
+.readme { margin-top: 22px; }
+.prose { padding: 18px 22px 24px; }
+.prose > * { max-width: 76ch; }
+.prose h1 { font-size: 20px; margin: 22px 0 8px; }
+.prose h2 { font-size: 16px; margin: 22px 0 8px; }
+.prose h3 { font-size: 14.5px; margin: 22px 0 8px; }
+.prose > h1:first-child, .prose > h2:first-child { margin-top: 0; }
+.prose p { font-size: 14px; color: var(--ink2); line-height: 1.65; margin: 8px 0; }
+.prose ul, .prose ol { margin: 8px 0 8px 22px; color: var(--ink2); line-height: 1.6; }
+.prose li { margin: 3px 0; }
+.prose a { color: var(--accent); }
+.prose a:hover { text-decoration: underline; }
+.prose code { font-size: 12.5px; background: var(--raise); padding: 1px 5px; border-radius: 4px; }
+.prose blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--hair2); color: var(--ink2); }
+.prose hr { border: none; border-top: 1px solid var(--hair); margin: 20px 0; }
+.prose table { border-collapse: collapse; font-size: 13.5px; margin: 10px 0; }
+.prose th, .prose td { border: 1px solid var(--hair); padding: 6px 10px; text-align: left; }
+.prose img { max-width: 100%; }
 /* Prose reads at 76ch; code wants room, so it gets its own measure
-   and wraps rather than scrolling — this is documentation, not a diff. */
-.readme pre {
-  background: var(--raise); padding: 12px 14px; border-radius: 6px;
-  font-size: 12px; margin: 10px 0; max-width: 108ch;
+   and wraps rather than scrolling: this is documentation, not a diff. */
+.prose pre {
+  background: var(--raise); border: 1px solid var(--hair); padding: 12px 14px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.6; margin: 12px 0; max-width: 108ch;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.readme pre code { background: none; padding: 0; }
+.prose pre code { background: none; padding: 0; font-size: inherit; }
 
-/* file view */
-.file-bar {
-  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  padding: 0 22px 14px; font-size: 12.5px; color: var(--ink2);
-  border-bottom: 1px solid var(--hair);
-}
-.file-bar .sep { color: var(--ink3); }
-.source { font-family: var(--mono); font-size: 12.5px; line-height: 1.65; padding: 12px 0 32px; overflow-x: auto; }
+/* The code frame: a file, raised and highlighted. The tokens are the
+   grammar's own scope names; only the few that carry meaning get a
+   colour, and comments recede. */
+.code { background: var(--raise); border: 1px solid var(--hair); border-radius: 10px; overflow: hidden; margin-top: 14px; }
+.code > header, .diff > header { display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--hair); font-size: 13px; color: var(--ink2); background: var(--panel); flex-wrap: wrap; min-height: 40px; }
+.code > header code, .diff > header code { color: var(--ink); font-weight: var(--wmed); font-size: 13px; overflow-wrap: anywhere; }
+.code > header .ic, .diff > header .ic { color: var(--ink3); flex: none; }
+.code > header .right, .diff > header .right { margin-left: auto; display: flex; gap: 4px; align-items: center; }
+.code > header .warn { color: var(--bad); }
+.source { font-family: var(--mono); font-size: 13px; line-height: 1.7; padding: 10px 0 14px; overflow-x: auto; margin: 0; }
 .cline { display: grid; grid-template-columns: 56px 1fr; min-width: max-content; }
-.cline:hover { background: var(--hover); }
+.cline:hover, .cline:target { background: var(--raise2); }
 .cline .no {
-  color: var(--ink3); text-align: right; padding-right: 16px;
-  user-select: none; font-size: 11px;
-  position: sticky; left: 0; background: var(--bg);
+  color: var(--ink3); text-align: right; padding-right: 18px;
+  user-select: none; font-size: 12px; text-decoration: none;
+  position: sticky; left: 0; background: var(--raise);
 }
-.cline:hover .no { background: var(--hover); }
-.cline .src { white-space: pre; padding-right: 32px; }
-.cline .src.comment { color: var(--ink2); }
+.cline:hover .no, .cline:target .no { background: var(--raise2); }
+a.no:hover { color: var(--accent); }
+.cline .src, .ln .cd { white-space: pre; padding-right: 32px; font-family: inherit; font-size: inherit; }
+.keyword, .storage { color: var(--kw); }
+.string { color: var(--str); }
+.comment { color: var(--cm); font-style: italic; }
+.constant.numeric, .constant.language, .constant.character { color: var(--num); }
+.entity.name.type, .support.type, .storage.type.class, .entity.name.class, .entity.name.struct, .entity.name.enum, .entity.name.trait { color: var(--typ); }
+.entity.name.function, .support.function { color: var(--ink); font-weight: var(--wmed); }
+.entity.name.tag { color: var(--kw); }
+.entity.name.section { color: var(--typ); }
+.entity.other.attribute-name, .variable.parameter, .support.macro { color: var(--ink2); }
+.meta.annotation, .meta.attribute { color: var(--ink2); }
+.punctuation.definition.comment { color: var(--cm); }
 
 /* blame: attribution as judgment */
-.file-bar .right-link { margin-left: auto; color: var(--ink2); }
-.file-bar .warn { color: var(--bad); }
-.source.blame .cline { grid-template-columns: 52px 56px 1fr; }
-.blame .who { text-align: right; padding-right: 14px; font-size: 11px; color: var(--ink2); }
+.code.blame .cline { grid-template-columns: 60px 56px 1fr; }
+.blame .who { text-align: right; padding-right: 14px; font-size: 12px; color: var(--ink2); }
 .blame .who a:hover { color: var(--ink); text-decoration: underline; }
 .blame .cline.run { border-top: 1px solid var(--hair); }
 .blame .cline.run:first-child { border-top: none; }
@@ -443,19 +470,26 @@ a.srow:hover .t { text-decoration: underline; }
 }
 .chg-split > .colr { border-left: 1px solid var(--hair); min-width: 0; }
 
-.file-head { font-size: 12.5px; display: flex; gap: 10px; align-items: baseline; padding: 16px 22px 10px; }
-.file-head code { font-size: 12px; }
-.hunk { font-family: var(--mono); font-size: 12.5px; line-height: 1.6; border-top: 1px solid var(--hair); overflow-x: auto; }
-.hunk-head { color: var(--ink3); padding: 5px 22px; font-size: 11px; font-family: var(--mono); background: var(--raise); white-space: pre; }
-.ln { display: grid; grid-template-columns: 44px 20px 1fr; min-width: max-content; }
-.ln .no { color: var(--ink3); text-align: right; padding-right: 10px; user-select: none; }
+/* The diff frame: one file, its hunks, and under a line the threads
+   about it. Whole-line tints say what happened; marks say which words. */
+.diff { background: var(--raise); border: 1px solid var(--hair); border-radius: 10px; overflow: hidden; margin: 14px 22px; }
+.diff > header .pm { font-family: var(--mono); font-size: 12.5px; }
+.diff > header .plus { color: var(--good); }
+.diff > header .minus { color: var(--ink3); }
+.hunk { font-family: var(--mono); font-size: 13px; line-height: 1.7; overflow-x: auto; }
+.hunk + .hunk { border-top: 1px solid var(--hair); }
+.hunk-head { color: var(--ink3); padding: 5px 14px; font-size: 12px; font-family: var(--sans); background: var(--panel); border-bottom: 1px solid var(--hair); }
+.ln { display: grid; grid-template-columns: 48px 48px 22px 1fr; min-width: max-content; }
+.ln .no { color: var(--ink3); text-align: right; padding-right: 10px; user-select: none; font-size: 12px; }
 .ln .sign { color: var(--ink3); text-align: center; user-select: none; }
-.ln .code { white-space: pre; padding-right: 32px; }
-.ln.ctx .code { color: var(--ink2); }
-.ln.add { background: var(--add); }
-.ln.add .sign { color: var(--ok); }
-.ln.del { background: var(--del); }
-.ln.del .code, .ln.del .sign { color: var(--ink3); }
+.ln.ctx .cd { color: var(--ink2); }
+.ln.add { background: var(--good-soft); }
+.ln.add .sign { color: var(--good); }
+.ln.del { background: var(--bad-soft); }
+.ln.del .sign { color: var(--bad); }
+.ln.del .cd { color: var(--ink2); }
+.ln.add mark { background: var(--mark-add); color: inherit; border-radius: 2px; }
+.ln.del mark { background: var(--mark-del); color: inherit; border-radius: 2px; }
 .nodiff { padding: 24px 22px; color: var(--ink3); font-size: 12.5px; }
 
 .composer { border-top: 1px solid var(--hair); padding: 16px 22px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
