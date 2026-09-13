@@ -42,14 +42,14 @@ async fn a_file_a_diff_and_a_readme_are_highlighted_on_the_server() {
     assert!(page.contains(r#"class="code""#), "{page}");
     assert!(page.contains("2 lines · Rust"), "{page}");
     assert!(
-        page.contains(r#"<span class="storage modifier rust">pub</span>"#),
+        page.contains(r#"<span class="hl-storage hl-modifier hl-rust">pub</span>"#),
         "{page}"
     );
-    assert!(page.contains(r#"class="comment"#), "{page}");
+    assert!(page.contains(r#"class="hl-comment"#), "{page}");
     assert!(!page.contains("style="), "{page}");
     let (_, toml) = page_with_cookie(app, "/ada/demo/tree/Cargo.toml", &ada).await;
     assert!(
-        toml.contains("TOML") && toml.contains("entity name section toml"),
+        toml.contains("TOML") && toml.contains("hl-entity hl-name hl-section hl-toml"),
         "{toml}"
     );
 
@@ -58,7 +58,7 @@ async fn a_file_a_diff_and_a_readme_are_highlighted_on_the_server() {
     assert!(repo.contains(r#"class="panel readme""#), "{repo}");
     assert!(repo.contains(r#"<h1>Demo</h1>"#), "{repo}");
     assert!(
-        repo.contains(r#"<pre><code class="src"><span class="source rust">"#),
+        repo.contains(r#"<pre><code class="src"><span class="hl-source hl-rust">"#),
         "{repo}"
     );
 
@@ -86,7 +86,7 @@ async fn a_file_a_diff_and_a_readme_are_highlighted_on_the_server() {
     let (_, blame) = page_with_cookie(app, "/ada/demo/blame/src/lib.rs", &ada).await;
     assert!(blame.contains(r#"class="code blame""#), "{blame}");
     assert!(
-        blame.contains(r#"<span class="storage modifier rust">pub</span>"#),
+        blame.contains(r#"<span class="hl-storage hl-modifier hl-rust">pub</span>"#),
         "{blame}"
     );
 }

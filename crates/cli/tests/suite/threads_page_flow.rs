@@ -154,7 +154,10 @@ async fn a_thread_on_the_change_starts_from_the_discussion_column() {
     pushed_change(&forge).await;
     let (_, ada) = sign_in_as(&forge, "ada").await;
     let (_, page) = page_with_cookie(app, "/ada/demo/changes/1", &ada).await;
-    assert!(page.contains("No discussion on this change"), "{page}");
+    assert!(
+        page.contains("A line number in the diff starts a thread"),
+        "{page}"
+    );
     assert!(page.contains("at=change#at"), "{page}");
     let (_, composing) = page_with_cookie(app, "/ada/demo/changes/1?r=1&at=change", &ada).await;
     assert!(

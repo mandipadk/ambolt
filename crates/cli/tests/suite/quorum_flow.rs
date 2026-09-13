@@ -228,10 +228,11 @@ async fn two_provenances_make_quorum_and_the_same_one_twice_does_not() {
     let (status, page) =
         page_with_cookie(app, &format!("/ada/demo/changes/{}", 1), "ambolt_dev=ada").await;
     assert_eq!(status, StatusCode::OK);
-    for who in ["runner-a", "runner-b", "runner-c", "arbiter"] {
+    // The page names people by their display name.
+    for who in ["runner-a", "runner-b", "runner-c", "Arbiter"] {
         assert!(
-            page.contains(&format!("{who} reproduced this")),
-            "{who} missing from the page"
+            page.contains(&format!("{who} re-ran it and saw the same")),
+            "{who} missing from the page: {page}"
         );
     }
 }

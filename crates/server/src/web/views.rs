@@ -195,6 +195,18 @@ fn layout_reading(
     frame_in(theme, Some(who), repo, None, active, title, body, None)
 }
 
+fn layout_reading_with(
+    theme: Theme,
+    who: Reading<'_>,
+    repo: Option<&str>,
+    active: Option<Tab>,
+    title: &str,
+    body: Markup,
+    rail: Option<Markup>,
+) -> Markup {
+    frame_in(theme, Some(who), repo, None, active, title, body, rail)
+}
+
 /// A page that belongs to a section of the sidebar - the inbox, people,
 /// teams - rather than to a repository. It highlights its entry in the
 /// sidebar and renders no repository header, because it is not one.
@@ -1472,7 +1484,7 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                 }
                                 @let claims: Vec<&Claim> = f.claims.iter().filter(|c| c.revision == latest.number).collect();
                                 @if claims.is_empty() { div class="vrow" { span class="s un" { "○" } span { "no claims on r" (latest.number) } } }
-                                @for claim in claims { (claim_row(claim, &f.verifications)) }
+                                @for claim in claims { (claim_row(claim, &f.verifications, &People::default())) }
                                 @for session in attempt.sessions.iter().filter(|s| s.outcome.is_some()) {
                                     q { (session.outcome.as_deref().unwrap_or("")) }
                                 }
@@ -3225,6 +3237,8 @@ pub struct ChangePage<'a> {
     /// The revision the shown one is compared with: an interdiff.
     pub compared: Option<i64>,
     pub error: Option<&'a str>,
+    /// Everyone named on the page, by display name.
+    pub people: &'a People,
 }
 
 /// Where a new thread is being composed, from `?at=`: `new:12:src/x.rs`
@@ -3292,6 +3306,7 @@ pub fn change(page: ChangePage) -> Markup {
         composer,
         compared,
         error,
+        people,
     } = page;
     let message = revisions
         .iter()
@@ -3307,7 +3322,7 @@ pub fn change(page: ChangePage) -> Markup {
         .filter(|t| t.kind == ThreadKind::Concern && t.resolved.is_none())
         .count();
     // Threads sit under the line they are about, on the revision they
-    // were raised on; other revisions list them in the Discussion column.
+    // were raised on; other revisions list them in the Discussion panel.
     let mut inline: HashMap<(&str, &str, i64), Vec<&Thread>> = HashMap::new();
     for thread in threads.iter().filter(|t| t.revision == shown) {
         if let Anchor::Line { path, side, line } = &thread.anchor {
@@ -3327,9 +3342,157 @@ pub fn change(page: ChangePage) -> Markup {
         inline.clear();
     }
     let signed = who.viewer().is_some();
-    let can_discuss = change.state == ChangeState::Open && signed;
+    let open = change.state == ChangeState::Open;
+    let can_discuss = open && signed;
     let satisfied = trace.requirements.iter().filter(|r| r.satisfied).count();
-    layout_reading(
+    let total = trace.requirements.len();
+    let base = format!("/{repo}/changes/{}", change.number);
+    let unmet_words = || {
+        let missing: Vec<String> = trace
+            .requirements
+            .iter()
+            .filter(|r| !r.satisfied)
+            .map(|r| requirement_words(&r.description))
+            .collect();
+        format!("Not ready: {}", missing.join("; "))
+    };
+    let authors: Vec<&Revision> = revisions
+        .iter()
+        .filter(|r| !r.by.as_str().is_empty())
+        .collect();
+    let rail = html! {
+        @if open && signed {
+            div class="panel readiness" {
+                header {
+                    h2 { @if trace.satisfied { "Ready to land" } @else { "Not ready to land" } }
+                    span class="n" { (satisfied) " of " (total) }
+                }
+                div class="pad" {
+                    div class="progress" {
+                        @for _ in 0..satisfied { i class="on" {} }
+                        @for _ in satisfied..total { i class="bad" {} }
+                    }
+                    div class="reqs" {
+                        @for requirement in trace.requirements.iter().filter(|r| !r.satisfied) {
+                            (requirement_row(requirement))
+                        }
+                        @for requirement in trace.requirements.iter().filter(|r| r.satisfied) {
+                            (requirement_row(requirement))
+                        }
+                    }
+                }
+                div class="foot" {
+                    @if queued {
+                        form class="dequeue" method="post" action={ (base) "/dequeue" } {
+                            span { "In the queue; it lands from here." }
+                            input class="input sm" type="text" name="reason" placeholder="Why take it out (optional)" autocomplete="off";
+                            button class="btn2 sm" type="submit" { "Take it out" }
+                        }
+                    } @else {
+                        form method="post" action={ (base) "/enqueue" } {
+                            button class="btn wide" type="submit" disabled[!trace.satisfied] title=[(!trace.satisfied).then(unmet_words)] {
+                                (ic("check", "sm")) "Land on " (change.target)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        div class="panel" {
+            header {
+                h2 { "Claims" }
+                span class="n" { "revision " (shown) }
+                @if open && signed {
+                    div class="right" {
+                        button class="ghost sm" type="button" data-toggle="claimform" data-toggle-closed { (ic("plus", "sm")) "Add" }
+                    }
+                }
+            }
+            @if claims.is_empty() {
+                div class="empty" { b { "None yet." } "Nobody has said what they checked on revision " (shown) "." }
+            }
+            @for claim in claims {
+                (claim_row(claim, verifications, people))
+                @if can_discuss {
+                    a class="quiet discuss" href={ (base) "?r=" (shown) "&at=claim:" (claim.id.as_str()) "#at" } { "Discuss" }
+                }
+            }
+            @if open && signed {
+                form class="pad form" id="claimform" method="post" action={ (base) "/claim" } {
+                    input type="hidden" name="revision" value=(shown);
+                    select class="input sm" name="kind" aria-label="Kind" {
+                        option value="test" { "Tests" }
+                        option value="lint" { "Lint" }
+                        option value="typecheck" { "Types" }
+                        option value="build" { "Build" }
+                        option value="manual" { "Looked at it myself" }
+                        option value="reasoning" { "Reasoning" }
+                    }
+                    input class="input sm" type="text" name="command" placeholder="Command that produced it, so a runner can re-run it" autocomplete="off";
+                    input class="input sm" type="text" name="summary" placeholder="What you saw" required;
+                    input class="input sm" type="text" name="unchecked" placeholder="What this did not check, comma-separated";
+                    div class="line" {
+                        button class="btn sm" type="submit" name="passed" value="yes" { "Passed" }
+                        button class="btn2 sm" type="submit" name="passed" value="no" { "Failed" }
+                    }
+                }
+            }
+        }
+        div class="panel" {
+            header {
+                h2 { "Reviews" }
+                span class="n" { (verdicts.len()) }
+            }
+            @if verdicts.is_empty() {
+                div class="empty" { b { "None yet." } "Nobody has reviewed revision " (shown) "." }
+            }
+            @for verdict in verdicts {
+                (verdict_row(verdict, people))
+                @if can_discuss {
+                    a class="quiet discuss" href={ (base) "?r=" (shown) "&at=verdict:" (verdict.id.as_str()) "#at" } { "Discuss" }
+                }
+            }
+        }
+        div class="panel" {
+            header {
+                h2 { "Discussion" }
+                span class="n" { (threads.iter().filter(|t| t.resolved.is_none()).count()) " open" }
+                @if can_discuss {
+                    div class="right" {
+                        a class="ghost sm" href={ (base) "?r=" (shown) "&at=change#at" } { (ic("plus", "sm")) "Thread" }
+                    }
+                }
+            }
+            @if threads.is_empty() {
+                div class="empty" { b { "Nothing yet." } "A line number in the diff starts a thread on that line." }
+            }
+            @for thread in threads {
+                a class="ev-row" href={ (base) "?r=" (thread.revision) "#" (thread.id.as_str()) } {
+                    (avatar(thread.by.as_str(), people.name(&thread.by).0, people.name(&thread.by).1, false))
+                    div {
+                        div class="h" {
+                            b { (people.name(&thread.by).0) }
+                            span class="sec2" {
+                                (thread.kind.as_str())
+                                @match &thread.anchor {
+                                    Anchor::Change => " on the change",
+                                    other => (anchor_words(other)),
+                                }
+                            }
+                        }
+                        div class="sub" {
+                            "revision " (thread.revision) " · " (closure_words(thread))
+                            @if !thread.replies.is_empty() {
+                                " · " (thread.replies.len())
+                                @if thread.replies.len() == 1 { " reply" } @else { " replies" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    layout_reading_with(
         theme,
         who,
         Some(repo),
@@ -3337,62 +3500,107 @@ pub fn change(page: ChangePage) -> Markup {
         &title,
         html! {
             @if let Some(error) = error {
-                p class="flash" { (error) }
+                div class="notice bad" { (ic("alert", "")) span { (error) } }
             }
-            div class="chg-title" {
-                div class="line1" {
-                    span class="ref" { "#" (change.number) }
+            div class="pagehead" {
+                div {
                     h1 { (change.title) }
-                }
-                div class="meta" {
-                    span { (state_dot(change.state)) " " (change.state.as_str()) }
-                    @if change.competing {
-                        span class="sep" { "·" }
-                        @match change.preferred_revision {
-                            Some(preferred) => { span { "r" (preferred) " preferred" } }
-                            None => { span { "competing revisions, no comparison yet" } }
+                    div class="meta" {
+                        @match change.state {
+                            ChangeState::Open => { span class="chip acc" { (ic("changes", "")) "Open" } }
+                            ChangeState::Merged => { span class="chip good" { (ic("check", "")) "Landed" } }
+                            ChangeState::Abandoned => { span class="chip" { (ic("x", "")) "Abandoned" } }
                         }
-                    }
-                    @if change.state == ChangeState::Merged {
-                        span class="sep" { "·" }
-                        a href={ "/api/changes/" (change.id) "/receipt" } { "receipt" }
-                    }
-                    span class="sep" { "·" }
-                    span { (change.owner) }
-                    @if let Some(task) = task {
-                        span class="sep" { "·" }
-                        span { "task: " (task.title) }
-                    }
-                    span class="sep" { "·" }
-                    span { "targets " (change.target) }
-                    span class="sep" { "·" }
-                    span title=(change.opened_at) { "opened " (short_day(&change.opened_at)) }
-                    span class="sep" { "·" }
-                    span title=(change.updated_at) { "moved " (short_day(&change.updated_at)) " " (clock_of(&change.updated_at)) }
-                    @if standing > 0 {
-                        span class="sep" { "·" }
-                        span class="stands" {
-                            (standing) @if standing == 1 { " concern stands" } @else { " concerns stand" }
+                        @if change.competing {
+                            @match change.preferred_revision {
+                                Some(preferred) => { span class="chip" { (ic("rerun", "")) "r" (preferred) " preferred" } }
+                                None => { span class="chip" { (ic("rerun", "")) (authors.len()) " attempts" } }
+                            }
                         }
-                    }
-                    @if queued {
-                        span class="sep" { "·" }
-                        span { "in the landing queue" }
+                        @if queued { span class="chip acc" { (ic("clock", "")) "In the landing queue" } }
+                        @if standing > 0 {
+                            span class="chip bad stands" {
+                                (ic("alert", ""))
+                                (standing) @if standing == 1 { " concern stands" } @else { " concerns stand" }
+                            }
+                        }
+                        span class="by" {
+                            (avatar(change.owner.as_str(), people.name(&change.owner).0, people.name(&change.owner).1, false))
+                            b { (people.name(&change.owner).0) }
+                        }
+                        span { "opened " span title=(change.opened_at) { (ago(&change.opened_at)) } }
+                        span { "into " b { (change.target) } }
+                        @if let Some(task) = task {
+                            span { "for the task " a href={ "/tasks/" (task.id.as_str()) } { (task.title) } }
+                        }
+                        span { "updated " span title=(change.updated_at) { (ago(&change.updated_at)) } }
+                        @if change.state == ChangeState::Merged {
+                            a href={ "/api/changes/" (change.id) "/receipt" } { "Receipt" }
+                        }
                     }
                 }
-                div class="revtabs" {
-                    @for revision in revisions {
-                        a class={ "revtab" @if revision.number == shown && compared.is_none() { " active" } }
-                          href={ "/" (repo) "/changes/" (change.number) "?r=" (revision.number) } {
-                            "r" (revision.number)
+                @if open && signed {
+                    div class="acts" {
+                        @if !queued {
+                            form method="post" action={ (base) "/enqueue" } {
+                                button class="btn sm" type="submit" disabled[!trace.satisfied] title=[(!trace.satisfied).then(unmet_words)] {
+                                    (ic("check", "sm")) "Land on " (change.target)
+                                }
+                            }
+                        }
+                        details class="more" {
+                            summary class="btn2 sm" aria-label="More" { (ic("more", "sm")) }
+                            form class="pop" method="post" action={ (base) "/abandon" } {
+                                div class="lab" { "Abandon this change" }
+                                input class="input sm" type="text" name="reason" placeholder="Why, for whoever reads the log" required autocomplete="off";
+                                button class="danger" type="submit" { (ic("x", "sm")) "Abandon" }
+                            }
                         }
                     }
-                    @if shown > 1 {
-                        @let previous = compared.unwrap_or(shown - 1);
-                        a class={ "revtab compare" @if compared.is_some() { " active" } }
-                          href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) "&vs=" (shown - 1) }
-                          title="What changed between the two revisions" {
-                            "r" (previous) " → r" (shown)
+                }
+            }
+            div class="chg-body" {
+                @if revisions.len() > 1 {
+                    div class="seg revs" {
+                        @for revision in revisions {
+                            a class=[(revision.number == shown && compared.is_none()).then_some("on")]
+                              href={ (base) "?r=" (revision.number) } {
+                                "Revision " (revision.number)
+                                @if !revision.by.as_str().is_empty() { span class="sec3" { (people.name(&revision.by).0) } }
+                            }
+                        }
+                        @if shown > 1 {
+                            @let previous = compared.unwrap_or(shown - 1);
+                            a class=[compared.is_some().then_some("on")]
+                              href={ (base) "?r=" (shown) "&vs=" (shown - 1) }
+                              title="What changed between the two revisions" {
+                                "What changed " (previous) " → " (shown)
+                            }
+                        }
+                    }
+                }
+                @if change.competing && open && authors.len() > 1 {
+                    div class="tries" {
+                        @for revision in &authors {
+                            @let chosen = change.preferred_revision == Some(revision.number);
+                            div class={ "try" @if chosen { " chosen" } } {
+                                div class="h" {
+                                    (avatar(revision.by.as_str(), people.name(&revision.by).0, people.name(&revision.by).1, false))
+                                    b { "Revision " (revision.number) " · " (people.name(&revision.by).0) }
+                                    @if chosen { span class="chip acc" { (ic("check", "")) "chosen" } }
+                                    @else if revision.number == change.latest_revision { span class="chip" { "latest" } }
+                                }
+                                @if let Some(summary) = message_body(&revision.message) {
+                                    span class="s" { (summary.lines().next().unwrap_or("")) }
+                                }
+                                @if signed && change.preferred_revision.is_none() {
+                                    form class="choose" method="post" action={ (base) "/prefer" } {
+                                        input type="hidden" name="revision" value=(revision.number);
+                                        input class="input sm" type="text" name="rationale" placeholder="Why this one and not the others" required;
+                                        button class="btn2 sm" type="submit" { "Choose this attempt" }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -3400,229 +3608,205 @@ pub fn change(page: ChangePage) -> Markup {
                     pre class="msg" { (body) }
                 }
                 @if let Some(vs) = compared {
-                    p class="note" { "Showing what changed from r" (vs) " to r" (shown) ", not the whole change. Threads sit on the full view of each revision." }
+                    div class="notice" { (ic("changes", "")) span { "Showing what changed from r" (vs) " to r" (shown) ", not the whole change. Threads sit on the full view of each revision." } }
                 }
-            }
-            (disagreement(verdicts))
-            div class="chg-split" {
-                div {
-                    @if files.is_empty() {
-                        p class="nodiff" { "No diff to show for this revision." }
-                    }
-                    @for file in files {
-                        @let rendered = diff_lines(file);
-                        @let adds = file.hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == LineKind::Add).count();
-                        @let dels = file.hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == LineKind::Del).count();
-                        div class="diff" {
-                            header {
-                                (ic("file", ""))
-                                code { (file.path) }
-                                span class="pm" {
-                                    span class="plus" { "+" (adds) }
-                                    " "
-                                    span class="minus" { "−" (dels) }
-                                }
-                                div class="right" {
-                                    a class="ghost sm" href={ "/" (repo) "/tree/" (file.path) } { (ic("code", "sm")) "File" }
-                                    a class="ghost sm" href={ "/" (repo) "/blame/" (file.path) } { (ic("review", "sm")) "Blame" }
-                                }
+                (disagreement(verdicts, people))
+                @if files.is_empty() {
+                    div class="empty" { "No diff to show for this revision." }
+                }
+                @for file in files {
+                    @let rendered = diff_lines(file);
+                    @let adds = file.hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == LineKind::Add).count();
+                    @let dels = file.hunks.iter().flat_map(|h| &h.lines).filter(|l| l.kind == LineKind::Del).count();
+                    div class="diff" {
+                        header {
+                            (ic("file", ""))
+                            code { (file.path) }
+                            span class="pm" {
+                                span class="plus" { "+" (adds) }
+                                " "
+                                span class="minus" { "−" (dels) }
                             }
-                            @for (h, hunk) in file.hunks.iter().enumerate() {
-                                div class="hunk" {
-                                    div class="hunk-head" { (hunk_range(hunk)) }
-                                    @for (i, line) in hunk.lines.iter().enumerate() {
-                                        @let (class, sign) = match line.kind {
-                                            LineKind::Add => ("ln add", "+"),
-                                            LineKind::Del => ("ln del", "−"),
-                                            LineKind::Context => ("ln ctx", ""),
-                                        };
-                                        @let side = if line.kind == LineKind::Del { "old" } else { "new" };
-                                        @let (old_no, new_no) = match line.kind {
-                                            LineKind::Add => (None, Some(line.number)),
-                                            LineKind::Del => (Some(line.number), None),
-                                            LineKind::Context => (line.old, Some(line.number)),
-                                        };
-                                        div class=(class) {
-                                            span class="no" { @if let Some(n) = old_no { (n) } }
-                                            @if can_discuss {
-                                                a class="no" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) "&at=" (side) ":" (line.number) ":" (query_path(&file.path)) "#at" } { @if let Some(n) = new_no { (n) } @else { (line.number) } }
-                                            } @else {
-                                                span class="no" { @if let Some(n) = new_no { (n) } }
-                                            }
-                                            span class="sign" { (sign) }
-                                            code class="cd" { (PreEscaped(&rendered[h][i])) }
+                            div class="right" {
+                                a class="ghost sm" href={ "/" (repo) "/tree/" (file.path) } { (ic("code", "sm")) "File" }
+                                a class="ghost sm" href={ "/" (repo) "/blame/" (file.path) } { (ic("review", "sm")) "Blame" }
+                            }
+                        }
+                        @for (h, hunk) in file.hunks.iter().enumerate() {
+                            div class="hunk" {
+                                div class="hunk-head" { (hunk_range(hunk)) }
+                                @for (i, line) in hunk.lines.iter().enumerate() {
+                                    @let (class, sign) = match line.kind {
+                                        LineKind::Add => ("ln add", "+"),
+                                        LineKind::Del => ("ln del", "−"),
+                                        LineKind::Context => ("ln ctx", ""),
+                                    };
+                                    @let side = if line.kind == LineKind::Del { "old" } else { "new" };
+                                    @let (old_no, new_no) = match line.kind {
+                                        LineKind::Add => (None, Some(line.number)),
+                                        LineKind::Del => (Some(line.number), None),
+                                        LineKind::Context => (line.old, Some(line.number)),
+                                    };
+                                    div class=(class) {
+                                        span class="no" { @if let Some(n) = old_no { (n) } }
+                                        @if can_discuss {
+                                            a class="no" href={ (base) "?r=" (shown) "&at=" (side) ":" (line.number) ":" (query_path(&file.path)) "#at" } { @if let Some(n) = new_no { (n) } @else { (line.number) } }
+                                        } @else {
+                                            span class="no" { @if let Some(n) = new_no { (n) } }
                                         }
-                                        @if let Some(here) = inline.get(&(file.path.as_str(), side, line.number)) {
-                                            @for thread in here {
-                                                (thread_block(repo, change, shown, thread))
-                                            }
+                                        span class="sign" { (sign) }
+                                        code class="cd" { (PreEscaped(&rendered[h][i])) }
+                                    }
+                                    @if let Some(here) = inline.get(&(file.path.as_str(), side, line.number)) {
+                                        @for thread in here {
+                                            (thread_block(repo, change, shown, thread, people))
                                         }
-                                        @if composer_line == Some((file.path.as_str(), side, line.number)) {
-                                            @if let Some(at) = &composer {
-                                                (thread_composer(repo, change, shown, at))
-                                            }
+                                    }
+                                    @if composer_line == Some((file.path.as_str(), side, line.number)) {
+                                        @if let Some(at) = &composer {
+                                            (thread_composer(repo, change, shown, at))
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
-                    @let loose: Vec<&Thread> = threads
-                        .iter()
-                        .filter(|t| !(t.revision == shown && matches!(t.anchor, Anchor::Line { .. })))
-                        .collect();
-                    @let composing_loose = matches!(&composer, Some(ThreadAt::Change | ThreadAt::Claim(_) | ThreadAt::Verdict(_)));
-                    @if !loose.is_empty() || (can_discuss && composing_loose) {
-                        div class="loose" {
-                            @for thread in &loose {
-                                (thread_block(repo, change, shown, thread))
-                            }
-                            @if can_discuss && composing_loose {
-                                @if let Some(at) = &composer {
-                                    (thread_composer(repo, change, shown, at))
-                                }
-                            }
-                        }
-                    }
-                    @if change.state == ChangeState::Open && signed && change.competing && change.preferred_revision.is_none() {
-                        form class="composer" method="post" action={ "/" (repo) "/changes/" (change.number) "/prefer" } {
-                            span class="hint" { "Compare" }
-                            select name="revision" aria-label="Revision" {
-                                @for revision in revisions.iter().filter(|r| !r.by.as_str().is_empty()) {
-                                    option value=(revision.number) { "r" (revision.number) " by " (revision.by) }
-                                }
-                            }
-                            input type="text" name="rationale" placeholder="Why this one and not the others" required;
-                            button class="vbtn" type="submit" { "Prefer" }
-                        }
-                    }
-                    @if change.state == ChangeState::Open && signed {
-                        form class="composer" method="post" action={ "/" (repo) "/changes/" (change.number) "/verdict" } {
-                            input type="hidden" name="revision" value=(shown);
-                            select name="domain" aria-label="Domain" {
-                                option value="correctness" { "correctness" }
-                                option value="security" { "security" }
-                                option value="design" { "design" }
-                                option value="style" { "style" }
-                            }
-                            button class="vbtn" type="submit" name="disposition" value="approve" { "Approve" }
-                            button class="vbtn" type="submit" name="disposition" value="concern" { "Concern" }
-                            button class="vbtn" type="submit" name="disposition" value="block" { "Block" }
-                            input type="text" name="rationale" placeholder="Why" required;
                         }
                     }
                 }
-                div class="colr" {
-                    div class="rsec" {
-                        span class="cap" { "Verification" }
-                        @if claims.is_empty() { div class="vrow" { span class="s un" { "○" } span { "No claims on r" (shown) } } }
-                        @for claim in claims {
-                            (claim_row(claim, verifications))
-                            @if can_discuss {
-                                a class="quiet discuss" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) "&at=claim:" (claim.id.as_str()) "#at" } { "Discuss" }
-                            }
+                @let loose: Vec<&Thread> = threads
+                    .iter()
+                    .filter(|t| !(t.revision == shown && matches!(t.anchor, Anchor::Line { .. })))
+                    .collect();
+                @let composing_loose = matches!(&composer, Some(ThreadAt::Change | ThreadAt::Claim(_) | ThreadAt::Verdict(_)));
+                @if !loose.is_empty() || (can_discuss && composing_loose) {
+                    div class="loose" {
+                        @for thread in &loose {
+                            (thread_block(repo, change, shown, thread, people))
                         }
-                        @if change.state == ChangeState::Open && signed {
-                            form class="composer claim" method="post" action={ "/" (repo) "/changes/" (change.number) "/claim" } {
-                                input type="hidden" name="revision" value=(shown);
-                                div class="line" {
-                                    select name="kind" aria-label="Kind" {
-                                        option value="test" { "test" }
-                                        option value="lint" { "lint" }
-                                        option value="typecheck" { "typecheck" }
-                                        option value="build" { "build" }
-                                        option value="manual" { "manual" }
-                                        option value="reasoning" { "reasoning" }
-                                    }
-                                    input type="text" name="command" placeholder="Command that produced it" autocomplete="off";
-                                }
-                                input type="text" name="summary" placeholder="What you saw" required;
-                                input type="text" name="unchecked" placeholder="What this did not check, comma-separated";
-                                div class="line" {
-                                    button class="vbtn" type="submit" name="passed" value="yes" { "Passed" }
-                                    button class="vbtn" type="submit" name="passed" value="no" { "Failed" }
-                                }
+                        @if can_discuss && composing_loose {
+                            @if let Some(at) = &composer {
+                                (thread_composer(repo, change, shown, at))
                             }
                         }
                     }
-                    div class="rsec" {
-                        span class="cap" { "Judgment" }
-                        @if verdicts.is_empty() { div class="vrow" { span class="s un" { "○" } span { "No verdicts on r" (shown) } } }
-                        @for verdict in verdicts {
-                            (verdict_row(verdict))
-                            @if can_discuss {
-                                a class="quiet discuss" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) "&at=verdict:" (verdict.id.as_str()) "#at" } { "Discuss" }
-                            }
+                }
+                @if open && signed {
+                    form class="review" method="post" action={ (base) "/verdict" } {
+                        input type="hidden" name="revision" value=(shown);
+                        span class="lab" { "Your review" }
+                        select class="input sm" name="domain" aria-label="Domain" {
+                            option value="correctness" { "Correctness" }
+                            option value="security" { "Security" }
+                            option value="design" { "Design" }
+                            option value="style" { "Style" }
                         }
-                    }
-                    div class="rsec" {
-                        span class="cap" { "Discussion" }
-                        @if threads.is_empty() { div class="vrow" { span class="s un" { "○" } span { "No discussion on this change" } } }
-                        @for thread in threads {
-                            div class="vrow" {
-                                span class="s" { span class=(thread_dot(thread)) {} }
-                                div {
-                                    a class="thread-link" href={ "/" (repo) "/changes/" (change.number) "?r=" (thread.revision) "#" (thread.id.as_str()) } {
-                                        (anchor_label(&thread.anchor))
-                                    }
-                                    " · " (thread.kind.as_str()) " · " (thread.by)
-                                    @if thread.revision != shown { " · r" (thread.revision) }
-                                    div class="run" { (closure_words(thread)) }
-                                }
-                            }
-                        }
-                        @if can_discuss {
-                            a class="quiet thread-start" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) "&at=change#at" } { "Start a thread on the change" }
-                            p class="hint" { "A line number starts a thread on that line." }
-                        }
-                    }
-                    @if change.state == ChangeState::Open && signed {
-                        div class="ready" {
-                            div class="head" {
-                                b { @if trace.satisfied { "Ready" } @else { "Not ready" } }
-                                span { (satisfied) " of " (trace.requirements.len()) }
-                            }
-                            @for requirement in &trace.requirements {
-                                div class={ "req" @if !requirement.satisfied { " unmet" } } {
-                                    span class="s" { @if requirement.satisfied { "●" } @else { "●" } }
-                                    span { (requirement.description) }
-                                }
-                            }
-                            @if queued {
-                                p class="note" { "Queued — the train lands it from here." }
-                                @if signed {
-                                    form class="stack" method="post" action={ "/" (repo) "/changes/" (change.number) "/dequeue" } {
-                                        input type="text" name="reason" placeholder="Why take it out (optional)" autocomplete="off";
-                                        button class="vbtn wide" type="submit" { "Dequeue" }
-                                    }
-                                }
-                            } @else {
-                                form method="post" action={ "/" (repo) "/changes/" (change.number) "/enqueue" } {
-                                    button class="btn wide" type="submit" disabled[!trace.satisfied] { "Enqueue" }
-                                }
-                            }
-                            @if signed {
-                                details class="alt abandon" {
-                                    summary { "Abandon this change" }
-                                    form class="stack" method="post" action={ "/" (repo) "/changes/" (change.number) "/abandon" } {
-                                        input type="text" name="reason" placeholder="Why, for whoever reads the log" required autocomplete="off";
-                                        button class="vbtn wide danger" type="submit" { "Abandon" }
-                                    }
-                                }
-                            }
-                        }
+                        input class="input sm" type="text" name="rationale" placeholder="Why, for the record" required;
+                        button class="btn2 sm" type="submit" name="disposition" value="approve" { (ic("check", "sm")) "Approve" }
+                        button class="btn2 sm" type="submit" name="disposition" value="concern" { (ic("alert", "sm")) "Concern" }
+                        button class="btn2 sm danger" type="submit" name="disposition" value="block" { (ic("x", "sm")) "Block" }
                     }
                 }
             }
         },
+        Some(rail),
     )
+}
+
+/// One rule of the policy, as a sentence a person can act on, with the
+/// evidence under it while it is unmet. The policy's own words stay on
+/// the row as its title.
+fn requirement_row(requirement: &ambolt_core::Requirement) -> Markup {
+    html! {
+        div class={ "req" @if requirement.satisfied { " met" } @else { " unmet" } } title=(requirement.description) {
+            span class="st" { @if requirement.satisfied { (ic("check", "")) } @else { (ic("x", "")) } }
+            div {
+                b { (requirement_words(&requirement.description)) }
+                @if !requirement.satisfied && !requirement.evidence.is_empty() {
+                    div class="why" { (requirement.evidence) }
+                }
+            }
+        }
+    }
+}
+
+/// The policy describes its rules in the graph's terms; the page says
+/// them the way a reviewer would.
+fn requirement_words(description: &str) -> String {
+    match description {
+        "change has at least one revision" => "Has at least one revision".into(),
+        "competing revisions have a comparison" => "One attempt is chosen".into(),
+        "no concern raised in discussion is left unresolved" => "Every concern is resolved".into(),
+        "latest revision carries a passing test claim" => {
+            "Tests pass on the latest revision".into()
+        }
+        "no claim on the latest revision is disputed by a runner" => {
+            "Runner agrees with every claim".into()
+        }
+        "no blocking verdict on the latest revision" => "Nobody has blocked it".into(),
+        "a runner reproduced a claim on the latest revision" => {
+            "A runner reproduced a claim".into()
+        }
+        "owner's earned trust" => "The owner has earned trust".into(),
+        d if d.starts_with("a human has looked at this change") => {
+            "A person has looked at it since it was drawn for one".into()
+        }
+        d if d.starts_with("approved independently") => {
+            "Someone other than the author approves it".into()
+        }
+        d if d.starts_with("approved for ") => {
+            format!("Approved for {}", &d["approved for ".len()..])
+        }
+        d if d.ends_with("reproduced the same claim on the latest revision") => {
+            let n = d.split(' ').next().unwrap_or("2");
+            format!("{n} runners reproduced the same claim")
+        }
+        other => {
+            let mut chars = other.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        }
+    }
+}
+
+/// Who people are on this page: display names and whether each is an
+/// agent, looked up once by the route.
+#[derive(Default)]
+pub struct People(pub HashMap<String, (String, bool)>);
+
+impl People {
+    /// The display name and agent flag of a principal, or its id when
+    /// the page was not told.
+    pub fn name<'a>(&'a self, id: &'a PrincipalId) -> (&'a str, bool) {
+        match self.0.get(id.as_str()) {
+            Some((display, agent)) => (display.as_str(), *agent),
+            None => (id.as_str(), false),
+        }
+    }
+}
+
+/// "2 h ago", "yesterday", "5 Sep": how long since a moment, the way a
+/// person says it. The exact time rides on the element's title.
+fn ago(ts: &str) -> String {
+    let Ok(then) = ts.parse::<jiff::Timestamp>() else {
+        return short_day(ts);
+    };
+    let seconds = jiff::Timestamp::now().duration_since(then).as_secs();
+    match seconds {
+        s if s < 60 => "just now".into(),
+        s if s < 3600 => format!("{} min ago", s / 60),
+        s if s < 86_400 => format!("{} h ago", s / 3600),
+        s if s < 172_800 => "yesterday".into(),
+        s if s < 14 * 86_400 => format!("{} days ago", s / 86_400),
+        _ => short_day(ts),
+    }
 }
 
 /// Where reviewers reached opposite conclusions, put the positions
 /// beside each other. This is the one place a human's judgment is
 /// provably worth more than another review, so it gets the top of the
 /// page rather than a line in a list.
-fn disagreement(verdicts: &[Verdict]) -> Markup {
+fn disagreement(verdicts: &[Verdict], people: &People) -> Markup {
     let favour: Vec<&Verdict> = verdicts
         .iter()
         .filter(|v| v.disposition == Disposition::Approve)
@@ -3640,32 +3824,34 @@ fn disagreement(verdicts: &[Verdict]) -> Markup {
         return html! {};
     }
     html! {
-        section class="disagree" {
+        section class="panel disagree" {
             header {
                 h2 { "Reviewers disagree" }
-                span { "your judgment decides this" }
+                span class="n" { "your judgment decides this" }
             }
             div class="sides" {
                 div class="side" {
                     span class="pos ok" { "In favour" }
-                    @for verdict in &favour { (position(verdict)) }
+                    @for verdict in &favour { (position(verdict, people)) }
                 }
                 div class="side" {
                     span class="pos bad" {
                         @if against.is_empty() { "Reserved" } @else { "Against" }
                     }
-                    @for verdict in against.iter().chain(reserved.iter()) { (position(verdict)) }
+                    @for verdict in against.iter().chain(reserved.iter()) { (position(verdict, people)) }
                 }
             }
         }
     }
 }
 
-fn position(verdict: &Verdict) -> Markup {
+fn position(verdict: &Verdict, people: &People) -> Markup {
+    let (display, agent) = people.name(&verdict.by);
     html! {
         div class="stance" {
             div class="who-line" {
-                span class="nm" { (verdict.by) }
+                (avatar(verdict.by.as_str(), display, agent, false))
+                span class="nm" { (display) }
                 span class="sec3" { (verdict.domain.as_str()) }
             }
             q { (verdict.rationale) }
@@ -3684,23 +3870,6 @@ fn query_path(path: &str) -> String {
             other => format!("%{other:02X}"),
         })
         .collect()
-}
-
-fn thread_dot(thread: &Thread) -> &'static str {
-    match (&thread.resolved, thread.kind) {
-        (Some(_), _) => "dot ok",
-        (None, ThreadKind::Concern) => "dot open",
-        (None, _) => "dot idle",
-    }
-}
-
-fn anchor_label(anchor: &Anchor) -> String {
-    match anchor {
-        Anchor::Change => "the change".into(),
-        Anchor::Line { path, line, .. } => format!("{path}:{line}"),
-        Anchor::Claim { .. } => "a claim".into(),
-        Anchor::Verdict { .. } => "a verdict".into(),
-    }
 }
 
 /// What became of a thread, in a few words.
@@ -3727,55 +3896,66 @@ fn closure_words(thread: &Thread) -> String {
 /// One thread under the line it is about. Open threads show everything
 /// and take replies; resolved ones fold to a line that says how they
 /// closed, with the whole exchange a click away.
-fn thread_block(repo: &str, change: &Change, shown: i64, thread: &Thread) -> Markup {
+fn thread_block(
+    repo: &str,
+    change: &Change,
+    shown: i64,
+    thread: &Thread,
+    people: &People,
+) -> Markup {
     let verb = match thread.kind {
         ThreadKind::Question => "asked",
         ThreadKind::Concern => "raised a concern",
         ThreadKind::Note => "noted",
     };
     let id = thread.id.as_str();
+    let (display, agent) = people.name(&thread.by);
     let head = html! {
-        span class=(thread_dot(thread)) {}
-        span {
-            b { (thread.by) } " " (verb) " "
-            span class="when" { (day_of(&thread.at)) " " (clock_of(&thread.at)) }
-            @if thread.revision != shown { span class="when" { " · on r" (thread.revision) } }
+        (avatar(thread.by.as_str(), display, agent, false))
+        b { (display) }
+        span class="sec2" {
+            (verb) " on revision " (thread.revision)
+            @if let Anchor::Line { path, line, .. } = &thread.anchor { " at " code { (path) ":" (line) } }
         }
-        span class="where" { (anchor_label(&thread.anchor)) }
+        span class="when" title=(thread.at) { (ago(&thread.at)) }
     };
     let exchange = html! {
         p class="body" { (thread.body) }
         @for reply in &thread.replies {
+            @let (display, agent) = people.name(&reply.by);
             div class="reply" {
-                b { (reply.by) } span class="when" { (clock_of(&reply.at)) }
-                p { (reply.body) }
+                (avatar(reply.by.as_str(), display, agent, false))
+                span {
+                    b { (display) } span class="when" title=(reply.at) { (ago(&reply.at)) }
+                    p { (reply.body) }
+                }
             }
         }
     };
     match &thread.resolved {
         None => html! {
             div class="thread" id=(id) {
-                div class="trow" { (head) }
+                div class="h" { (head) }
                 (exchange)
                 @if change.state == ChangeState::Open {
                     div class="act" {
                         form method="post" action={ "/" (repo) "/changes/" (change.number) "/threads/" (thread.id.as_str()) "/reply" } {
                             input type="hidden" name="revision" value=(shown);
-                            input type="text" name="body" placeholder="Reply" required autocomplete="off";
-                            button class="vbtn" type="submit" { "Reply" }
+                            input class="input sm" type="text" name="body" placeholder="Reply" required autocomplete="off";
+                            button class="btn2 sm" type="submit" { "Reply" }
                         }
                         form class="resolve" method="post" action={ "/" (repo) "/changes/" (change.number) "/threads/" (thread.id.as_str()) "/resolve" } {
                             input type="hidden" name="revision" value=(shown);
-                            select name="how" aria-label="Resolve as" {
-                                option value="answered" { "answered" }
+                            select class="input sm" name="how" aria-label="Resolve as" {
+                                option value="answered" { "Answered" }
                                 @for fixed in (thread.revision + 1)..=change.latest_revision {
-                                    option value={ "fixed:" (fixed) } { "fixed in r" (fixed) }
+                                    option value={ "fixed:" (fixed) } { "Fixed in revision " (fixed) }
                                 }
-                                option value="withdrawn" { "withdrawn" }
-                                option value="overruled" { "overruled" }
+                                option value="withdrawn" { "Withdrawn" }
+                                option value="overruled" { "Overruled" }
                             }
-                            input type="text" name="note" placeholder="Why (optional)" autocomplete="off";
-                            button class="vbtn" type="submit" { "Resolve" }
+                            input class="input sm" type="text" name="note" placeholder="Why (optional)" autocomplete="off";
+                            button class="btn2 sm" type="submit" { "Resolve" }
                         }
                     }
                 }
@@ -3784,25 +3964,25 @@ fn thread_block(repo: &str, change: &Change, shown: i64, thread: &Thread) -> Mar
         Some(done) => html! {
             details class="thread folded" id=(id) {
                 summary {
-                    span class="trow" { (head) }
-                    span class="closed-inline" { (closure_words(thread)) }
+                    span class="h" { (head) }
+                    span class="chip" { (closure_words(thread)) }
                 }
                 (exchange)
                 p class="closed" {
                     (closure_words(thread))
-                    @if !done.note.is_empty() { " — " (done.note) }
+                    @if !done.note.is_empty() { ": " (done.note) }
                 }
             }
         },
     }
 }
 
-/// The form a line number opens beneath itself, or the Discussion column
+/// The form a line number opens beneath itself, or the Discussion panel
 /// opens for a claim, a verdict or the change. No script: `?at=` says
 /// where, and the page renders the form there.
 fn thread_composer(repo: &str, change: &Change, shown: i64, at: &ThreadAt) -> Markup {
     html! {
-        form class="composer thread-new" id="at" method="post" action={ "/" (repo) "/changes/" (change.number) "/threads" } {
+        form class="thread new" id="at" method="post" action={ "/" (repo) "/changes/" (change.number) "/threads" } {
             input type="hidden" name="revision" value=(shown);
             @match at {
                 ThreadAt::Change => { input type="hidden" name="on" value="change"; }
@@ -3821,74 +4001,100 @@ fn thread_composer(repo: &str, change: &Change, shown: i64, at: &ThreadAt) -> Ma
                     input type="hidden" name="verdict" value=(verdict);
                 }
             }
-            span class="at" { "New thread " (at.words()) ", r" (shown) }
-            select name="kind" aria-label="Kind" {
-                option value="question" { "question" }
-                option value="concern" { "concern" }
-                option value="note" { "note" }
+            div class="at" { "New thread " (at.words()) ", revision " (shown) }
+            div class="act" {
+                select class="input sm" name="kind" aria-label="Kind" {
+                    option value="question" { "Question" }
+                    option value="concern" { "Concern" }
+                    option value="note" { "Note" }
+                }
+                input class="input sm" type="text" name="body" placeholder="What do you want to say?" required autofocus autocomplete="off";
+                button class="btn sm" type="submit" { "Open" }
+                a class="btn2 sm" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) } { "Cancel" }
             }
-            input type="text" name="body" placeholder="What do you want to say?" required autofocus autocomplete="off";
-            button class="vbtn" type="submit" { "Open" }
-            a class="quiet" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) } { "Cancel" }
         }
     }
 }
 
-fn claim_row(claim: &Claim, verifications: &[Verification]) -> Markup {
+/// What a claim says it did, in the page's words.
+fn claim_kind_words(kind: ambolt_core::ClaimKind, passed: bool) -> &'static str {
+    match (kind.as_str(), passed) {
+        ("test", true) => "Tests pass",
+        ("test", false) => "Tests fail",
+        ("lint", true) => "Lint clean",
+        ("lint", false) => "Lint fails",
+        ("typecheck", true) => "Types check",
+        ("typecheck", false) => "Types fail",
+        ("build", true) => "Builds",
+        ("build", false) => "Does not build",
+        ("manual", _) => "Looked at it",
+        ("reasoning", _) => "Reasoning",
+        (_, true) => "Passed",
+        (_, false) => "Failed",
+    }
+}
+
+fn claim_row(claim: &Claim, verifications: &[Verification], people: &People) -> Markup {
     let runs: Vec<&Verification> = verifications
         .iter()
         .filter(|v| v.claim == claim.id)
         .collect();
     let disputed = runs.iter().any(|v| !v.agrees);
+    let (display, agent) = people.name(&claim.by);
+    let executed = claim.command.is_some();
     html! {
-        div class="vrow" {
-            @if disputed { span class="s bad" { "●" } }
-            @else if claim.passed { span class="s ok" { "●" } }
-            @else { span class="s bad" { "●" } }
+        div class="ev-row" {
+            (avatar(claim.by.as_str(), display, agent, false))
             div {
-                b { (claim.kind.as_str()) } " · " (claim.summary)
+                div class="h" {
+                    b { (claim_kind_words(claim.kind, claim.passed)) }
+                    @if disputed { span class="chip bad" { (ic("alert", "")) "disputed" } }
+                    @else if !executed { span class="sec3" { "not a check" } }
+                    @else if claim.passed { span class="chip good" { (ic("check", "")) "passed" } }
+                    @else { span class="chip bad" { (ic("x", "")) "failed" } }
+                    span class="sec3" { (display) }
+                }
                 @if let Some(command) = &claim.command {
                     div class="cmd" { (command) }
                 }
+                q { (claim.summary) }
                 @for run in &runs {
-                    div class={ "run" @if !run.agrees { " disputed" } } {
-                        (run.by)
-                        @if run.agrees { " reproduced this" } @else { " could not reproduce this" }
-                        ": " (run.observed)
+                    @let (runner, _) = people.name(&run.by);
+                    div class={ "sub" @if run.agrees { " good" } @else { " bad" } } {
+                        (ic("rerun", "sm"))
+                        (runner)
+                        @if run.agrees { " re-ran it and saw the same: " } @else { " re-ran it and saw something else: " }
+                        (run.observed)
                     }
                 }
-                @if runs.is_empty() && claim.command.is_some() {
-                    div class="run none" { "not re-run by anyone" }
+                @if runs.is_empty() && executed {
+                    div class="sub" { "Not re-run by anyone yet." }
                 }
-            }
-        }
-        @for unchecked in &claim.unchecked {
-            div class="vrow" {
-                span class="s un" { "○" }
-                div { "not checked — " (unchecked) }
+                @if !executed {
+                    div class="sub" { "An argument, not a check. Nothing to re-run." }
+                }
+                @for unchecked in &claim.unchecked {
+                    div class="sub" { "Not checked: " (unchecked) }
+                }
             }
         }
     }
 }
 
-fn verdict_row(verdict: &Verdict) -> Markup {
-    let disp = match verdict.disposition {
-        Disposition::Approve => ("disp ok", "approve"),
-        Disposition::Concern => ("disp warn", "concern"),
-        Disposition::Block => ("disp bad", "block"),
-    };
+fn verdict_row(verdict: &Verdict, people: &People) -> Markup {
+    let (display, agent) = people.name(&verdict.by);
     html! {
-        div class="vrow" {
-            @match verdict.disposition {
-                Disposition::Approve => { span class="s ok" { "●" } }
-                Disposition::Concern => { span class="s un" { "○" } }
-                Disposition::Block => { span class="s bad" { "●" } }
-            }
+        div class="ev-row" {
+            (avatar(verdict.by.as_str(), display, agent, false))
             div {
-                div class="who-line" {
-                    span class="nm" { (verdict.by) }
-                    span class=(disp.0) { (disp.1) }
-                    span class="sec3" { (verdict.domain.as_str()) }
+                div class="h" {
+                    b { (display) }
+                    @match verdict.disposition {
+                        Disposition::Approve => { span class="chip good" { (ic("check", "")) "approves" } }
+                        Disposition::Concern => { span class="chip" { (ic("alert", "")) "concern" } }
+                        Disposition::Block => { span class="chip bad" { (ic("x", "")) "blocks" } }
+                    }
+                    span class="sec3" { (verdict.domain.as_str()) @if agent { " · agent" } }
                 }
                 q { (verdict.rationale) }
             }

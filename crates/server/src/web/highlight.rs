@@ -139,10 +139,18 @@ impl Coder {
     }
 }
 
+/// Each atom of the scope becomes a class, prefixed so the grammar's
+/// vocabulary (`meta`, `source`, `dot`, `link`) never meets the page's.
 fn open(html: &mut String, scope: Scope) {
     html.push_str("<span class=\"");
     let name = scope.build_string();
-    html.push_str(&name.replace('.', " "));
+    for (index, atom) in name.split('.').enumerate() {
+        if index > 0 {
+            html.push(' ');
+        }
+        html.push_str("hl-");
+        html.push_str(atom);
+    }
     html.push_str("\">");
 }
 
@@ -292,7 +300,10 @@ mod tests {
     fn a_rust_line_gets_its_keyword_named() {
         let mut coder = Coder::for_path("src/main.rs", 100);
         let html = coder.line("pub fn main() {}", &[]);
-        assert!(html.contains("class=\"storage modifier rust\""), "{html}");
+        assert!(
+            html.contains("class=\"hl-storage hl-modifier hl-rust\""),
+            "{html}"
+        );
         assert!(html.contains(">pub<"), "{html}");
         assert!(html.contains("main"), "{html}");
         assert_eq!(
@@ -306,9 +317,9 @@ mod tests {
         let mut coder = Coder::for_path("a.rs", 100);
         let first = coder.line("/* a comment that", &[]);
         let second = coder.line("   goes on */ let x = 1;", &[]);
-        assert!(first.contains("comment"), "{first}");
+        assert!(first.contains("hl-comment"), "{first}");
         assert!(
-            second.starts_with("<span class=\"source rust\"><span class=\"comment"),
+            second.starts_with("<span class=\"hl-source hl-rust\"><span class=\"hl-comment"),
             "{second}"
         );
         for line in [&first, &second] {
@@ -343,13 +354,19 @@ mod tests {
     fn a_manifest_reads_as_one() {
         let mut coder = Coder::for_path("Cargo.toml", 100);
         let html = coder.line("[package]", &[]);
-        assert!(html.contains("entity name section toml"), "{html}");
+        assert!(
+            html.contains("hl-entity hl-name hl-section hl-toml"),
+            "{html}"
+        );
         let html = coder.line("name = \"ambolt\" # the forge", &[]);
-        assert!(html.contains("entity name tag toml"), "{html}");
-        assert!(html.contains("string quoted double toml"), "{html}");
-        assert!(html.contains("comment line"), "{html}");
+        assert!(html.contains("hl-entity hl-name hl-tag hl-toml"), "{html}");
+        assert!(
+            html.contains("hl-string hl-quoted hl-double hl-toml"),
+            "{html}"
+        );
+        assert!(html.contains("hl-comment hl-line"), "{html}");
         let html = coder.line("edition = 2024", &[]);
-        assert!(html.contains("constant numeric toml"), "{html}");
+        assert!(html.contains("hl-constant hl-numeric hl-toml"), "{html}");
     }
 
     #[test]

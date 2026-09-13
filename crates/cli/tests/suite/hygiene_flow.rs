@@ -118,7 +118,7 @@ async fn changes_say_when_and_the_list_filters_and_pages() {
     );
     let (_, page) = page_with_cookie(app, "/ada/demo/changes/1", &cookie).await;
     assert!(page.contains("Why this exists, in a paragraph."), "{page}");
-    assert!(page.contains("moved "), "{page}");
+    assert!(page.contains("updated "), "{page}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

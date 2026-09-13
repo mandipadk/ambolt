@@ -222,7 +222,7 @@ async fn web_ui_full_journey() {
     // The whole app agrees: change merged, landing tells the story,
     // the tree now exists, and the file renders escaped.
     let (_, body, _) = ada.get("/ada/demo/changes/1");
-    assert!(body.contains("merged"));
+    assert!(body.contains("Landed"));
     let (_, body, _) = ada.get("/ada/demo/review");
     assert!(body.contains("landed"));
     let (_, body, _) = ada.get("/ada/demo");

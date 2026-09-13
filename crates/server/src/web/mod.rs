@@ -3624,6 +3624,35 @@ async fn change_page(
         Err(err) => return oops(err),
     };
     let composer = query.at.as_deref().and_then(views::ThreadAt::parse);
+    // Everyone the page names, looked up once each.
+    let mut ids: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    ids.insert(change.owner.as_str());
+    ids.extend(revisions.iter().map(|r| r.by.as_str()));
+    ids.extend(claims.iter().map(|c| c.by.as_str()));
+    ids.extend(verifications.iter().map(|v| v.by.as_str()));
+    ids.extend(verdicts.iter().map(|v| v.by.as_str()));
+    for thread in &threads {
+        ids.insert(thread.by.as_str());
+        ids.extend(thread.replies.iter().map(|r| r.by.as_str()));
+    }
+    let people = views::People(
+        ids.into_iter()
+            .filter(|id| !id.is_empty())
+            .filter_map(|id| {
+                let found = app
+                    .with_store(|s| s.principal(&PrincipalId(id.to_owned())))
+                    .ok()
+                    .flatten()?;
+                Some((
+                    id.to_owned(),
+                    (
+                        found.display,
+                        found.kind == ambolt_core::PrincipalKind::Agent,
+                    ),
+                ))
+            })
+            .collect(),
+    );
 
     views::change(views::ChangePage {
         theme,
@@ -3643,6 +3672,7 @@ async fn change_page(
         composer,
         compared,
         error: query.error.as_deref(),
+        people: &people,
     })
     .into_response()
 }
