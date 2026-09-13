@@ -258,7 +258,7 @@ async fn imported_code_is_paid_down_by_reproduced_covering_claims() {
         "{page}"
     );
     assert!(
-        page.contains("Paid down") && page.contains("scout"),
+        page.contains("Paid down") && page.contains("Scout"),
         "{page}"
     );
     assert!(

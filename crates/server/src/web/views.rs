@@ -1778,6 +1778,7 @@ pub fn forge_log(
     events: &[Envelope],
     scopes: &HashMap<i64, Option<String>>,
     after: i64,
+    people: &People,
 ) -> Markup {
     let refs: Refs = numbers
         .iter()
@@ -1789,26 +1790,14 @@ pub fn forge_log(
         "log",
         "Forge log",
         html! {
-            div class="sechead" { b { "Forge log" } span { "everything, newest last" } }
-            div class="log" {
-                @for envelope in events {
-                    @let (_, text) = describe(&refs, envelope, &People::default());
-                    div class="trow" {
-                        span class="sec3" { (day_of(&envelope.ts)) " " (clock_of(&envelope.ts)) }
-                        span class="sec2" { (envelope.actor) }
-                        span {
-                            @if let Some(Some(repo)) = scopes.get(&envelope.seq.0) { a class="link sec3" href={ "/" (repo) "/activity" } { (repo) } " · " }
-                            (text)
-                            @if let Some(via) = &envelope.via {
-                                span class="sec3" { " · in session " (short(via.as_str())) }
-                            }
-                        }
-                    }
-                }
+            div class="sec top" {
+                div class="sh" { h2 { "Forge log" } span class="n" { "everything, newest last" } }
+                @if events.is_empty() { div class="panel" { div class="empty" { "Nothing more recent." } } }
             }
+            (event_days(&refs, events, people, Some(scopes)))
             @if let Some(last) = events.last() {
                 @if after > 0 || events.len() >= 200 {
-                    div class="sechead later" { span {} a class="quiet" href={ "/log?after=" (last.seq.0) } { "Later events" } }
+                    div class="sec" { a class="btn2 sm" href={ "/log?after=" (last.seq.0) } { "Later events" } }
                 }
             }
         },
@@ -5149,57 +5138,124 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
     }
 }
 
-pub fn log(
-    theme: Theme,
-    who: Reading<'_>,
-    repo: &str,
-    numbers: &HashMap<String, (i64, String)>,
-    after: i64,
+/// What kind of thing an event is, for the filter pills: the log's own
+/// tag, grouped the way a reader thinks about it.
+pub fn event_group(event: &Event) -> &'static str {
+    let tag = serde_json::to_value(event)
+        .ok()
+        .and_then(|v| v.get("kind").and_then(|k| k.as_str()).map(str::to_owned))
+        .unwrap_or_default();
+    match tag.as_str() {
+        t if t.starts_with("change_") || t.starts_with("revision_") => "changes",
+        t if t.starts_with("verdict_") || t.starts_with("thread_") => "reviews",
+        t if t.starts_with("claim_") => "claims",
+        t if t.starts_with("task_") || t.starts_with("session_") || t.starts_with("paths_") => {
+            "work"
+        }
+        _ => "forge",
+    }
+}
+
+fn group_words(group: &str) -> &'static str {
+    match group {
+        "changes" => "Changes",
+        "reviews" => "Reviews",
+        "claims" => "Claims",
+        "work" => "Tasks and sessions",
+        _ => "Repository",
+    }
+}
+
+/// Day-grouped rows of events, each with its actor drawn and a sentence.
+fn event_days(
+    refs: &Refs,
     events: &[Envelope],
+    people: &People,
+    scopes: Option<&HashMap<i64, Option<String>>>,
 ) -> Markup {
+    let mut days: Vec<(String, Vec<&Envelope>)> = Vec::new();
+    for envelope in events {
+        let day = day_of(&envelope.ts);
+        match days.last_mut() {
+            Some((last, group)) if *last == day => group.push(envelope),
+            _ => days.push((day, vec![envelope])),
+        }
+    }
+    html! {
+        @for (day, group) in &days {
+            div class="sec" {
+                div class="sh" { h2 { (day_label(day)) } span class="n" { (short_day(day)) } }
+                div class="panel" {
+                    @for envelope in group {
+                        @let (_, text) = describe(refs, envelope, people);
+                        @let (display, agent) = people.name(&envelope.actor);
+                        div class="row feed" {
+                            (avatar(envelope.actor.as_str(), display, agent, false))
+                            span class="s wrap" {
+                                @if let Some(Some(repo)) = scopes.and_then(|s| s.get(&envelope.seq.0)) { a class="chip" href={ "/" (repo) "/activity" } { (repo) } " " }
+                                (text)
+                                @if let Some(via) = &envelope.via { span class="sec3" { " · in session " (short(via.as_str())) } }
+                            }
+                            span class="age" title=(envelope.ts) { (clock_of(&envelope.ts)) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub struct ActivityPage<'a> {
+    pub theme: Theme,
+    pub who: Reading<'a>,
+    pub repo: &'a str,
+    pub numbers: &'a HashMap<String, (i64, String)>,
+    pub after: i64,
+    pub events: &'a [Envelope],
+    pub group: Option<&'a str>,
+    pub people: &'a People,
+}
+
+pub fn log(page: ActivityPage<'_>) -> Markup {
+    let ActivityPage {
+        theme,
+        who,
+        repo,
+        numbers,
+        after,
+        events,
+        group,
+        people,
+    } = page;
     let refs: Refs = numbers
         .iter()
         .map(|(id, (number, title))| (id.as_str(), (*number, title.as_str())))
         .collect();
+    let href = |g: Option<&str>| match g {
+        Some(g) => format!("/{repo}/activity?kind={g}"),
+        None => format!("/{repo}/activity"),
+    };
     layout_reading(
         theme,
         who,
         Some(repo),
         Some(Tab::Activity),
-        "Log",
+        "Activity",
         html! {
-            div class="sechead" {
-                b { "Log" }
-                span {
-                    @match (events.first(), events.last()) {
-                        (Some(first), Some(last)) if day_of(&first.ts) == day_of(&last.ts) => { (day_of(&first.ts)) }
-                        (Some(first), Some(last)) => { (day_of(&first.ts)) " to " (day_of(&last.ts)) }
-                        _ => {}
+            div class="sec top" {
+                div class="filters" {
+                    a class=[group.is_none().then_some("on")] href=(href(None)) { "All" }
+                    @for g in ["changes", "reviews", "claims", "work", "forge"] {
+                        a class=[(group == Some(g)).then_some("on")] href=(href(Some(g))) { (group_words(g)) }
                     }
                 }
-            }
-            @if events.is_empty() {
-                p class="empty" { @if after == 0 { "Nothing has happened here yet." } @else { "Nothing more recent." } }
-            }
-            div class="log" {
-                @for envelope in events {
-                    @let (_, text) = describe(&refs, envelope, &People::default());
-                    div class="trow" {
-                        span class="sec3" { (day_of(&envelope.ts)) " " (clock_of(&envelope.ts)) }
-                        span class="sec2" { (envelope.actor) }
-                        span {
-                            (text)
-                            @if let Some(via) = &envelope.via {
-                                span class="sec3" { " · in session " (short(via.as_str())) }
-                            }
-                        }
-                    }
+                @if events.is_empty() {
+                    div class="panel" { div class="empty" { @if after == 0 { "Nothing has happened here yet." } @else { "Nothing more recent." } } }
                 }
             }
+            (event_days(&refs, events, people, None))
             @if let Some(last) = events.last() {
-                div class="pager" {
-                    a class="quiet" href={ "/" (repo) "/log?after=" (last.seq.0) } { "Later events" }
-                }
+                div class="sec" { a class="btn2 sm" href={ "/" (repo) "/activity?after=" (last.seq.0) @if let Some(g) = group { "&kind=" (g) } } { "Later events" } }
             }
         },
     )
@@ -5395,94 +5451,170 @@ fn thousands(n: usize) -> String {
     out
 }
 
-/// The verification-debt map: what backs every line of the default
-/// branch, for the whole and by file, most debt first.
-pub fn debt(
-    theme: Theme,
-    who: Reading<'_>,
-    repo: &str,
-    map: &crate::debt::DebtMap,
-    history: &[ambolt_core::DebtSnapshot],
-) -> Markup {
+/// The verification map: what backs every line of the default branch,
+/// for the whole and by file, most debt first. Ten files show unless
+/// all are asked for; the API pages the rest.
+pub struct CoveragePage<'a> {
+    pub theme: Theme,
+    pub who: Reading<'a>,
+    pub repo: &'a str,
+    pub map: &'a crate::debt::DebtMap,
+    pub history: &'a [ambolt_core::DebtSnapshot],
+    pub show_all: bool,
+    pub people: &'a People,
+}
+
+pub fn debt(page: CoveragePage<'_>) -> Markup {
+    let CoveragePage {
+        theme,
+        who,
+        repo,
+        map,
+        history,
+        show_all,
+        people,
+    } = page;
     let c = &map.counts;
     let signed = who.viewer().is_some();
-    layout_reading(
+    let total = c.total().max(1);
+    let percent = c.reproduced * 100 / total;
+    let shown = if show_all {
+        map.files.len()
+    } else {
+        map.files.len().min(10)
+    };
+    // The verified share at each of the last tips, for the sparkline.
+    let spark: Vec<f64> = history
+        .iter()
+        .map(|p| {
+            let all = (p.reproduced + p.claimed + p.gap + p.argued + p.imported).max(1) as f64;
+            p.reproduced as f64 / all
+        })
+        .collect();
+    let week_gain: Option<i64> = history
+        .first()
+        .zip(history.last())
+        .map(|(a, b)| b.reproduced - a.reproduced);
+    let rail = html! {
+        div class="stat" {
+            span class="k" { (ic("coverage", "sm")) "Verified" }
+            span class="v" { (percent) small { "%" } }
+            span class={ "d" @if week_gain.is_some_and(|g| g > 0) { " good-t" } } {
+                @match week_gain {
+                    Some(g) if g > 0 => { "+" (thousands(g as usize)) " lines over the last " (history.len()) " tips" }
+                    Some(g) if g < 0 => { (thousands(g.unsigned_abs() as usize)) " fewer lines reproduced than " (history.len()) " tips ago" }
+                    _ => { (thousands(c.reproduced)) " of " (thousands(c.total())) " lines reproduced" }
+                }
+            }
+            @if spark.len() >= 2 {
+                @let points: String = spark.iter().enumerate().map(|(i, v)| format!("{:.1},{:.1}", i as f64 * 120.0 / (spark.len() - 1) as f64, 30.0 - v * 28.0)).collect::<Vec<_>>().join(" ");
+                div class="spark" { svg viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true" { polyline points=(points) {} } }
+            }
+        }
+        @if signed && map.files.iter().any(|f| f.counts.debt() > 0 && f.task.is_none()) {
+            div class="panel" {
+                header { h2 { "Pay it down" } span class="n" { (thousands(c.imported)) " imported" } }
+                form class="pad form" method="post" action={ "/" (repo) "/debt/tasks" } {
+                    p class="what" { "Each task names a file and the lines nobody here has judged, and asks for a claim a runner can re-run." }
+                    div class="line" {
+                        input class="input sm num" id="count" name="count" type="number" min="1" max="50" value="5" aria-label="How many";
+                        span class="lbl" { "most indebted files without a task" }
+                        button class="btn sm" type="submit" { "Create tasks" }
+                    }
+                }
+            }
+        }
+        @if !map.paid_down.is_empty() {
+            div class="panel" {
+                header { h2 { "Paid down" } span class="n" { "by reproduced covering claims" } }
+                @for paid in &map.paid_down {
+                    @let id = ambolt_core::PrincipalId(paid.by.clone());
+                    @let (display, agent) = people.name(&id);
+                    div class="ev-row" {
+                        (avatar(&paid.by, display, agent, false))
+                        div {
+                            div class="h" { b { (display) } span class="sec2" { "paid down " (thousands(paid.lines)) " lines" } }
+                            div class="sub good" { (ic("check", "sm")) (paid.claims) " covering claim(s), reproduced · " (paid.files) " file(s)" }
+                        }
+                    }
+                }
+            }
+        }
+    };
+    layout_reading_with(
         theme,
         who,
         Some(repo),
         Some(Tab::Coverage),
-        "Verification",
+        "Coverage",
         html! {
-            div class="sechead" {
-                b { "What backs this code" }
-                span {
-                    (map.branch) " at " code { (short(&map.tip)) } " · " (thousands(c.total())) " lines in " (map.files.len()) " files"
-                    @if map.skipped > 0 { " · " (map.skipped) " binary or large, not counted" }
-                }
-            }
-            (stack(c))
-            div class="legend" {
-                span { i class="s-reproduced" {} b { (thousands(c.reproduced)) } " reproduced" }
-                span { i class="s-claimed" {} b { (thousands(c.claimed)) } " claimed, never re-run" }
-                span { i class="s-gap" {} b { (thousands(c.gap)) } " under a declared gap" }
-                span { i class="s-argued" {} b { (thousands(c.argued)) } " argued only" }
-                span { i class="s-imported" {} b { (thousands(c.imported)) } " imported, never judged here" }
-            }
-            p class="word" {
-                "Every line, by what the log knows about the change that landed it. Reproduced means a runner re-ran the claim. A gap means the claim said what it did not check, and the gap follows every line that landed under it. Imported lines predate this forge."
-            }
-            @if history.len() >= 2 {
-                div class="sechead later" { b { "Burndown" } span { (map.branch) " · last " (history.len()) " tips" } }
-                (burndown(history))
-                @let first = &history[0];
-                @let last = &history[history.len() - 1];
-                div class="legend" {
-                    span { b { (thousands((last.claimed + last.gap + last.argued + last.imported) as usize)) } " debt · was " (thousands((first.claimed + first.gap + first.argued + first.imported) as usize)) }
-                    span { b { (thousands(last.imported as usize)) } " imported · was " (thousands(first.imported as usize)) }
-                }
-                p class="word" { "Debt is every line short of a reproduced claim. It falls when a runner reproduces a claim that covers existing code, or when a file is rewritten under one." }
-            }
-            @if !map.paid_down.is_empty() {
-                div class="sechead later" { b { "Paid down" } span { "by reproduced covering claims" } }
-                @for paid in &map.paid_down {
-                    div class="trow paid" {
-                        span class="strong" { (paid.by) }
-                        span class="sec3" { (paid.claims) " covering claim(s), reproduced · " (paid.files) " file(s)" }
-                        span class="n" { (thousands(paid.lines)) " lines" }
+            div class="chg-body" {
+                div class="panel" {
+                    header {
+                        h2 { "What backs this code" }
+                        span class="n" {
+                            (map.branch) " at " code { (short(&map.tip)) } " · " (thousands(c.total())) " lines in " (map.files.len()) " files"
+                            @if map.skipped > 0 { " · " (map.skipped) " binary or large, not counted" }
+                        }
                     }
+                    div class="pad" {
+                        div class="bigbars" { (stack(c)) }
+                        div class="legend" {
+                            span { i class="s-reproduced" {} b { (thousands(c.reproduced)) } " reproduced" }
+                            span { i class="s-claimed" {} b { (thousands(c.claimed)) } " claimed, not re-run" }
+                            span { i class="s-gap" {} b { (thousands(c.gap)) } " under a declared gap" }
+                            span { i class="s-argued" {} b { (thousands(c.argued)) } " argued only" }
+                            span { i class="s-imported" {} b { (thousands(c.imported)) } " imported, never judged" }
+                        }
+                    }
+                    div class="foot" { (ic("coverage", "sm")) "A line is reproduced when a runner re-ran the claim that landed it. A gap is a line that landed under a claim which said it did not check this. Imported lines predate this forge." }
                 }
-            }
-            @if signed && map.files.iter().any(|f| f.counts.debt() > 0 && f.task.is_none()) {
-                div class="sechead later" { b { "Pay down" } span { "owner" } }
-                form class="line" method="post" action={ "/" (repo) "/debt/tasks" } {
-                    label for="count" { "Create tasks for the" }
-                    input id="count" name="count" type="number" min="1" max="50" value="5";
-                    span class="hint" { "most indebted files without one" }
-                    button class="vbtn" type="submit" { "Create tasks" }
-                }
-                p class="word" { "Each task names the file and the lines nobody here has judged, and asks for a claim whose command exercises it and that a runner can re-run." }
-            }
-            @if map.files.is_empty() {
-                p class="word" { "Nothing on " (map.branch) " yet." }
-            } @else {
-                div class="thead debt" { span { "File" } span {} span class="r" { "lines" } span class="r" { "debt" } }
-                @for file in &map.files {
-                    a class="trow debt" href={ "/" (repo) "/blame/" (file.path) } {
-                        span {
-                            code { (file.path) }
-                            @if let Some((_, holders)) = &file.task {
-                                small class="sec3" { " task open" @if !holders.is_empty() { " · claimed by " (holders.join(", ")) } }
-                            } @else if let Some(cover) = file.covered_by.first() {
-                                small class="sec3" { " covered by #" (cover.change) @if cover.reproduced { " · runner reproduced" } @else { " · not yet re-run" } }
+                @if history.len() >= 2 {
+                    @let first = &history[0];
+                    @let last = &history[history.len() - 1];
+                    div class="panel" {
+                        header { h2 { "Burndown" } span class="n" { (map.branch) " · last " (history.len()) " tips" } }
+                        div class="pad" {
+                            (burndown(history))
+                            div class="legend" {
+                                span { i class="s-debt" {} b { (thousands((last.claimed + last.gap + last.argued + last.imported) as usize)) } " debt · was " (thousands((first.claimed + first.gap + first.argued + first.imported) as usize)) }
+                                span { i class="s-imported" {} b { (thousands(last.imported as usize)) } " imported · was " (thousands(first.imported as usize)) }
                             }
                         }
-                        (stack(&file.counts))
-                        span class="n" { (thousands(file.counts.total())) }
-                        span class={ "n" @if file.counts.debt() > 0 { " debt" } } { (thousands(file.counts.debt())) }
+                        div class="foot" { "Debt is every line short of a reproduced claim. It falls when a runner reproduces a claim that covers existing code, or when a file is rewritten under one." }
+                    }
+                }
+                div class="panel" {
+                    header { h2 { "By file" } span class="n" { (map.files.len()) } div class="right" { span class="sec3" { "sorted by lines unjudged" } } }
+                    @if map.files.is_empty() {
+                        div class="empty" { "Nothing on " (map.branch) " yet." }
+                    } @else {
+                        div class="thead fv" { span { "File" } span {} span class="r" { "Unjudged" } span class="r" { "Lines" } }
+                        @for file in map.files.iter().take(shown) {
+                            a class="row fv" href={ "/" (repo) "/blame/" (file.path) } {
+                                span class="tt" {
+                                    code { (file.path) }
+                                    @if let Some((_, holders)) = &file.task {
+                                        span class="s" { "task open" @if !holders.is_empty() { " · claimed by " (holders.iter().map(|h| people.name(&ambolt_core::PrincipalId(h.clone())).0.to_owned()).collect::<Vec<_>>().join(", ")) } }
+                                    } @else if let Some(cover) = file.covered_by.first() {
+                                        span class="s" { "covered by #" (cover.change) @if cover.reproduced { " · runner reproduced" } @else { " · not yet re-run" } }
+                                    }
+                                }
+                                (stack(&file.counts))
+                                span class={ "num r" @if file.counts.debt() == 0 { " sec3" } } { (thousands(file.counts.debt())) }
+                                span class="num r sec3" { (thousands(file.counts.total())) }
+                            }
+                        }
+                        @if map.files.len() > shown {
+                            div class="foot" { a class="btn2 sm" href={ "/" (repo) "/coverage?all=1" } { "Show all " (map.files.len()) " files" } }
+                        } @else if show_all && map.files.len() > 10 {
+                            div class="foot" { a class="btn2 sm" href={ "/" (repo) "/coverage" } { "Show the top ten" } }
+                        }
                     }
                 }
             }
         },
+        Some(rail),
     )
 }
 

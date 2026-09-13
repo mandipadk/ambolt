@@ -607,8 +607,6 @@ details.thread[open] > summary .chip { visibility: hidden; }
 }
 
 /* log */
-.pager { padding: 16px 22px 28px; }
-.pager a:hover { color: var(--ink); border-color: var(--ink2); }
 
 /* login and simple pages */
 /* The token path is still there for anyone driving the UI like a
@@ -819,6 +817,42 @@ details.alt .field { margin-bottom: 10px; }
 .pref form.seg { display: inline-flex; }
 form.pref { display: flex; }
 
+/* Coverage: the strip, the legend, the files; activity: days of rows. */
+.bars { display: block; width: 100%; height: 6px; border-radius: 3px; overflow: hidden; background: var(--raise2); }
+.bigbars .bars { height: 14px; border-radius: 7px; }
+.bars rect.s-reproduced { fill: var(--good); }
+.bars rect.s-claimed { fill: var(--accent); }
+.bars rect.s-gap { fill: var(--bad); }
+.bars rect.s-argued { fill: var(--ink3); }
+.bars rect.s-imported { fill: var(--idle); }
+.legend { display: flex; gap: 8px 18px; margin-top: 14px; font-size: 13px; color: var(--ink2); flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.legend b { font-weight: var(--wmed); color: var(--ink); font-variant-numeric: tabular-nums; }
+.legend i.s-reproduced { background: var(--good); }
+.legend i.s-claimed { background: var(--accent); }
+.legend i.s-gap { background: var(--bad); }
+.legend i.s-argued { background: var(--ink3); }
+.legend i.s-imported { background: var(--idle); }
+.legend i.s-debt { background: var(--ink); }
+.row.fv { grid-template-columns: minmax(0, 1fr) 160px 80px 80px; }
+.thead.fv { display: grid; grid-template-columns: minmax(0, 1fr) 160px 80px 80px; gap: 14px; padding: 8px 16px 4px; font-size: 12px; color: var(--ink3); border-top: none; }
+.thead .r, .row .r { text-align: right; }
+.row.fv code { font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+.row.fv .tt .s { white-space: normal; }
+.row.fv .num { font-variant-numeric: tabular-nums; font-size: 13px; }
+a.row.fv:hover { background: var(--raise); }
+.burndown { display: block; width: 100%; height: 120px; margin: 4px 0; }
+.burndown .axis { stroke: var(--hair); stroke-width: 1; }
+.burndown polyline { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.burndown .imported { stroke: var(--ink3); }
+.burndown .debt { stroke: var(--ink); }
+.stat .spark { margin-top: 8px; height: 32px; }
+.stat .spark svg { width: 100%; height: 32px; display: block; }
+.stat .spark polyline { fill: none; stroke: var(--good); stroke-width: 2; }
+.rail .stat .d { white-space: normal; }
+@media (max-width: 760px) { .thead.fv, .row.fv { grid-template-columns: minmax(0, 1fr) 90px 56px 56px; } }
+
 /* Home and Review: numbers first, then what needs you, then what happened. */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 22px; }
 .stat { background: var(--panel); border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -924,30 +958,6 @@ form.pref { display: flex; }
 .ln a.no { color: var(--ink3); text-decoration: none; }
 .ln a.no:hover { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink3); }
 
-/* Verification: what backs each line, as one word and one colour. */
-.bars { display: block; width: calc(100% - 44px); height: 6px; border-radius: 3px; overflow: hidden; margin: 6px 22px 8px; background: var(--hair); }
-.bars rect.s-reproduced { fill: var(--ok); }
-.bars rect.s-claimed { fill: var(--ink2); }
-.bars rect.s-gap { fill: var(--bad); }
-.bars rect.s-argued { fill: var(--ink3); }
-.bars rect.s-imported { fill: var(--idle); }
-.legend i.s-reproduced { background: var(--ok); }
-.legend i.s-claimed { background: var(--ink2); }
-.legend i.s-gap { background: var(--bad); }
-.legend i.s-argued { background: var(--ink3); }
-.legend i.s-imported { background: var(--idle); }
-.legend { display: flex; gap: 18px; padding: 0 22px 6px; font-size: 12px; color: var(--ink2); flex-wrap: wrap; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.legend b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
-.word { padding: 4px 22px 10px; color: var(--ink2); max-width: 640px; }
-.thead.debt { display: grid; grid-template-columns: minmax(0, 1fr) 180px 64px 64px; gap: 14px; padding: 8px 22px 4px; font-size: 11.5px; color: var(--ink3); }
-.thead.debt .r { text-align: right; }
-.trow.debt { grid-template-columns: minmax(0, 1fr) 180px 64px 64px; align-items: center; }
-.trow.debt code { font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
-.trow.debt .bars { margin: 0; height: 5px; width: 100%; }
-.trow.debt .n { text-align: right; color: var(--ink3); font-variant-numeric: tabular-nums; font-size: 12px; }
-.trow.debt .n.debt { color: var(--ink); }
 .blame .cline .no { position: relative; }
 .blame .cline .no::before { content: ""; position: absolute; left: 6px; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: var(--idle); }
 .blame .cline.reproduced .no::before { background: var(--ok); }
@@ -955,7 +965,6 @@ form.pref { display: flex; }
 .blame .cline.gap .no::before { background: var(--bad); }
 .blame .cline.argued .no::before { background: var(--ink3); }
 .blame .cline.imported .no::before { background: transparent; border: 1px solid var(--ink3); box-sizing: border-box; }.blame .cline.gap .who a { color: var(--bad); }.blame .cline.gap .no { color: var(--bad); opacity: 0.7; }
-@media (max-width: 760px) { .thead.debt, .trow.debt { grid-template-columns: minmax(0, 1fr) 90px 56px 56px; } }
 
 /* Change hygiene: when, the message, the interdiff, the way out. */
 .trow.changes { grid-template-columns: 14px 48px minmax(0, 1fr) 110px 120px 150px 40px; }
@@ -964,16 +973,8 @@ form.pref { display: flex; }
 
 
 /* The burndown: two lines, no axes; the legend carries the numbers. */
-.burndown { display:block; width:100%; height:120px; margin:6px 0 4px; }
-.burndown .axis { stroke:var(--hair); stroke-width:1; }
-.burndown polyline { fill:none; stroke-width:1.5; vector-effect:non-scaling-stroke; }
-.burndown .imported { stroke:var(--ink3); }
-.burndown .debt { stroke:var(--ink); }
-.trow.debt small { display:block; font-size:11.5px; }
 
 /* Who paid down what: a name, what they did, the lines it moved. */
-.trow.paid { grid-template-columns: 150px minmax(0, 1fr) auto; align-items: baseline; }
-.trow.paid .n { color: var(--ink); font-variant-numeric: tabular-nums; }
 form.line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 form.line input[type="number"] { width: 72px; font: inherit; font-size: 13px; padding: 6px 10px; color: var(--ink); background: var(--raise); border: 1px solid var(--hair); border-radius: 6px; }
 form.line input[type="number"]:focus { outline: none; border-color: var(--ink2); }

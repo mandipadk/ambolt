@@ -4245,11 +4245,18 @@ fn flash(back: &str, message: &str) -> Response {
     Redirect::to(&format!("{back}?error={encoded}")).into_response()
 }
 
+#[derive(Deserialize)]
+struct CoverageQuery {
+    #[serde(default)]
+    all: Option<String>,
+}
+
 async fn debt_page(
     State(app): State<AppState>,
     Palette(theme): Palette,
     reader: Reader,
     RepoName(repo): RepoName,
+    Query(query): Query<CoverageQuery>,
 ) -> Response {
     let (record, who) = match read_repo(&app, reader, &repo) {
         Ok(found) => found,
@@ -4259,7 +4266,27 @@ async fn debt_page(
         .with_store(|s| s.debt_history(&repo, 60))
         .unwrap_or_default();
     match crate::debt::map(&app, &repo, &record.default_branch).await {
-        Ok(map) => views::debt(theme, who.reading(), &repo, &map, &history).into_response(),
+        Ok(map) => {
+            let people = people_named(
+                &app,
+                map.paid_down.iter().map(|p| p.by.as_str()).chain(
+                    map.files
+                        .iter()
+                        .filter_map(|f| f.task.as_ref())
+                        .flat_map(|(_, holders)| holders.iter().map(String::as_str)),
+                ),
+            );
+            views::debt(views::CoveragePage {
+                theme,
+                who: who.reading(),
+                repo: &repo,
+                map: &map,
+                history: &history,
+                show_all: query.all.is_some(),
+                people: &people,
+            })
+            .into_response()
+        }
         Err(err) => (
             StatusCode::OK,
             views::plain_note(
@@ -4470,6 +4497,8 @@ async fn lessons_page(
 #[derive(Deserialize)]
 struct LogQuery {
     after: Option<i64>,
+    /// One group of events, from the filter pills.
+    kind: Option<String>,
 }
 
 /// A repository's settings: who may see it, and who owns it. For
@@ -4716,7 +4745,8 @@ async fn forge_log_page(
         Ok(found) => found,
         Err(err) => return oops(err),
     };
-    views::forge_log(theme, &viewer, &numbers, &events, &scopes, after).into_response()
+    let people = people_named(&app, events.iter().map(|e| e.actor.as_str()));
+    views::forge_log(theme, &viewer, &numbers, &events, &scopes, after, &people).into_response()
 }
 
 #[derive(Deserialize)]
@@ -5256,8 +5286,23 @@ async fn log_page(
     // This repository's own log, not the forge's. The scope is on the
     // event, so the page does not have to guess which rows belong here.
     match app.with_store(|s| s.events_for_repo(&repo, ambolt_core::EventSeq(after), 100)) {
-        Ok(events) => {
-            views::log(theme, who.reading(), &repo, &numbers, after, &events).into_response()
+        Ok(mut events) => {
+            let group = query.kind.as_deref().filter(|k| !k.is_empty());
+            if let Some(group) = group {
+                events.retain(|e| views::event_group(&e.event) == group);
+            }
+            let people = people_named(&app, events.iter().map(|e| e.actor.as_str()));
+            views::log(views::ActivityPage {
+                theme,
+                who: who.reading(),
+                repo: &repo,
+                numbers: &numbers,
+                after,
+                events: &events,
+                group,
+                people: &people,
+            })
+            .into_response()
         }
         Err(err) => oops(err),
     }
