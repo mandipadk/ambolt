@@ -1,0 +1,154 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Iwork0130b",
+      "id": "c-13ns6echmfvnk9v590sfam48bs",
+      "landed_oid": "248692f01988a7ec0881a377901d71d7f8881661",
+      "landed_revision": 2,
+      "latest_revision": 2,
+      "number": 132,
+      "opened_at": "2026-09-13T20:43:33.853680149Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-30s8ez8w1hwr4e542techgmzm9",
+      "title": "Fold tokens and sessions into settings, and give people, teams and owners their rows",
+      "updated_at": "2026-09-13T20:59:34.179258497Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-13ns6echmfvnk9v590sfam48bs",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-45w72pxa8rqsygbqxq8ctzgxtn",
+        "kind": "test",
+        "passed": true,
+        "revision": 2,
+        "seq": 1210,
+        "summary": "cargo test --workspace: the suite, with the settings, tokens and sessions tests pointed at the settings page, all green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-13ns6echmfvnk9v590sfam48bs",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-51nxtgt65k0hkzjh79g7y2wvnn",
+        "kind": "lint",
+        "passed": true,
+        "revision": 2,
+        "seq": 1211,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "248692f01988a7ec0881a377901d71d7f8881661",
+    "landed_at": "2026-09-13T20:59:34.179258497Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-13ns6echmfvnk9v590sfam48bs",
+      "commit_oid": "248692f01988a7ec0881a377901d71d7f8881661",
+      "message": "Fold tokens and sessions into settings, and give people, teams and owners their rows\n\nSettings is one page with a sub-navigation and a panel per section:\nthe address, how you sign in (passkeys, a linked provider, the\npassword), tokens, where you are signed in, and appearance with the\nthree-way theme. Tokens and sessions used to be pages of their own;\ntheir addresses now answer a permanent redirect into the section, and\nthe forms that mint, revoke and sign out land back on it.\n\nPeople is a panel of rows: the avatar, the display name, the username\nand their standing in words, and the controls on the right; adding one\nis a form of fields labelled Username, not Name. Teams are cards like\nagents: members as chips each with its own remove, a way to add one,\nwhat the team holds, and granting folded behind a control. An owner's\npage opens with their avatar and a chip saying what they are, then\nrepositories as rows, the allowance as a panel of what is used of what\nis allowed, and for an organisation its members with a way to add one.\n\nChange-Id: Iwork0130b\nTask: t-30s8ez8w1hwr4e542techgmzm9\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 2,
+      "paths": [
+        "crates/cli/tests/suite/account_flow.rs",
+        "crates/cli/tests/suite/pages_flow.rs",
+        "crates/cli/tests/suite/reset_flow.rs",
+        "crates/cli/tests/suite/sessions_flow.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs"
+      ],
+      "session": null
+    },
+    "seq": 1215,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 2 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-45w72pxa8rqsygbqxq8ctzgxtn, cl-51nxtgt65k0hkzjh79g7y2wvnn",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-51nxtgt65k0hkzjh79g7y2wvnn",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 168 judged claims, 95% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 7 path(s) outside docs/, *.md: crates/cli/tests/suite/account_flow.rs, crates/cli/tests/suite/pages_flow.rs, crates/cli/tests/suite/reset_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-13ns6echmfvnk9v590sfam48bs",
+        "claim": "cl-45w72pxa8rqsygbqxq8ctzgxtn",
+        "command": "cargo test --workspace",
+        "id": "vr-286p24apt67q9zdsxj66yecyze",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 2,
+        "seq": 1212
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-13ns6echmfvnk9v590sfam48bs",
+        "claim": "cl-51nxtgt65k0hkzjh79g7y2wvnn",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-4ybtpxbecv2da30y45er80s23f",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.96s",
+        "revision": 2,
+        "seq": 1213
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "6sUN4MUHMaPCbbQAG5RzPB+HytD9Klf/wWbta7HQmHLVlVbqIsP+f8y5kHmirKL2piJyLqgj/f886cuFnfyUDA=="
+  }
+}
