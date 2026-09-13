@@ -116,5 +116,5 @@ async fn a_quiet_forge_says_so() {
     let forge = boot().await;
     let (status, body) = page_with_cookie(&forge.app, "/", "ambolt_dev=ada").await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains("Nothing is waiting on a human"));
+    assert!(body.contains("Nothing needs you right now"));
 }

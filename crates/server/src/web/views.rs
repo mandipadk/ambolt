@@ -3,7 +3,7 @@
 //! rendered with raw HTML events stripped before it gets here.
 
 use super::diff::{FileDiff, LineKind};
-use super::{Brief, Chrome, LandingData, Sidebar, Viewer};
+use super::{Chrome, LandingData, Sidebar, Viewer};
 use ambolt_core::{
     Anchor, Independence, Resolution, ReviewDomain, Session, SessionState, Side, TaskState, Thread,
     ThreadKind, Waiver,
@@ -532,10 +532,6 @@ fn short(oid: &str) -> &str {
     &oid[..oid.len().min(7)]
 }
 
-fn clock(ts: &str) -> &str {
-    ts.get(11..16).unwrap_or(ts)
-}
-
 /// The public page: what this is, and a way to be told when it is
 /// ready. Signed-out visitors get this instead of a sign-in form,
 /// because a form asks for something they do not have and tells them
@@ -887,109 +883,182 @@ pub fn login(
 }
 
 pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
-    let rail = html! {
-        @if !data.lanes.is_empty() {
-            div class="card" {
-                div class="sechead" { b { "Landing" } span {} }
-                @for lane in &data.lanes {
-                    div class="line" {
-                        span { b { (lane.repo) } " · " (lane.branch) }
-                        span class="q" { (lane.queued) " queued" }
-                    }
-                }
-            }
-        }
-        @if !viewer.1.working.is_empty() {
-            div class="card" {
-                div class="sechead" { b { "In flight" } span { (viewer.1.working.len()) } }
-                @for worker in &viewer.1.working {
-                    div class="line" {
-                        span {
-                            b { (worker.display) }
-                            @if let Some(repo) = &worker.repo { " · " (repo) }
-                            @if !worker.paths.is_empty() {
-                                br;
-                                span class="q" { (worker.paths.join(", ")) }
-                            }
-                        }
-                        span class="q" {}
-                    }
-                }
-            }
-        }
-        @if !data.lessons.is_empty() {
-            div class="card" {
-                div class="sechead" { b { "Lessons" } span {} }
-                @for lesson in &data.lessons {
-                    div class="lesson" { (lesson.outcome) }
-                }
-            }
-        }
-    };
-
-    layout_with(
+    let people = &data.people;
+    let working = &viewer.1.working;
+    let disputed = data
+        .needs_you
+        .iter()
+        .filter(|e| attention_chip(&e.item).1 == "Disputed")
+        .count();
+    let unlooked = data.needs_you.len() - disputed;
+    layout(
         theme,
         Some(viewer),
         None,
         None,
         "Home",
         html! {
-            div class="block homeneed" {
-                div class="sechead" { b { "Needs you" } span { (data.needs_you.len()) } }
-                @if data.needs_you.is_empty() {
-                    div class="empty" { "Nothing is waiting on a human." }
+            div class="stats" {
+                div class="stat" {
+                    span class="k" { (ic("review", "sm")) "Needs you" }
+                    span class="v" { (data.needs_you.len()) }
+                    span class="d" {
+                        @if data.needs_you.is_empty() { "nothing waits on your judgment" }
+                        @else {
+                            @if disputed > 0 { (disputed) " disputed" }
+                            @if disputed > 0 && unlooked > 0 { " · " }
+                            @if unlooked > 0 { (unlooked) " to look at" }
+                        }
+                    }
                 }
-                @for entry in &data.needs_you {
-                    a class="trow" href={ "/" (entry.repo) "/changes/" (entry.item.change.number) }
-                      title=(attention_evidence(&entry.item)) {
-                        span class="sec3" { (entry.repo) " #" (entry.item.change.number) }
-                        span class="strong" { (entry.item.change.title) }
-                        span class="reasons" {
-                            @if let Some(draw) = &entry.item.drawn {
-                                span class="drawn" { "drawn " (draw.day) } span class="sec3" { " · " }
-                            }
-                            @for (index, signal) in entry.item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn).take(2).enumerate() {
-                                @if index > 0 { span class="sec3" { " · " } }
-                                span class={ @if index == 0 { "lead" } @else { "sec3" } } {
-                                    (signal.description)
+                div class="stat" {
+                    span class="k" { (ic("agents", "sm")) "At work now" }
+                    span class="v" { (working.len()) small { @if working.len() == 1 { "agent" } @else { "agents" } } }
+                    span class="d" {
+                        @if working.is_empty() { "nobody is holding a path" }
+                        @else { (names(working.iter().map(|w| w.display.as_str()))) }
+                    }
+                }
+                div class="stat" {
+                    span class="k" { (ic("check", "sm")) "Landed today" }
+                    span class="v" { (data.landed_today) }
+                    span class="d" {
+                        @match &data.latest_landed {
+                            Some((repo, number, title)) => { a href={ "/" (repo) "/changes/" (number) } { "#" (number) " " (title) } }
+                            None => { "nothing landed in the last day" }
+                        }
+                    }
+                }
+                div class="stat" {
+                    span class="k" { (ic("clock", "sm")) "In the queue" }
+                    span class="v" { (data.lanes.iter().map(|l| l.queued).sum::<usize>()) }
+                    span class="d" {
+                        @if data.lanes.is_empty() { "nothing waiting to land" }
+                        @else { (names(data.lanes.iter().map(|l| l.repo.as_str()))) }
+                    }
+                }
+            }
+
+            div class="sec" {
+                div class="sh" { h2 { "Needs you" } span class="n" { (data.needs_you.len()) } }
+                div class="panel" {
+                    @if data.needs_you.is_empty() {
+                        div class="empty" { b { "Nothing needs you right now." } "Changes that want a person's judgment appear here, ranked by what that judgment is worth." }
+                    }
+                    @for entry in &data.needs_you {
+                        @let item = &entry.item;
+                        @let (chip, label) = attention_chip(item);
+                        @let (display, agent) = people.name(&item.change.owner);
+                        a class="row need" href={ "/" (entry.repo) "/changes/" (item.change.number) } title=(attention_evidence(item)) {
+                            span class=(chip) { (label) }
+                            span class="tt" {
+                                span class="t" { (item.change.title) }
+                                span class="s" {
+                                    (entry.repo) " #" (item.change.number)
+                                    @if let Some(draw) = &item.drawn { " · drawn " (draw.day) }
+                                    @for signal in item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn).take(2) {
+                                        " · " (signal.description)
+                                    }
                                 }
                             }
-                            @if entry.item.signals.len() > 2 {
-                                span class="sec3" { " · +" (entry.item.signals.len() - 2) }
-                            }
+                            span class="avs" { (avatar(item.change.owner.as_str(), display, agent, false)) }
+                            span class="age" title=(item.change.updated_at) { (ago(&item.change.updated_at)) }
                         }
                     }
                 }
             }
 
             @if !data.mine.is_empty() {
-                div class="block homemine" {
-                    div class="sechead" { b { "Your changes" } span { (data.mine.len()) } }
-                    @for (repo, change) in &data.mine {
-                        a class="trow" href={ "/" (repo) "/changes/" (change.number) } {
-                            span class="sec3" { (repo) " #" (change.number) }
-                            span class="strong" { (change.title) }
-                            span class="sec3" { "revision " (change.latest_revision) }
+                div class="sec" {
+                    div class="sh" { h2 { "Yours, open" } span class="n" { (data.mine.len()) } }
+                    div class="panel" {
+                        @for (repo, change) in &data.mine {
+                            a class="row need" href={ "/" (repo) "/changes/" (change.number) } {
+                                span class="chip acc" { (ic("changes", "")) "Revision " (change.latest_revision) }
+                                span class="tt" {
+                                    span class="t" { (change.title) }
+                                    span class="s" { (repo) " #" (change.number) " · into " (change.target) }
+                                }
+                                span class="avs" {}
+                                span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
+                            }
                         }
                     }
                 }
             }
 
             @if !data.recent.is_empty() {
-                div class="block homefeed" {
-                    div class="sechead" { b { "Across your repositories" } span {} }
-                    @for line in &data.recent {
-                        div class="trow" {
-                            span class="sec3" { (line.where_) }
-                            span { (line.what) }
-                            span class="sec3" { (line.kind) }
+                div class="sec" {
+                    div class="sh" { h2 { "Across your repositories" } }
+                    div class="panel" {
+                        @for line in &data.recent {
+                            @let (display, agent) = people.name(&line.actor);
+                            div class="row feed" {
+                                (avatar(line.actor.as_str(), display, agent, false))
+                                span class="s wrap" {
+                                    b { (display) } " " (line.what)
+                                    @if let Some((href, label)) = &line.object { " " a href=(href) { b { (label) } } }
+                                    @if !line.tail.is_empty() { " " (line.tail) }
+                                }
+                                span class="age" title=(line.ts) { (ago(&line.ts)) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            @if !data.lessons.is_empty() {
+                div class="sec" {
+                    div class="sh" { h2 { "Stopped, with a lesson" } span class="n" { (data.lessons.len()) } }
+                    div class="panel" {
+                        @for lesson in &data.lessons {
+                            @let (display, agent) = people.name(&lesson.agent);
+                            div class="row ls" {
+                                (avatar(lesson.agent.as_str(), display, agent, false))
+                                span class="tt" {
+                                    span class="t" { (lesson.task_title) }
+                                    span class="s wrap" { (lesson.outcome) }
+                                }
+                                span class="age" { (display) }
+                            }
                         }
                     }
                 }
             }
         },
-        Some(rail),
     )
+}
+
+/// "Quill and Scout", "Quill, Scout and Ada": a short list, spoken.
+fn names<'a>(items: impl Iterator<Item = &'a str>) -> String {
+    let all: Vec<&str> = items.collect();
+    match all.len() {
+        0 => String::new(),
+        1 => all[0].to_owned(),
+        2 => format!("{} and {}", all[0], all[1]),
+        n if n <= 4 => format!("{} and {}", all[..n - 1].join(", "), all[n - 1]),
+        n => format!("{}, {} and {} more", all[0], all[1], n - 2),
+    }
+}
+
+/// The chip a change wanting attention wears: what its lead signal is.
+fn attention_chip(item: &ambolt_core::AttentionItem) -> (&'static str, &'static str) {
+    use ambolt_core::SignalKind;
+    let lead = item
+        .signals
+        .iter()
+        .filter(|s| s.kind != SignalKind::Drawn)
+        .max_by_key(|s| s.weight)
+        .map(|s| s.kind);
+    match lead {
+        Some(SignalKind::DisputedClaim | SignalKind::RunnersDisagree) => ("chip bad", "Disputed"),
+        Some(SignalKind::ReviewersDisagree) => ("chip bad", "Disagreement"),
+        Some(SignalKind::Blocked) => ("chip bad", "Blocked"),
+        Some(SignalKind::NoExecutedCheck) => ("chip", "No check run"),
+        Some(SignalKind::SpotCheck) => ("chip acc", "Spot check"),
+        _ if item.drawn.is_some() => ("chip acc", "Drawn"),
+        _ => ("chip", "Unreviewed"),
+    }
 }
 
 /// A forge with nothing in it yet. The first thing anyone sees, so it
@@ -1582,7 +1651,7 @@ pub fn forge_log(
             div class="sechead" { b { "Forge log" } span { "everything, newest last" } }
             div class="log" {
                 @for envelope in events {
-                    @let (_, text) = describe(&refs, envelope);
+                    @let (_, text) = describe(&refs, envelope, &People::default());
                     div class="trow" {
                         span class="sec3" { (day_of(&envelope.ts)) " " (clock_of(&envelope.ts)) }
                         span class="sec2" { (envelope.actor) }
@@ -4114,87 +4183,160 @@ pub fn landing(
         .iter()
         .map(|(id, (number, title))| (id.as_str(), (*number, title.as_str())))
         .collect();
-    layout_reading(
+    let people = &data.people;
+    let brief = &data.brief;
+    let latest_landed = data.outcomes.iter().find_map(|e| match &e.event {
+        Event::ChangeMerged { change, .. } => Some(change.as_str()),
+        _ => None,
+    });
+    let rail = html! {
+        div class="panel" {
+            header { h2 { "At work here" } span class="n" { (data.sessions.len()) } }
+            @if data.sessions.is_empty() { div class="empty" { "Nobody is working here right now." } }
+            @for session in &data.sessions {
+                @let (display, agent) = people.name(&session.agent);
+                @let paths: Vec<&str> = data.leases.iter().filter(|l| l.session == session.id).flat_map(|l| l.paths.iter().map(String::as_str)).collect();
+                @let shared = data.leases.iter().any(|l| l.session != session.id && l.paths.iter().any(|p| paths.iter().any(|q| p.starts_with(q) || q.starts_with(p.as_str()))));
+                div class="ev-row" {
+                    (avatar(session.agent.as_str(), display, agent, true))
+                    div {
+                        div class="h" {
+                            b { (display) }
+                            @if let Some(title) = data.tasks.get(session.task.as_str()) { span class="sec2" { "on " (title) } }
+                        }
+                        @if !paths.is_empty() { span class="cmd" { (paths.join(", ")) } }
+                        @if shared { div class="sub bad" { (ic("alert", "sm")) "overlaps another's path" } }
+                    }
+                }
+            }
+        }
+        div class="panel" {
+            header { h2 { "Just now" } }
+            @if data.live.is_empty() { div class="empty" { "Nothing has happened here yet." } }
+            @for envelope in &data.live {
+                (event_row(&numbers, envelope, people))
+            }
+        }
+    };
+    layout_reading_with(
         theme,
         who,
         Some(repo),
         Some(Tab::Review),
-        "Landing",
+        "Review",
         html! {
-            div class="cols2" {
-                div {
-                    (brief(repo, &data.brief))
-                    div class="need" {
-                        div class="sechead" { b { "Needs you" } span { (data.needs_you.len()) } }
-                        @if data.needs_you.is_empty() {
-                            div class="empty" { "Nothing is waiting on a human." }
+            div class="stats" {
+                div class="stat" {
+                    span class="k" { (ic("review", "sm")) "Needs you" }
+                    span class="v" { (data.needs_you.len()) }
+                    span class="d" { "ranked by what your judgment is worth" }
+                }
+                div class="stat" {
+                    span class="k" { (ic("check", "sm")) "Landed lately" }
+                    span class="v" { (brief.landed) }
+                    span class="d" {
+                        @match latest_landed {
+                            Some(id) => { (change_ref(&numbers, id)) }
+                            None => { "nothing has landed in this window" }
                         }
-                        @for item in &data.needs_you {
-                            a class="trow" href={ "/" (repo) "/changes/" (item.change.number) }
-                              title=(attention_evidence(item)) {
-                                span class="sec3" { "#" (item.change.number) }
-                                span class="strong" { (item.change.title) }
-                                span class="reasons" {
-                                    @if let Some(draw) = &item.drawn {
-                                        span class="drawn" { "drawn " (draw.day) } span class="sec3" { " · " }
-                                    }
-                                    @for (index, signal) in item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn).enumerate() {
-                                        @if index > 0 { span class="sec3" { " · " } }
-                                        span class={ @if index == 0 { "lead" } @else { "sec3" } } {
-                                            (signal.description)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        " · " a href={ "/" (repo) "/activity?after=" (brief.since) } { "counted from the log" }
                     }
-                    div {
-                        div class="sechead" { b { "Landing" } span { (branch) } }
-                        @if data.queue.is_empty() && data.outcomes.is_empty() {
-                            div class="lane-row" { span {} span class="sec3" { "Nothing queued yet." } span {} }
-                        }
-                        @for (index, entry) in data.queue.iter().enumerate() {
-                            div class="lane-row" {
-                                span class="pos" { (index + 1) }
-                                span class={ "t" @if index == 0 { " landing-line" } } {
-                                    (change_ref(&numbers, entry.change.as_str()))
+                }
+                div class="stat" {
+                    span class="k" { (ic("alert", "sm")) "Disputed claims" }
+                    span class={ "v" @if brief.disputed > 0 { " bad-t" } } { (brief.disputed) }
+                    span class="d" {
+                        @if brief.disputed == 0 { "runners agreed with every claim they re-ran" }
+                        @else if brief.disputed == 1 { "a runner saw something else" }
+                        @else { "runners saw something else" }
+                    }
+                }
+                div class="stat" {
+                    span class="k" { (ic("agents", "sm")) "At work here" }
+                    span class="v" { (data.sessions.len()) }
+                    span class="d" {
+                        @if data.sessions.is_empty() { "no session is open on this repository" }
+                        @else { (names(data.sessions.iter().map(|s| people.name(&s.agent).0))) }
+                    }
+                }
+            }
+
+            div class="sec" {
+                div class="sh" { h2 { "Needs you" } span class="n" { (data.needs_you.len()) } }
+                div class="panel" {
+                    @if data.needs_you.is_empty() {
+                        div class="empty" { b { "Nothing needs you right now." } "Changes that want a person's judgment appear here, ranked by what that judgment is worth." }
+                    }
+                    @for item in &data.needs_you {
+                        @let (chip, label) = attention_chip(item);
+                        @let (display, agent) = people.name(&item.change.owner);
+                        a class="row need" href={ "/" (repo) "/changes/" (item.change.number) } title=(attention_evidence(item)) {
+                            span class=(chip) { (label) }
+                            span class="tt" {
+                                span class="t" { "#" (item.change.number) " " (item.change.title) }
+                                span class="s" {
+                                    @if let Some(draw) = &item.drawn { "drawn " (draw.day) " · " }
+                                    @for (index, signal) in item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn).enumerate() {
+                                        @if index > 0 { " · " }
+                                        (signal.description)
+                                    }
                                 }
-                                span class="st" { @if index == 0 { "landing" } @else { "queued" } }
                             }
-                        }
-                        @for outcome in &data.outcomes {
-                            (outcome_row(&numbers, outcome))
+                            span class="avs" { (avatar(item.change.owner.as_str(), display, agent, false)) }
+                            span class="age" title=(item.change.updated_at) { (ago(&item.change.updated_at)) }
                         }
                     }
                 }
-                div class="colr" {
-                    section class="side-sec" {
-                        header {
-                            h2 { "Live" }
-                            span {}
-                        }
-                        @if data.live.is_empty() { div class="none" { "Nothing in flight." } }
-                        @for envelope in &data.live {
-                            (event_row(&numbers, envelope))
+            }
+
+            div class="sec" {
+                div class="sh" { h2 { "Landing on " (branch) } span class="n" { @if brief.landed > 0 { (brief.landed) " lately" } } }
+                div class="panel" {
+                    @for (index, entry) in data.queue.iter().enumerate() {
+                        @let (display, agent) = people.name(&entry.enqueued_by);
+                        div class="row need" {
+                            span class={ "chip" @if index == 0 { " acc" } } { (ic("clock", "")) @if index == 0 { "landing" } @else { "queued" } }
+                            span class="tt" {
+                                span class="t" { (change_ref(&numbers, entry.change.as_str())) }
+                                span class="s" { "sent by " (display) }
+                            }
+                            span class="avs" { (avatar(entry.enqueued_by.as_str(), display, agent, false)) }
+                            span class="age" { (index + 1) }
                         }
                     }
-                    section class="side-sec" {
-                        header {
-                            h2 { "Fleet" }
-                            span { (data.sessions.len()) }
-                        }
-                        @if data.sessions.is_empty() { p class="none" { "No active sessions." } }
-                        @for session in &data.sessions {
-                            div class="srow" {
-                                span class="dot ok" {}
-                                span class="t" { (session.agent) }
-                                span class="age" { "working" }
+                    @for outcome in &data.outcomes {
+                        (outcome_row(&numbers, outcome, people))
+                    }
+                    @if data.queue.is_empty() {
+                        div class="foot" { (ic("clock", "sm")) "Nothing waiting. Landing checks the rules once more and writes the result into the merge." }
+                    }
+                }
+            }
+
+            @if !brief.failed_sessions.is_empty() {
+                div class="sec" {
+                    div class="sh" {
+                        h2 { "Stopped, with a lesson" }
+                        span class="n" { (brief.failed_sessions.len()) }
+                        div class="right" { a href={ "/" (repo) "/lessons" } { "All lessons" } }
+                    }
+                    div class="panel" {
+                        @for lesson in &brief.failed_sessions {
+                            @let (display, agent) = people.name(&lesson.agent);
+                            div class="row ls" {
+                                (avatar(lesson.agent.as_str(), display, agent, false))
+                                span class="tt" {
+                                    span class="t" { (lesson.task_title) }
+                                    span class="s wrap" { (lesson.outcome) }
+                                }
+                                span class="age" { (display) }
                             }
                         }
                     }
                 }
             }
         },
+        Some(rail),
     )
 }
 
@@ -4234,39 +4376,49 @@ fn change_num(numbers: &Refs, id: &str) -> Markup {
     }
 }
 
-fn outcome_row(numbers: &Refs, envelope: &Envelope) -> Markup {
+fn outcome_row(numbers: &Refs, envelope: &Envelope, people: &People) -> Markup {
+    let (display, agent) = people.name(&envelope.actor);
     match &envelope.event {
         Event::ChangeMerged {
             change, merged_as, ..
         } => html! {
-            div class="lane-row" {
-                span class="pos" { span class="dot ok" {} }
-                span class="t sec2" { (change_ref(numbers, change.as_str())) }
-                span class="st" {
-                    "landed"
-                    @if let Some(oid) = merged_as { " as " code { (short(oid)) } " · rebased" }
+            div class="row need" {
+                span class="chip good" { (ic("check", "")) "landed" }
+                span class="tt" {
+                    span class="t" { (change_ref(numbers, change.as_str())) }
+                    span class="s" {
+                        @if let Some(oid) = merged_as { "as " code { (short(oid)) } " · rebased · " }
+                        "receipt signed"
+                    }
                 }
+                span class="avs" { (avatar(envelope.actor.as_str(), display, agent, false)) }
+                span class="age" title=(envelope.ts) { (ago(&envelope.ts)) }
             }
         },
         Event::ChangeDequeued { change, reason } => html! {
-            div class="lane-row" {
-                span class="pos" { span class="dot bad" {} }
-                span class="t sec2" { (change_ref(numbers, change.as_str())) }
-                span class="st" { (reason) }
+            div class="row need" {
+                span class="chip bad" { (ic("x", "")) "left the queue" }
+                span class="tt" {
+                    span class="t" { (change_ref(numbers, change.as_str())) }
+                    span class="s" { (reason) }
+                }
+                span class="avs" { (avatar(envelope.actor.as_str(), display, agent, false)) }
+                span class="age" title=(envelope.ts) { (ago(&envelope.ts)) }
             }
         },
         _ => html! {},
     }
 }
 
-fn event_row(numbers: &Refs, envelope: &Envelope) -> Markup {
-    let (dot, text) = describe(numbers, envelope);
+fn event_row(numbers: &Refs, envelope: &Envelope, people: &People) -> Markup {
+    let (_, text) = describe(numbers, envelope, people);
+    let (display, agent) = people.name(&envelope.actor);
     html! {
-        div class="ev" {
-            span class=(dot) {}
+        div class="ev-row" {
+            (avatar(envelope.actor.as_str(), display, agent, false))
             div {
-                (text)
-                div class="when" { (clock(&envelope.ts)) }
+                div class="h said" { (text) }
+                div class="sub" title=(envelope.ts) { (ago(&envelope.ts)) }
             }
         }
     }
@@ -4282,8 +4434,8 @@ fn anchor_words(anchor: &Anchor) -> String {
     }
 }
 
-fn describe(numbers: &Refs, envelope: &Envelope) -> (&'static str, Markup) {
-    let actor = envelope.actor.as_str();
+fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static str, Markup) {
+    let actor = people.name(&envelope.actor).0;
     match &envelope.event {
         Event::RevisionPreferred {
             change,
@@ -4691,7 +4843,7 @@ pub fn log(
             }
             div class="log" {
                 @for envelope in events {
-                    @let (_, text) = describe(&refs, envelope);
+                    @let (_, text) = describe(&refs, envelope, &People::default());
                     div class="trow" {
                         span class="sec3" { (day_of(&envelope.ts)) " " (clock_of(&envelope.ts)) }
                         span class="sec2" { (envelope.actor) }
@@ -5014,52 +5166,6 @@ fn coverage_gaps(repo: &str, rows: &[BlameRow]) -> Markup {
                         a class="link sec2" href={ "/" (repo) "/changes/" (number) } { "#" (number) " " (title) }
                         span { (gap) }
                     }
-                }
-            }
-        }
-    }
-}
-
-/// The state of things lately, in sentences whose every number is the
-/// size of something the reader can go and look at. Nothing here is
-/// generated prose: it is the log, counted.
-fn brief(repo: &str, brief: &Brief) -> Markup {
-    let quiet = brief.landed == 0
-        && brief.dequeued.is_empty()
-        && brief.failed_sessions.is_empty()
-        && brief.disputed == 0;
-    html! {
-        section class="brief" {
-            @if quiet {
-                p { "Nothing has landed or failed recently." }
-            } @else {
-                p {
-                    @if brief.landed > 0 {
-                        "The train landed "
-                        a class="link" href={ "/" (repo) "/log?after=" (brief.since) } {
-                            @if brief.landed == 1 { "one change" } @else { (brief.landed) " changes" }
-                        }
-                        ". "
-                    }
-                    @if brief.disputed > 0 {
-                        @if brief.disputed == 1 { "One claim was disputed by a runner. " }
-                        @else { (brief.disputed) " claims were disputed by runners. " }
-                    }
-                    @for (change, reason) in &brief.dequeued {
-                        (change) " left the queue — " (reason) ". "
-                    }
-                }
-                @for lesson in &brief.failed_sessions {
-                    p class="lesson" {
-                        (lesson.agent) " gave up on " (lesson.task_title) ": " (lesson.outcome)
-                    }
-                }
-            }
-            div class="src" {
-                "counted from the log"
-                @if !brief.failed_sessions.is_empty() {
-                    " · "
-                    a class="link" href={ "/" (repo) "/lessons" } { "all lessons" }
                 }
             }
         }

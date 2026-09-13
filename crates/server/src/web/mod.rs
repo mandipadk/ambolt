@@ -2300,17 +2300,19 @@ pub struct HomeAttention {
     pub item: ambolt_core::AttentionItem,
 }
 
-/// One line of "what happened lately", already resolved to words.
+/// One line of "what happened lately": who did what to which thing,
+/// so the page can draw the actor and link the thing.
 pub struct Recent {
-    pub where_: String,
+    pub actor: PrincipalId,
     pub what: String,
-    pub kind: &'static str,
+    pub object: Option<(String, String)>,
+    pub tail: String,
+    pub ts: String,
 }
 
 /// A branch's landing queue, for the rail.
 pub struct Lane {
     pub repo: String,
-    pub branch: String,
     pub queued: usize,
 }
 
@@ -2320,6 +2322,11 @@ pub struct HomeData {
     pub recent: Vec<Recent>,
     pub lanes: Vec<Lane>,
     pub lessons: Vec<ambolt_core::Lesson>,
+    /// Everyone the page names.
+    pub people: views::People,
+    /// Changes that landed in the last day, and the latest of them.
+    pub landed_today: usize,
+    pub latest_landed: Option<(String, i64, String)>,
 }
 
 #[derive(Deserialize)]
@@ -2676,6 +2683,9 @@ fn gather_home(app: &AppState, who: &PrincipalId) -> Result<HomeData, ambolt_cor
         let mut needs_you = Vec::new();
         let mut mine = Vec::new();
         let mut lanes = Vec::new();
+        // Change id → (repository, number, title), so a line can say
+        // "#4 Move the prompt" rather than an id.
+        let mut numbers: HashMap<String, (String, i64, String)> = HashMap::new();
         for repo in store.readable_repos(who)? {
             for item in store.attention_for(&repo.name)? {
                 needs_you.push(HomeAttention {
@@ -2684,6 +2694,10 @@ fn gather_home(app: &AppState, who: &PrincipalId) -> Result<HomeData, ambolt_cor
                 });
             }
             for change in store.changes_in_repo(&repo.name)? {
+                numbers.insert(
+                    change.id.as_str().to_owned(),
+                    (repo.name.clone(), change.number, change.title.clone()),
+                );
                 if change.owner == *who && change.state == ambolt_core::ChangeState::Open {
                     mine.push((repo.name.clone(), change));
                 }
@@ -2692,7 +2706,6 @@ fn gather_home(app: &AppState, who: &PrincipalId) -> Result<HomeData, ambolt_cor
             if queued > 0 {
                 lanes.push(Lane {
                     repo: repo.name.clone(),
-                    branch: repo.default_branch.clone(),
                     queued,
                 });
             }
@@ -2704,59 +2717,143 @@ fn gather_home(app: &AppState, who: &PrincipalId) -> Result<HomeData, ambolt_cor
         mine.truncate(6);
 
         let latest = store.latest_seq()?.0;
-        let recent = store
-            .events_visible_to(who, ambolt_core::EventSeq((latest - 300).max(0)), 320)?
+        let events =
+            store.events_visible_to(who, ambolt_core::EventSeq((latest - 300).max(0)), 320)?;
+        let day_ago = (jiff::Timestamp::now() - jiff::SignedDuration::from_hours(24)).to_string();
+        let mut landed_today = 0;
+        let mut latest_landed = None;
+        for envelope in &events {
+            if let ambolt_core::Event::ChangeMerged { change, .. } = &envelope.event
+                && envelope.ts >= day_ago
+                && let Some((repo, number, title)) = numbers.get(change.as_str())
+            {
+                landed_today += 1;
+                latest_landed = Some((repo.clone(), *number, title.clone()));
+            }
+        }
+        let recent: Vec<Recent> = events
             .into_iter()
             .rev()
-            .filter_map(describe)
+            .filter_map(|envelope| describe(envelope, &numbers))
             .take(8)
             .collect();
 
         // Failures only: a lesson is what an attempt that did not work left behind.
         let lessons = store.lessons(None, None, true, 3)?;
+        let mut ids: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        ids.extend(needs_you.iter().map(|e| e.item.change.owner.as_str()));
+        ids.extend(recent.iter().map(|r| r.actor.as_str()));
+        ids.extend(lessons.iter().map(|l| l.agent.as_str()));
+        let people = views::People(
+            ids.into_iter()
+                .filter_map(|id| {
+                    let found = store
+                        .principal(&PrincipalId(id.to_owned()))
+                        .ok()
+                        .flatten()?;
+                    Some((
+                        id.to_owned(),
+                        (
+                            found.display,
+                            found.kind == ambolt_core::PrincipalKind::Agent,
+                        ),
+                    ))
+                })
+                .collect(),
+        );
         Ok(HomeData {
             needs_you,
             mine,
             recent,
             lanes,
             lessons,
+            people,
+            landed_today,
+            latest_landed,
         })
     })
 }
 
 /// Turn an event into a line worth reading. Anything not worth a
 /// person's attention on a home page is left out rather than padded in.
-fn describe(envelope: ambolt_core::Envelope) -> Option<Recent> {
-    use ambolt_core::Event;
-    let actor = envelope.actor.as_str().to_owned();
-    match envelope.event {
-        Event::ChangeMerged { change, .. } => Some(Recent {
-            where_: change.as_str().to_owned(),
-            what: format!("{actor} landed a change"),
-            kind: "landed",
-        }),
-        Event::ChangeDequeued { reason, .. } => Some(Recent {
-            where_: String::new(),
-            what: reason,
-            kind: "dequeued",
-        }),
-        Event::ClaimVerified { agrees, .. } if !agrees => Some(Recent {
-            where_: String::new(),
-            what: format!("{actor} could not reproduce a claim"),
-            kind: "disputed",
-        }),
-        Event::HistoryImported { repo, commits, .. } => Some(Recent {
-            where_: repo,
-            what: format!("{actor} imported {commits} commits"),
-            kind: "imported",
-        }),
-        Event::RepoCreated { repo, .. } => Some(Recent {
-            where_: repo.clone(),
-            what: format!("{actor} created {repo}"),
-            kind: "created",
-        }),
-        _ => None,
-    }
+fn describe(
+    envelope: ambolt_core::Envelope,
+    numbers: &HashMap<String, (String, i64, String)>,
+) -> Option<Recent> {
+    use ambolt_core::{Disposition, Event};
+    let change_object = |id: &ambolt_core::ChangeId| {
+        numbers.get(id.as_str()).map(|(repo, number, title)| {
+            (
+                format!("/{repo}/changes/{number}"),
+                format!("#{number} {title}"),
+            )
+        })
+    };
+    let line = |what: &str, object: Option<(String, String)>, tail: String| Recent {
+        actor: envelope.actor.clone(),
+        what: what.to_owned(),
+        object,
+        tail,
+        ts: envelope.ts.clone(),
+    };
+    Some(match &envelope.event {
+        Event::ChangeMerged { change, .. } => match change_object(change) {
+            Some(object) => line("landed", Some(object), String::new()),
+            None => line("landed a change", None, String::new()),
+        },
+        Event::ChangeDequeued { change, reason } => line(
+            "took",
+            change_object(change),
+            format!("out of the queue: {reason}"),
+        ),
+        Event::ClaimVerified { agrees, change, .. } if !agrees => line(
+            "could not reproduce a claim on",
+            change_object(change),
+            String::new(),
+        ),
+        Event::VerdictGiven {
+            change,
+            disposition,
+            ..
+        } => line(
+            match disposition {
+                Disposition::Approve => "approved",
+                Disposition::Concern => "raised a concern on",
+                Disposition::Block => "blocked",
+            },
+            change_object(change),
+            String::new(),
+        ),
+        Event::ChangeOpened {
+            repo,
+            number,
+            title,
+            ..
+        } => line(
+            "opened",
+            Some((
+                format!("/{repo}/changes/{number}"),
+                format!("#{number} {title}"),
+            )),
+            String::new(),
+        ),
+        Event::TaskCreated { task, title, .. } => line(
+            "filed a task:",
+            Some((format!("/tasks/{}", task.as_str()), title.clone())),
+            String::new(),
+        ),
+        Event::HistoryImported { repo, commits, .. } => line(
+            &format!("imported {commits} commits into"),
+            Some((format!("/{repo}"), repo.clone())),
+            String::new(),
+        ),
+        Event::RepoCreated { repo, .. } => line(
+            "created",
+            Some((format!("/{repo}"), repo.clone())),
+            String::new(),
+        ),
+        _ => return None,
+    })
 }
 
 #[derive(Deserialize)]
@@ -4172,6 +4269,11 @@ pub(crate) struct LandingData {
     pub outcomes: Vec<ambolt_core::Envelope>,
     pub live: Vec<ambolt_core::Envelope>,
     pub sessions: Vec<ambolt_core::Session>,
+    /// What each open session holds, and what its task is called.
+    pub leases: Vec<ambolt_core::Lease>,
+    pub tasks: HashMap<String, String>,
+    /// Everyone the page names.
+    pub people: views::People,
     /// Change id → (number, title), for readable references.
     pub numbers: HashMap<String, (i64, String)>,
     /// The cursor a consumer would resume from right now.
@@ -4185,7 +4287,6 @@ pub(crate) struct LandingData {
 pub(crate) struct Brief {
     pub since: i64,
     pub landed: usize,
-    pub dequeued: Vec<(String, String)>,
     pub failed_sessions: Vec<ambolt_core::Lesson>,
     pub disputed: usize,
 }
@@ -4225,18 +4326,12 @@ fn landing_data(
     // so a reader can always go and check it.
     let window_start = (latest - 200).max(0);
     let mut landed = 0;
-    let mut dequeued = Vec::new();
     let mut disputed = 0;
     for envelope in &events {
         match &envelope.event {
             ambolt_core::Event::ChangeMerged { change, .. } => {
                 if numbers.contains_key(change.as_str()) {
                     landed += 1;
-                }
-            }
-            ambolt_core::Event::ChangeDequeued { change, reason } => {
-                if let Some((number, title)) = numbers.get(change.as_str()) {
-                    dequeued.push((format!("#{number} {title}"), reason.clone()));
                 }
             }
             ambolt_core::Event::ClaimVerified { agrees: false, .. } => disputed += 1,
@@ -4246,12 +4341,43 @@ fn landing_data(
     let failed_sessions = app
         .with_store(|s| s.lessons(Some(repo), None, true, 3))
         .unwrap_or_default();
+    let sessions = app.with_store(|s| s.active_sessions_in(repo))?;
+    let leases = app.with_store(|s| s.live_leases(repo)).unwrap_or_default();
+    let tasks: HashMap<String, String> = sessions
+        .iter()
+        .filter_map(|session| {
+            let task = app.with_store(|s| s.task(&session.task)).ok().flatten()?;
+            Some((session.task.as_str().to_owned(), task.title))
+        })
+        .collect();
+    let mut ids: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    ids.extend(needs_you.iter().map(|i| i.change.owner.as_str()));
+    ids.extend(sessions.iter().map(|s| s.agent.as_str()));
+    ids.extend(live.iter().map(|e| e.actor.as_str()));
+    ids.extend(outcomes.iter().map(|e| e.actor.as_str()));
+    ids.extend(failed_sessions.iter().map(|l| l.agent.as_str()));
+    let people = views::People(
+        ids.into_iter()
+            .filter_map(|id| {
+                let found = app
+                    .with_store(|s| s.principal(&PrincipalId(id.to_owned())))
+                    .ok()
+                    .flatten()?;
+                Some((
+                    id.to_owned(),
+                    (
+                        found.display,
+                        found.kind == ambolt_core::PrincipalKind::Agent,
+                    ),
+                ))
+            })
+            .collect(),
+    );
 
     Ok(LandingData {
         brief: Brief {
             since: window_start,
             landed,
-            dequeued,
             failed_sessions,
             disputed,
         },
@@ -4259,7 +4385,10 @@ fn landing_data(
         queue: app.with_store(|s| s.queue_for(repo, target))?,
         outcomes,
         live,
-        sessions: app.with_store(|s| s.active_sessions_in(repo))?,
+        sessions,
+        leases,
+        tasks,
+        people,
         numbers,
     })
 }

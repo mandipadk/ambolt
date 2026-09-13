@@ -132,7 +132,7 @@ async fn web_ui_full_journey() {
         "home should lead with attention"
     );
     assert!(
-        body.contains("Nothing is waiting on a human"),
+        body.contains("Nothing needs you right now"),
         "an empty queue should say so rather than showing a bare list"
     );
     assert!(
@@ -294,7 +294,7 @@ async fn web_ui_full_journey() {
     // Once it lands there is genuinely nothing for a human to do here.
     let (status, body, _) = ada.get("/ada/demo/review");
     assert_eq!(status, 200);
-    assert!(body.contains("Nothing is waiting on a human."));
+    assert!(body.contains("Nothing needs you right now."));
 
     // The brief counts what happened; the lessons page keeps what
     // attempts learned, and both are searchable from the page.
@@ -306,7 +306,7 @@ async fn web_ui_full_journey() {
         body.contains("counted from the log"),
         "the brief should say where its numbers come from"
     );
-    assert!(body.contains("The train landed") || body.contains("Nothing has landed"));
+    assert!(body.contains("Landed lately"));
 
     // A change nobody argues about shows no disagreement section.
     let (_, body, _) = ada.get("/ada/demo/changes/1");

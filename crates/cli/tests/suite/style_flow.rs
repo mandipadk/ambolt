@@ -75,6 +75,27 @@ fn every_selector_is_declared_once() {
     );
 }
 
+/// A comment's tail left behind by an edit reads as a selector, and the
+/// browser drops that rule and the one after it without a word. No
+/// selector carries the end of a comment or a full stop followed by a
+/// space, which prose has and selectors never do.
+#[test]
+fn no_rule_is_swallowed_by_stray_text() {
+    // A font face's source is a placeholder the server fills in, and it
+    // reads as a block to this parser; it is not a rule.
+    let stray: Vec<String> = selectors(STYLE)
+        .into_iter()
+        .filter(|(scope, _)| !scope.iter().any(|at| at.starts_with("@font-face")))
+        .map(|(_, sel)| sel)
+        .filter(|sel| sel.contains("*/") || sel.contains(". ") || sel.split(' ').count() > 8)
+        .collect();
+    assert!(
+        stray.is_empty(),
+        "text outside any rule: {}",
+        stray.join(" | ")
+    );
+}
+
 /// Every `var(--x)` the stylesheet reads is declared on `:root`, so no
 /// token exists only inside a media or theme block and silently falls
 /// back to nothing in another state.
