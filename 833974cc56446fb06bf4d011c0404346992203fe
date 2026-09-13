@@ -1,0 +1,156 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ichange0128",
+      "id": "c-4k2sja31z8wj5z5jcmk6zrnwpb",
+      "landed_oid": "833974cc56446fb06bf4d011c0404346992203fe",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 129,
+      "opened_at": "2026-09-13T19:54:49.322235888Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-345e7z8yjfm72few058khn16aa",
+      "title": "Rebuild the change page around what is missing",
+      "updated_at": "2026-09-13T19:55:40.498187005Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-4k2sja31z8wj5z5jcmk6zrnwpb",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-03tkpdfcgke2k4nztnfq37kdnf",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1175,
+        "summary": "cargo test --workspace: the suite, with the change page tests updated to its new words, all green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-4k2sja31z8wj5z5jcmk6zrnwpb",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-2d3fk5j6wxe2bgpc9s8hvysfy6",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1176,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "833974cc56446fb06bf4d011c0404346992203fe",
+    "landed_at": "2026-09-13T19:55:40.498187005Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-4k2sja31z8wj5z5jcmk6zrnwpb",
+      "commit_oid": "833974cc56446fb06bf4d011c0404346992203fe",
+      "message": "Rebuild the change page around what is missing\n\nThe change page now leads with the decision. Its head carries the\ntitle, chips for state, attempts, the queue and standing concerns, who\nopened it and when, the branch it lands on and the task it serves, and\none accent button, \"Land on main\", disabled with the missing rules as\nits title until the change is ready; abandoning sits behind the more\nmenu. Revisions are a segmented control named by number and author,\nwith \"What changed\" as the last segment. When a task has more than one\nattempt the attempts stand side by side, each with its author, its\nsummary and a way to choose it; the chosen one is outlined.\n\nThe rail is a stack of panels. Readiness comes first: a segmented bar,\nthen every rule as a sentence a reviewer can act on, unmet ones first\nwith the evidence under them, and the same landing button at the foot.\nClaims follow, each a row with who made it, what it says it did, the\ncommand, what was seen and what a runner saw when it re-ran it; adding\none folds behind Add. Reviews and Discussion read the same way, and\nevery person on the page is named and drawn with their avatar.\n\nThreads are cards under the line they are about, with replies and the\nreply and resolve controls inside; resolved ones fold to a chip. One\nreview composer sits at the foot of the diff column. The words changed\nwith the shape: attempts rather than competing revisions, landed rather\nthan merged, updated rather than moved, a runner that re-ran a claim\nrather than a verification, and the policy's own sentences kept on each\nrule as its title for anyone who wants the graph's terms.\n\nThe highlighter's classes now carry a prefix: the grammar's own words,\nmeta, source, dot and link among them, were meeting the page's classes\nof the same name, and a span named meta was laid out as a flex row.\n\nChange-Id: Ichange0128\nTask: t-345e7z8yjfm72few058khn16aa\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/code_flow.rs",
+        "crates/cli/tests/suite/hygiene_flow.rs",
+        "crates/cli/tests/suite/quorum_flow.rs",
+        "crates/cli/tests/suite/threads_page_flow.rs",
+        "crates/cli/tests/suite/web_flow.rs",
+        "crates/server/src/web/highlight.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs"
+      ],
+      "session": null
+    },
+    "seq": 1180,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-03tkpdfcgke2k4nztnfq37kdnf, cl-2d3fk5j6wxe2bgpc9s8hvysfy6",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-2d3fk5j6wxe2bgpc9s8hvysfy6",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 160 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 9 path(s) outside docs/, *.md: crates/cli/tests/suite/code_flow.rs, crates/cli/tests/suite/hygiene_flow.rs, crates/cli/tests/suite/quorum_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-4k2sja31z8wj5z5jcmk6zrnwpb",
+        "claim": "cl-03tkpdfcgke2k4nztnfq37kdnf",
+        "command": "cargo test --workspace",
+        "id": "vr-4djgg0gmwycvqa2vn87nxeq4g7",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1177
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-4k2sja31z8wj5z5jcmk6zrnwpb",
+        "claim": "cl-2d3fk5j6wxe2bgpc9s8hvysfy6",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-172wrcftp8919w8p6jp32hkes7",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.00s",
+        "revision": 1,
+        "seq": 1178
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "4F1bzsMvvbnBu2RZfQoSIohG7hfMPaqClLkwbq4K6l3siD5Kg4VD3zyYAvgQeF8ZRgPkVB10xEjCo5VaMl+NDA=="
+  }
+}
