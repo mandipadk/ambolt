@@ -1,0 +1,168 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ishell0125",
+      "id": "c-540bxb1zadt1p5shkgtbpjmyc6",
+      "landed_oid": "cff31af56ad86b853b61dbb68cca69d87f779818",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 126,
+      "opened_at": "2026-09-13T18:56:37.953686673Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-00bcsqqpkfzdh89s352gy8k4kq",
+      "title": "Put every page in one frame",
+      "updated_at": "2026-09-13T18:57:37.753039895Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-540bxb1zadt1p5shkgtbpjmyc6",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-3d5szfpp0zdzm9w8r0ywkyj7fx",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1145,
+        "summary": "cargo test --workspace: the suite, with the new shell tests for the tabs, the redirects, the script and the palette, all green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-540bxb1zadt1p5shkgtbpjmyc6",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-4mt2b714e9az698dj9z7vm8m89",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1146,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "cff31af56ad86b853b61dbb68cca69d87f779818",
+    "landed_at": "2026-09-13T18:57:37.753039895Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-540bxb1zadt1p5shkgtbpjmyc6",
+      "commit_oid": "cff31af56ad86b853b61dbb68cca69d87f779818",
+      "message": "Put every page in one frame\n\nEvery signed-in page now renders inside the same shell: a sidebar, a\nhead row, and inside a repository its tabs. The sidebar holds the forge\nmark, a search box that opens a palette, the four places a person goes\n(home, inbox with its unread count, tasks, agents), the repositories\nwith their open-change counts, who is at work now with what they hold,\nan operator section for admins, and an account card whose menu carries\nyour changes, tokens, sessions, settings, the theme choice and sign out.\nSigned out, the sidebar shows the readable repositories and a way in.\n\nThe head row says where you are: a page's name, or the repository as a\nbreadcrumb. A repository's tabs are named for what they are for: Code,\nChanges, Tasks, Review, Coverage, Activity, Settings. The pages behind\nthe old names of three of them, landing, debt and log, answer permanent\nredirects so no link breaks. The Tasks tab is the tasks page filtered to\none repository, which the page now accepts as a query. The rail beside a\npage is a stack of panels; below 1100 px it drops under the page, and\nbelow 820 px the sidebar becomes the foot of the page, reached from a\nMenu link in the head row.\n\nOne small script rides with the pages, hashed and cached like the\nstylesheet: it closes the account menu on a click elsewhere, drives\nfolds, copy buttons and segments by data attributes, and opens the\npalette on ⌘K, asking a JSON form of the same search the search page\nruns. Nothing depends on it: the menu is a details element, the search\nbox is a link to the search page, and the theme is a form.\n\nChange-Id: Ishell0125\nTask: t-00bcsqqpkfzdh89s352gy8k4kq\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/account_state_flow.rs",
+        "crates/cli/tests/suite/assets_flow.rs",
+        "crates/cli/tests/suite/attention_budget_flow.rs",
+        "crates/cli/tests/suite/burndown_flow.rs",
+        "crates/cli/tests/suite/credential_flow.rs",
+        "crates/cli/tests/suite/debt_flow.rs",
+        "crates/cli/tests/suite/main.rs",
+        "crates/cli/tests/suite/oidc_flow.rs",
+        "crates/cli/tests/suite/pages_flow.rs",
+        "crates/cli/tests/suite/pages_more_flow.rs",
+        "crates/cli/tests/suite/public_flow.rs",
+        "crates/cli/tests/suite/read_boundary_flow.rs",
+        "crates/cli/tests/suite/repo_lifecycle_flow.rs",
+        "crates/cli/tests/suite/shell_flow.rs",
+        "crates/cli/tests/suite/threads_flow.rs",
+        "crates/cli/tests/suite/web_flow.rs",
+        "crates/cli/tests/suite/welcome_flow.rs",
+        "crates/server/src/web/app.js",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs"
+      ],
+      "session": null
+    },
+    "seq": 1150,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-3d5szfpp0zdzm9w8r0ywkyj7fx, cl-4mt2b714e9az698dj9z7vm8m89",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-4mt2b714e9az698dj9z7vm8m89",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 154 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 21 path(s) outside docs/, *.md: crates/cli/tests/suite/account_state_flow.rs, crates/cli/tests/suite/assets_flow.rs, crates/cli/tests/suite/attention_budget_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-540bxb1zadt1p5shkgtbpjmyc6",
+        "claim": "cl-3d5szfpp0zdzm9w8r0ywkyj7fx",
+        "command": "cargo test --workspace",
+        "id": "vr-664c4wmtmxbmecbq21vyjzg8wa",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1147
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-540bxb1zadt1p5shkgtbpjmyc6",
+        "claim": "cl-4mt2b714e9az698dj9z7vm8m89",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-73hpex0h5rw16dxkv1vhqvjmjn",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.42s",
+        "revision": 1,
+        "seq": 1148
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "AfECMMFuS8ECGwGI6LnK8oAMrmzby34bBRKLb4dFDN7pWu5tpyi+GmFcguGgIXd3Fdid1DQBftg/LTxPQEDzCw=="
+  }
+}
