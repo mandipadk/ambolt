@@ -141,7 +141,7 @@ async fn web_ui_full_journey() {
     );
 
     let (_, body, _) = ada.get("/ada/demo");
-    assert!(body.contains("Empty repository"));
+    assert!(body.contains("Put something on the anvil"));
 
     // Push a change whose title is actively hostile.
     git(
@@ -227,7 +227,7 @@ async fn web_ui_full_journey() {
     assert!(body.contains("landed"));
     let (_, body, _) = ada.get("/ada/demo");
     assert!(body.contains("greeting.txt"));
-    assert!(!body.contains("Empty repository"));
+    assert!(!body.contains("Put something on the anvil"));
     let (_, body, _) = ada.get("/ada/demo/tree/greeting.txt");
     assert!(body.contains("hello"));
     let (_, body, _) = ada.get("/ada/demo/activity");

@@ -3502,19 +3502,32 @@ async fn render_tree(
         Ok(sidebar) => sidebar,
         Err(err) => return oops(err),
     };
-    views::repository(
+    let people = people_named(
+        &app,
+        sidebar
+            .sessions
+            .iter()
+            .map(|s| s.agent.as_str())
+            .chain(sidebar.open_changes.iter().map(|c| c.owner.as_str()))
+            .chain(sidebar.tags.iter().map(|t| t.by.as_str()))
+            .chain(
+                entries
+                    .iter()
+                    .filter_map(|e| e.change.as_ref().map(|c| c.owner.as_str())),
+            ),
+    );
+    views::repository(views::RepoPage {
         theme,
-        who.reading(),
-        &repo,
-        &branch,
-        tip.as_deref(),
-        &path,
-        &entries,
-        readme.as_deref(),
-        &sidebar,
-        &clone_url,
-        &record.description,
-    )
+        who: who.reading(),
+        repo: &record,
+        tip: tip.as_deref(),
+        path: &path,
+        entries: &entries,
+        readme: readme.as_deref(),
+        sidebar: &sidebar,
+        clone_url: &clone_url,
+        people: &people,
+    })
     .into_response()
 }
 

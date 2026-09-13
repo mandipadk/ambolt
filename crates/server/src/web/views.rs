@@ -545,31 +545,28 @@ pub fn signup(theme: Theme, state: super::Signup, error: Option<&str>) -> Markup
         None,
         "Make an account",
         html! {
-            div class="center" {
-                div class="login" {
-                    div class="mark" {
-                        (mark())
-                        b { "ambolt" }
-                    }
+            div class="auth" {
+                div class="card" {
+                    div class="brand" { (mark()) "ambolt" }
                     @if let Some(error) = error { p class="error" { (error) } }
                     @if open {
                         form method="post" action="/signup" {
-                            div {
+                            div class="field" {
                                 label for="name" { "Name" }
                                 input id="name" name="name" type="text" autocomplete="username"
                                     autocapitalize="none" autofocus required pattern="[a-z0-9-]{2,64}";
                                 p class="hint" { "Lowercase letters, digits and hyphens. Your repositories live under it." }
                             }
-                            div {
+                            div class="field" {
                                 label for="display" { "Shown as" }
                                 input id="display" name="display" type="text" autocomplete="name";
                             }
-                            div {
+                            div class="field" {
                                 label for="email" { "Email" }
                                 input id="email" name="email" type="email" autocomplete="email";
                                 p class="hint" { "A confirmation link goes there; sign-in links and invitations use it." }
                             }
-                            div {
+                            div class="field" {
                                 label for="password" { "Password" }
                                 input id="password" name="password" type="password"
                                     autocomplete="new-password" required;
@@ -721,6 +718,8 @@ pub fn welcome(
 
 /// A page for somebody who is not signed in: the sign-in frame, a
 /// heading, and whatever the moment needs.
+/// A page for somebody who is not signed in: one card on a quiet page,
+/// the mark above it, the title on it.
 fn outside(theme: Theme, title: &str, body: Markup) -> Markup {
     layout(
         theme,
@@ -729,13 +728,10 @@ fn outside(theme: Theme, title: &str, body: Markup) -> Markup {
         None,
         title,
         html! {
-            div class="center" {
-                div class="login" {
-                    div class="mark" {
-                        (mark())
-                        b { "ambolt" }
-                    }
-                    p class="strong" { (title) }
+            div class="auth" {
+                div class="card" {
+                    div class="brand" { (mark()) "ambolt" }
+                    h1 { (title) }
                     (body)
                 }
             }
@@ -748,7 +744,7 @@ pub fn forgot(theme: Theme, can_mail: bool, sent: bool, error: Option<&str>) -> 
         theme,
         "Reset your password",
         html! {
-            @if let Some(error) = error { p class="error" { (error) } }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
             @if sent {
                 @if can_mail {
                     p { "If that account has an email address on record, a link is on its way. It works once, for thirty minutes." }
@@ -758,12 +754,12 @@ pub fn forgot(theme: Theme, can_mail: bool, sent: bool, error: Option<&str>) -> 
                 }
                 p class="hint" { a href="/login" { "Back to sign in" } }
             } @else {
-                form class="stack" method="post" action="/forgot" {
-                    div {
-                        label for="who" { "Your name or email" }
+                form class="form" method="post" action="/forgot" {
+                    div class="field" {
+                        label for="who" { "Username or email" }
                         input id="who" name="who" type="text" autocomplete="username" autofocus required;
                     }
-                    button class="btn" type="submit" { @if can_mail { "Send a reset link" } @else { "Ask for a new link" } }
+                    button class="btn wide" type="submit" { @if can_mail { "Send a reset link" } @else { "Ask for a new link" } }
                     p class="hint" { a href="/login" { "Back to sign in" } }
                 }
             }
@@ -776,18 +772,19 @@ pub fn reset(theme: Theme, token: &str, error: Option<&str>) -> Markup {
         theme,
         "Choose a new password",
         html! {
-            @if let Some(error) = error { p class="error" { (error) } }
-            form class="stack" method="post" action="/reset" {
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            form class="form" method="post" action="/reset" {
                 input type="hidden" name="token" value=(token);
-                div {
+                div class="field" {
                     label for="password" { "New password" }
                     input id="password" name="password" type="password" autocomplete="new-password" minlength="12" autofocus required;
                 }
-                div {
+                div class="field" {
                     label for="confirm" { "Again" }
                     input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="12" required;
+                    span class="hint" { "At least 12 characters." }
                 }
-                button class="btn" type="submit" { "Set password" }
+                button class="btn wide" type="submit" { "Set password" }
             }
         },
     )
@@ -804,77 +801,63 @@ pub fn login(
     done: Option<&str>,
     error: Option<&str>,
 ) -> Markup {
-    layout(
+    outside(
         theme,
-        None,
-        None,
-        None,
         "Sign in",
         html! {
-            div class="center" {
-                div class="login" {
-                    div class="mark" {
-                        (mark())
-                        b { "ambolt" }
-                    }
-                    @if let Some(error) = error { p class="error" { (error) } }
-                    @if let Some(done) = done { p class="done" { (done) } }
-                    @if sent {
-                        p class="hint" { "If that account has a confirmed address, a sign-in link is on its way. It works once, for fifteen minutes." }
-                    }
-
-                    form method="post" action="/login" {
-                        div {
-                            label for="principal" { "Name" }
-                            input id="principal" name="principal" type="text"
-                                autocomplete="username webauthn" autocapitalize="none" autofocus required;
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            @if let Some(done) = done { div class="notice" { (ic("check", "")) span { (done) } } }
+            @if sent {
+                div class="notice" { (ic("send", "")) span { "If that account has a confirmed address, a sign-in link is on its way. It works once, for fifteen minutes." } }
+            }
+            form class="form" method="post" action="/login" {
+                div class="field" {
+                    label for="principal" { "Username" }
+                    input id="principal" name="principal" type="text"
+                        autocomplete="username webauthn" autocapitalize="none" autofocus required;
+                }
+                div class="field" {
+                    label for="password" { "Password" }
+                    input id="password" name="password" type="password" autocomplete="current-password";
+                }
+                button class="btn wide" type="submit" { "Sign in" }
+                p class="hint" { a href="/forgot" { "Forgot your password?" } }
+            }
+            @if provider.is_some() || can_passkey || can_mail {
+                div class="or" { "or" }
+            }
+            @if let Some(provider) = provider {
+                a class="btn2 wide" href="/login/oidc" { "Continue with " (provider) }
+            }
+            @if can_passkey {
+                button class="btn2 wide" type="button" data-passkey="login" data-say="passkey-note" { (ic("key", "sm")) "Sign in with a passkey" }
+                p class="hint" id="passkey-note" {}
+            }
+            @if can_mail && !sent {
+                form method="post" action="/login/link" {
+                    details class="alt" {
+                        summary { "Email me a sign-in link" }
+                        div class="field" {
+                            label for="who" { "Username or email" }
+                            input id="who" name="who" type="text" autocomplete="username" required;
                         }
-                        div {
-                            label for="password" { "Password" }
-                            input id="password" name="password" type="password"
-                                autocomplete="current-password";
-                        }
-                        button class="btn wide" type="submit" { "Sign in" }
-                        p class="hint" { a href="/forgot" { "Forgot your password?" } }
-                    }
-
-                    div class="or" { span { "or" } }
-                    @if let Some(provider) = provider {
-                        a class="vbtn wide" href="/login/oidc" { "Continue with " (provider) }
-                    }
-                    @if can_passkey {
-                        button class="vbtn wide" type="button" data-passkey="login" data-say="passkey-note" {
-                            "Sign in with a passkey"
-                        }
-                        p class="hint" id="passkey-note" {}
-                    }
-                    @if can_mail && !sent {
-                        form method="post" action="/login/link" {
-                            details class="alt" {
-                                summary { "Email me a sign-in link" }
-                                div {
-                                    label for="who" { "Your name or email" }
-                                    input id="who" name="who" type="text" autocomplete="username" required;
-                                }
-                                button class="vbtn wide" type="submit" { "Send the link" }
-                            }
-                        }
-                    }
-                    form method="post" action="/login" {
-                        details class="alt" {
-                            summary { "Sign in with a token" }
-                            div {
-                                label for="token" { "API token" }
-                                input id="token" name="token" type="password" autocomplete="off";
-                            }
-                            button class="vbtn wide" type="submit" { "Sign in with the token" }
-                            p class="hint" { "From your Tokens page, once signed in." }
-                        }
-                    }
-                    @if dev {
-                        p class="hint" { "Dev mode: a name alone is accepted as asserted identity." }
+                        button class="btn2 wide" type="submit" { "Send the link" }
                     }
                 }
+            }
+            form method="post" action="/login" {
+                details class="alt" {
+                    summary { "Sign in with a token" }
+                    div class="field" {
+                        label for="token" { "API token" }
+                        input id="token" name="token" type="password" autocomplete="off";
+                        span class="hint" { "From your settings, once signed in." }
+                    }
+                    button class="btn2 wide" type="submit" { "Sign in with the token" }
+                }
+            }
+            @if dev {
+                p class="hint" { "Dev mode: a name alone is accepted as asserted identity." }
             }
         },
     )
@@ -1071,22 +1054,30 @@ pub fn first_run(theme: Theme, viewer: &Viewer) -> Markup {
         html! {
             div class="first" {
                 h2 { "Nothing here yet" }
-                p {
-                    "ambolt records how software actually came to exist — who claimed what, \
+                p class="sec2" {
+                    "ambolt records how software actually came to exist: who claimed what, \
                      who re-ran it, and why anything was allowed to land. It starts \
                      recording from the first push."
                 }
-                a class="do" href="/new" {
-                    b { "Create a repository" }
-                    span { "empty, ready for a first push" }
-                }
-                a class="do" href="/new" {
-                    b { "Import from GitHub" }
-                    span { "recorded as imported, never as reviewed" }
-                }
-                a class="do" href="/agents" {
-                    b { "Add an agent" }
-                    span { "a token and a narrow capability grant" }
+                div class="panel" {
+                    a class="row need" href="/new" {
+                        span class="chip" { (ic("repo", "")) "Repository" }
+                        span class="tt" { span class="t" { "Create a repository" } span class="s" { "Empty, ready for a first push." } }
+                        span class="avs" {}
+                        span class="age" { (ic("chev", "sm")) }
+                    }
+                    a class="row need" href="/new" {
+                        span class="chip" { (ic("download", "")) "Import" }
+                        span class="tt" { span class="t" { "Import from GitHub" } span class="s" { "Recorded as imported, never as reviewed." } }
+                        span class="avs" {}
+                        span class="age" { (ic("chev", "sm")) }
+                    }
+                    a class="row need" href="/agents" {
+                        span class="chip" { (ic("agents", "")) "Agent" }
+                        span class="tt" { span class="t" { "Add an agent" } span class="s" { "A token and a narrow capability grant." } }
+                        span class="avs" {}
+                        span class="age" { (ic("chev", "sm")) }
+                    }
                 }
             }
         },
@@ -1181,52 +1172,45 @@ pub fn new_repo(
         None,
         "New repository",
         html! {
-            div class="narrowcol" {
-                div class="sechead" { b { "New repository" } span {} }
-                @if let Some(error) = error {
-                    p class="error" { (error) }
-                }
-                form class="stack" method="post" action="/new" {
-                    @if owners.len() > 1 {
-                        div {
-                            label for="owner" { "Owner" }
-                            select id="owner" name="owner" {
-                                @for owner in owners {
-                                    option value=(owner) selected[owner == chosen] { (owner) }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            div class="sec top" {
+                div class="panel narrow" {
+                    header { (ic("repo", "")) h2 { "New repository" } }
+                    form class="pad form" method="post" action="/new" {
+                        @if owners.len() > 1 {
+                            div class="field" {
+                                label for="owner" { "Owner" }
+                                select id="owner" name="owner" {
+                                    @for owner in owners {
+                                        option value=(owner) selected[owner == chosen] { (owner) }
+                                    }
                                 }
+                                span class="hint" { "Yours, or an organisation you belong to. The address is the owner's name, then this one." }
                             }
-                            p class="hint" { "Yours, or an organisation you belong to. The address is the owner's name, then this one." }
+                        } @else {
+                            input type="hidden" name="owner" value=(chosen);
                         }
-                    } @else {
-                        input type="hidden" name="owner" value=(chosen);
-                    }
-                    div {
-                        label for="name" { "Name" }
-                        input id="name" name="name" type="text" autofocus autocomplete="off"
-                              placeholder="lowercase, digits and hyphens" required;
-                        p class="hint" { "It will live at /" (chosen) "/…" }
-                    }
-                    div {
-                        label for="default_branch" { "Default branch" }
-                        input id="default_branch" name="default_branch" type="text"
-                              autocomplete="off" placeholder="main";
-                    }
-                    // The forge fetching from an address a caller typed is
-                    // the operator's to allow; the field is not shown to
-                    // somebody it would refuse.
-                    @if may_import {
-                    div {
-                        label for="source" { "Import from" }
-                        input id="source" name="source" type="text" autocomplete="off"
-                              placeholder="https://github.com/you/project.git — optional";
-                        p class="hint" {
-                            "History brought in this way is recorded as imported. \
-                             Nothing here was reviewed under this repository's policy, \
-                             and the log says so rather than implying otherwise."
+                        div class="field" {
+                            label for="name" { "Name" }
+                            input id="name" name="name" type="text" autofocus autocomplete="off" placeholder="lowercase, digits and hyphens" required;
+                            span class="hint" { "It will live at /" (chosen) "/…" }
                         }
+                        div class="field" {
+                            label for="default_branch" { "Default branch" }
+                            input id="default_branch" name="default_branch" type="text" autocomplete="off" placeholder="main";
+                        }
+                        // The forge fetching from an address a caller typed is
+                        // the operator's to allow; the field is not shown to
+                        // somebody it would refuse.
+                        @if may_import {
+                            div class="field" {
+                                label for="source" { "Import from" }
+                                input id="source" name="source" type="text" autocomplete="off" placeholder="https://github.com/you/project.git (optional)";
+                                span class="hint" { "History brought in this way is recorded as imported. Nothing here was reviewed under this repository's policy, and the log says so rather than implying otherwise." }
+                            }
+                        }
+                        div class="acts" { button class="btn" type="submit" { "Create" } }
                     }
-                    }
-                    button class="btn" type="submit" { "Create" }
                 }
             }
         },
@@ -1831,6 +1815,9 @@ pub fn forge_log(
     )
 }
 
+/// A repository's settings: one panel per thing an owner decides, a
+/// sub-navigation beside them, the landing policy with its preview and
+/// its simulation as panels of their own.
 pub fn repo_settings(
     theme: Theme,
     viewer: &Viewer,
@@ -1844,6 +1831,7 @@ pub fn repo_settings(
     let ninety_days_ago = (jiff::Timestamp::now() - jiff::SignedDuration::from_hours(24 * 90))
         .strftime("%Y-%m-%d")
         .to_string();
+    let base = format!("/{}/settings", repo.name);
     layout(
         theme,
         Some(viewer),
@@ -1851,202 +1839,224 @@ pub fn repo_settings(
         Some(Tab::Settings),
         "Settings",
         html! {
-            div class="narrowcol" {
-                @if let Some(error) = error { p class="error" { (error) } }
-                @if done { p class="done" { "Saved." } }
-
-                div class="sechead" { b { "Visibility" } span { (repo.visibility.as_str()) } }
-                form class="stack" method="post" action={ "/" (repo.name) "/settings/visibility" } {
-                    label class="choice" {
-                        input type="radio" name="visibility" value="private" checked[repo.visibility == Visibility::Private];
-                        span { b { "Private" } " — only you, and whoever you grant something on it." }
-                    }
-                    label class="choice" {
-                        input type="radio" name="visibility" value="public" checked[repo.visibility == Visibility::Public];
-                        span { b { "Public" } " — anyone can read and clone it. Writing still needs authority." }
-                    }
-                    button class="btn" type="submit" { "Save" }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            @if done { div class="notice" { (ic("check", "")) span { "Saved." } } }
+            div class="settings" {
+                nav class="subnav" {
+                    a href="#visibility" { "Visibility" }
+                    a href="#ownership" { "Ownership" }
+                    a href="#policy" { "Landing policy" }
+                    @if viewer.1.admin { a href="#mirror" { "Mirror" } }
+                    a href="#description" { "Description" }
+                    a href="#name" { "Name" }
+                    a href="#archive" { "Archive" }
+                    a href="#delete" { "Delete" }
                 }
-
-                div class="sechead later" { b { "Ownership" } span { (repo.owner.as_str()) } }
-                @if let Some(pending) = &repo.pending_owner {
-                    p class="note" { "Offered to " b { (pending.as_str()) } ". Nothing changes until they accept." }
-                    form class="stack" method="post" action={ "/" (repo.name) "/settings/transfer" } {
-                        input type="hidden" name="action" value="withdraw";
-                        button class="vbtn danger" type="submit" { "Withdraw the offer" }
-                    }
-                } @else {
-                    p class="note" { "Owning a repository carries every capability on it. Offer it to a person; it moves when they accept." }
-                    form class="stack" method="post" action={ "/" (repo.name) "/settings/transfer" } {
-                        input type="hidden" name="action" value="offer";
-                        div {
-                            label for="to" { "Offer to" }
-                            input id="to" name="to" type="text" autocomplete="off" placeholder="their name" required;
+                div class="panels" {
+                    div class="panel" id="visibility" {
+                        form class="pref" method="post" action={ (base) "/visibility" } {
+                            h3 { "Visibility" }
+                            div class="seg radio" {
+                                label { input type="radio" name="visibility" value="private" checked[repo.visibility == Visibility::Private]; span { (ic("lock", "sm")) "Private" } }
+                                label { input type="radio" name="visibility" value="public" checked[repo.visibility == Visibility::Public]; span { (ic("globe", "sm")) "Public" } }
+                            }
+                            p class="what" { "Private: only you, and whoever you grant something on it. Public: anyone can read and clone it; writing still needs authority." }
+                            div class="acts" { button class="btn2" type="submit" { "Save" } }
                         }
-                        button class="btn" type="submit" { "Offer ownership" }
                     }
-                }
-
-                div class="sechead later" { b { "Landing policy" } span { "what must be true before anything lands" } }
-                form class="stack" method="post" action={ "/" (repo.name) "/settings/policy" } {
-                    label class="tick" { input type="checkbox" name="require_executed_check" checked[policy.require_executed_check]; "A passing executed check on the landing revision" }
-                    label class="tick" { input type="checkbox" name="require_runner_verification" checked[policy.require_runner_verification]; "A runner has reproduced a claim" }
-                    div {
-                        label for="runner_quorum" { "Runners of distinct provenance that must agree on it" }
-                        input id="runner_quorum" name="runner_quorum" type="number" min="1" max="9" value=(policy.runner_quorum.to_string());
-                    }
-                    label class="tick" { input type="checkbox" name="require_concerns_resolved" checked[policy.require_concerns_resolved]; "No concern raised in discussion is left unresolved" }
-                    label class="tick" { input type="checkbox" name="agents_act_in_sessions" checked[policy.agents_act_in_sessions]; "Agents act inside sessions; their standing tokens cannot push, review or merge" }
-                    div {
-                        label for="independence" { "Approval" }
-                        select id="independence" name="independence" {
-                            @for choice in [Independence::HumanOrTwoModels, Independence::HumanOnly, Independence::Anyone, Independence::None] {
-                                option value=(choice.as_str()) selected[policy.independence == choice] {
-                                    @match choice {
-                                        Independence::HumanOrTwoModels => "one human, or two agents of distinct models",
-                                        Independence::HumanOnly => "a human, and only a human",
-                                        Independence::Anyone => "anyone but the owner",
-                                        Independence::None => "nobody (a scratch repository)",
-                                    }
+                    div class="panel" id="ownership" {
+                        div class="pref" {
+                            h3 { "Ownership" span class="n" { (repo.owner.as_str()) } }
+                            @if let Some(pending) = &repo.pending_owner {
+                                p class="what" { "Offered to " b { (pending.as_str()) } ". Nothing changes until they accept." }
+                                form method="post" action={ (base) "/transfer" } {
+                                    input type="hidden" name="action" value="withdraw";
+                                    button class="btn2 danger" type="submit" { "Withdraw the offer" }
+                                }
+                            } @else {
+                                p class="what" { "Owning a repository carries every capability on it. Offer it to a person; it moves when they accept." }
+                                form class="line" method="post" action={ (base) "/transfer" } {
+                                    input type="hidden" name="action" value="offer";
+                                    input class="input" id="to" name="to" type="text" autocomplete="off" placeholder="Their username" required aria-label="Offer to";
+                                    button class="btn2" type="submit" { "Offer ownership" }
                                 }
                             }
                         }
                     }
-                    div {
-                        span class="hint" { "Domains a reviewer must cover" }
-                        @for domain in [ReviewDomain::Correctness, ReviewDomain::Security, ReviewDomain::Design, ReviewDomain::Style] {
-                            label class="tick" { input type="checkbox" name="domains" value=(domain.as_str()) checked[policy.required_domains.contains(&domain)]; (domain.as_str()) }
-                        }
-                    }
-                    div {
-                        label for="attention_budget" { "Human looks drawn per day (empty for none)" }
-                        input id="attention_budget" name="attention_budget" type="number" min="0" max="100"
-                              value=(policy.attention_budget.map(|n| n.to_string()).unwrap_or_default());
-                    }
-                    div {
-                        span class="hint" { "Earned trust: what an owner's record may stand in for" }
-                        @let trust = policy.trust.as_ref();
-                        label class="tick" { input type="checkbox" name="trust_waives" value="runner_verification" checked[trust.is_some_and(|t| t.waives.contains(&Waiver::RunnerVerification))]; "their own claim, in place of a runner" }
-                        label class="tick" { input type="checkbox" name="trust_waives" value="independent_approval" checked[trust.is_some_and(|t| t.waives.contains(&Waiver::IndependentApproval))]; "their own claim, in place of an independent approval" }
-                        div class="line" {
-                            label for="trust_percent" { "when at least" }
-                            input id="trust_percent" name="trust_percent" type="number" min="50" max="100" value=(trust.map(|t| t.min_reproduced_percent.to_string()).unwrap_or_else(|| "98".to_owned()));
-                            label for="trust_claims" { "% of at least" }
-                            input id="trust_claims" name="trust_claims" type="number" min="1" max="10000" value=(trust.map(|t| t.min_claims.to_string()).unwrap_or_else(|| "20".to_owned()));
-                            label for="trust_days" { "judged claims were reproduced over" }
-                            input id="trust_days" name="trust_days" type="number" min="1" max="3650" value=(trust.map(|t| t.window_days.to_string()).unwrap_or_else(|| "90".to_owned()));
-                            span class="hint" { "days" }
-                        }
-                        label for="trust_paths" { "only for changes touching nothing outside (comma-separated; docs/, *.md; empty for any)" }
-                        input id="trust_paths" name="trust_paths" type="text" autocomplete="off" value=(trust.map(|t| t.paths.join(", ")).unwrap_or_default());
-                    }
-                    div {
-                        span class="hint" { "Start from a pack instead of the fields above" }
-                        select name="pack" {
-                            option value="" { "the fields above" }
-                            @for pack in ambolt_core::packs() { option value=(pack.name) { (pack.name) " · " (pack.description) } }
-                        }
-                        label for="pack_json" { "or paste a pack exported by another repository" }
-                        textarea id="pack_json" name="pack_json" rows="3" placeholder="{ \"pack\": 1, \"name\": … }" {}
-                        a class="link" href={ "/api/repos/" (repo.name) "/policy/pack" } { "Export this policy as a pack" }
-                    }
-                    div class="line" {
-                        button class="vbtn" type="submit" name="action" value="preview" { "Preview against open changes" }
-                        label for="since" { "or against landings since" }
-                        input id="since" name="since" type="date" value=(ninety_days_ago);
-                        button class="vbtn" type="submit" name="action" value="simulate" { "Simulate" }
-                        button class="btn" type="submit" name="action" value="save" { "Save policy" }
-                    }
-                }
-                @if let Some(simulation) = simulation {
-                    div class="preview" {
-                        p class="note" {
-                            "Against " (simulation.landings) " landing(s) since " (short_day(&simulation.since)) ", this policy would have held " (simulation.held) "."
-                            @if simulation.landings > 0 && simulation.held == 0 { " A requirement nothing failed is one that was being met, which is the reason to keep it." }
-                        }
-                        @for (description, n) in &simulation.by_requirement {
-                            div class="trow" {
-                                span class="sec3" { (n) " held by: " (description) }
+                    div class="panel" id="policy" {
+                        form class="pref" method="post" action={ (base) "/policy" } {
+                            h3 { "Landing policy" span class="n" { "what must be true before anything lands" } }
+                            div class="field" {
+                                label { "Checks" }
+                                label class="check" { input type="checkbox" name="require_executed_check" checked[policy.require_executed_check]; span { "Tests pass on the landing revision, by an executed check" } }
+                                label class="check" { input type="checkbox" name="require_runner_verification" checked[policy.require_runner_verification]; span { "A runner reproduced a claim" } }
+                                div class="line" {
+                                    label for="runner_quorum" class="lbl" { "Runners of distinct provenance that must agree" }
+                                    input class="input sm num" id="runner_quorum" name="runner_quorum" type="number" min="1" max="9" value=(policy.runner_quorum.to_string());
+                                }
+                                label class="check" { input type="checkbox" name="require_concerns_resolved" checked[policy.require_concerns_resolved]; span { "Every concern raised in discussion is resolved" } }
+                                label class="check" { input type="checkbox" name="agents_act_in_sessions" checked[policy.agents_act_in_sessions]; span { "Agents act inside sessions; their standing tokens cannot push, review or merge" } }
+                            }
+                            div class="field" {
+                                label for="independence" { "Approval" }
+                                select id="independence" name="independence" {
+                                    @for choice in [Independence::HumanOrTwoModels, Independence::HumanOnly, Independence::Anyone, Independence::None] {
+                                        option value=(choice.as_str()) selected[policy.independence == choice] {
+                                            @match choice {
+                                                Independence::HumanOrTwoModels => "Someone other than the author: one person, or two agents of different models",
+                                                Independence::HumanOnly => "A person, and only a person",
+                                                Independence::Anyone => "Anyone but the owner",
+                                                Independence::None => "Nobody (a scratch repository)",
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            div class="field" {
+                                label { "Reviewed for" }
+                                div class="line" {
+                                    @for domain in [ReviewDomain::Correctness, ReviewDomain::Security, ReviewDomain::Design, ReviewDomain::Style] {
+                                        label class="check" { input type="checkbox" name="domains" value=(domain.as_str()) checked[policy.required_domains.contains(&domain)]; span { (domain.as_str()) } }
+                                    }
+                                }
+                            }
+                            div class="field" {
+                                label for="attention_budget" { "Human looks drawn per day" }
+                                input class="input sm num" id="attention_budget" name="attention_budget" type="number" min="0" max="100"
+                                      value=(policy.attention_budget.map(|n| n.to_string()).unwrap_or_default());
+                                span class="hint" { "Empty for none. A drawn change waits for a person to look before it lands." }
+                            }
+                            div class="field" {
+                                label { "Earned trust" }
+                                span class="hint" { "What an owner's own record may stand in for." }
+                                @let trust = policy.trust.as_ref();
+                                label class="check" { input type="checkbox" name="trust_waives" value="runner_verification" checked[trust.is_some_and(|t| t.waives.contains(&Waiver::RunnerVerification))]; span { "Their own claim, in place of a runner" } }
+                                label class="check" { input type="checkbox" name="trust_waives" value="independent_approval" checked[trust.is_some_and(|t| t.waives.contains(&Waiver::IndependentApproval))]; span { "Their own claim, in place of an independent approval" } }
+                                div class="line" {
+                                    label for="trust_percent" class="lbl" { "when at least" }
+                                    input class="input sm num" id="trust_percent" name="trust_percent" type="number" min="50" max="100" value=(trust.map(|t| t.min_reproduced_percent.to_string()).unwrap_or_else(|| "98".to_owned()));
+                                    label for="trust_claims" class="lbl" { "% of at least" }
+                                    input class="input sm num" id="trust_claims" name="trust_claims" type="number" min="1" max="10000" value=(trust.map(|t| t.min_claims.to_string()).unwrap_or_else(|| "20".to_owned()));
+                                    label for="trust_days" class="lbl" { "claims were reproduced over" }
+                                    input class="input sm num" id="trust_days" name="trust_days" type="number" min="1" max="3650" value=(trust.map(|t| t.window_days.to_string()).unwrap_or_else(|| "90".to_owned()));
+                                    span class="lbl" { "days" }
+                                }
+                                label for="trust_paths" class="lbl" { "Only for changes touching nothing outside" }
+                                input class="input sm" id="trust_paths" name="trust_paths" type="text" autocomplete="off" placeholder="docs/, *.md (empty for any)" value=(trust.map(|t| t.paths.join(", ")).unwrap_or_default());
+                            }
+                            div class="field" {
+                                label for="pack" { "Start from a pack instead" }
+                                select id="pack" name="pack" {
+                                    option value="" { "The fields above" }
+                                    @for pack in ambolt_core::packs() { option value=(pack.name) { (pack.name) " · " (pack.description) } }
+                                }
+                                textarea id="pack_json" name="pack_json" rows="3" placeholder="Or paste a pack exported by another repository: { \"pack\": 1, \"name\": … }" aria-label="Pack" {}
+                                span class="hint" { a href={ "/api/repos/" (repo.name) "/policy/pack" } { "Export this policy as a pack" } }
+                            }
+                            div class="acts" {
+                                button class="btn" type="submit" name="action" value="save" { "Save policy" }
+                                button class="btn2" type="submit" name="action" value="preview" { "Preview against open changes" }
+                                span class="lbl" { "or against landings since" }
+                                input class="input sm" id="since" name="since" type="date" value=(ninety_days_ago) aria-label="Since";
+                                button class="btn2" type="submit" name="action" value="simulate" { "Simulate" }
                             }
                         }
-                        @for entry in simulation.entries.iter().filter(|e| e.held) {
-                            div class="trow" {
-                                a class="link" href={ "/" (repo.name) "/changes/" (entry.number) } { "#" (entry.number) " " (entry.title) }
-                                span class="sec3" { (entry.unmet.join("; ")) }
+                    }
+                    @if let Some(simulation) = simulation {
+                        div class="panel" {
+                            header { (ic("rerun", "")) h2 { "Simulated" } span class="n" { "landings since " (short_day(&simulation.since)) } }
+                            div class="pad" {
+                                p class="what" {
+                                    "Against " (simulation.landings) " landing(s) since " (short_day(&simulation.since)) ", this policy would have held " (simulation.held) "."
+                                    @if simulation.landings > 0 && simulation.held == 0 { " A requirement nothing failed is one that was being met, which is the reason to keep it." }
+                                }
+                            }
+                            @for (description, n) in &simulation.by_requirement {
+                                div class="row" { span class="s" { (n) " held by: " (description) } }
+                            }
+                            @for entry in simulation.entries.iter().filter(|e| e.held) {
+                                a class="row need" href={ "/" (repo.name) "/changes/" (entry.number) } {
+                                    span class="chip bad" { "held" }
+                                    span class="tt" { span class="t" { "#" (entry.number) " " (entry.title) } span class="s" { (entry.unmet.join("; ")) } }
+                                    span class="avs" {} span class="age" {}
+                                }
                             }
                         }
                     }
-                }
-                @if let Some(previewed) = preview {
-                    div class="preview" {
+                    @if let Some(previewed) = preview {
                         @let blocked: Vec<&(Change, PolicyTrace)> = previewed.iter().filter(|(_, trace)| !trace.satisfied).collect();
-                        p class="note" {
-                            "Against " (previewed.len()) " open change(s), this policy would hold " (blocked.len()) "."
-                        }
-                        @for (change, trace) in blocked {
-                            div class="trow" {
-                                a class="link" href={ "/" (repo.name) "/changes/" (change.number) } { "#" (change.number) " " (change.title) }
-                                span class="sec3" { (trace.unmet_summary()) }
+                        div class="panel" {
+                            header { (ic("review", "")) h2 { "Previewed" } span class="n" { "against " (previewed.len()) " open change(s)" } }
+                            div class="pad" { p class="what" { "This policy would hold " (blocked.len()) " of them." } }
+                            @for (change, trace) in blocked {
+                                a class="row need" href={ "/" (repo.name) "/changes/" (change.number) } {
+                                    span class="chip bad" { "held" }
+                                    span class="tt" { span class="t" { "#" (change.number) " " (change.title) } span class="s" { (trace.unmet_summary()) } }
+                                    span class="avs" {} span class="age" {}
+                                }
                             }
                         }
                     }
-                }
-
-                @if viewer.1.admin {
-                    div class="sechead later" { b { "Mirror" } span { @if let Some(m) = &repo.mirror { (m.url) } @else { "none" } } }
-                    p class="note" { "Landed branches are copied to this address after every landing. The credential lives with whoever runs the forge, never here." }
-                    form class="stack" method="post" action={ "/" (repo.name) "/settings/mirror" } {
-                        div {
-                            label for="mirror-url" { "Push URL (https), empty to stop mirroring" }
-                            input id="mirror-url" name="url" type="text" autocomplete="off" value=(repo.mirror.as_ref().map(|m| m.url.as_str()).unwrap_or(""));
+                    @if viewer.1.admin {
+                        div class="panel" id="mirror" {
+                            form class="pref" method="post" action={ (base) "/mirror" } {
+                                h3 { "Mirror" span class="n" { @if let Some(m) = &repo.mirror { (m.url) } @else { "none" } } }
+                                p class="what" { "Landed branches are copied to this address after every landing. The credential lives with whoever runs the forge, never here." }
+                                div class="field" {
+                                    label for="mirror-url" { "Push URL" }
+                                    input id="mirror-url" name="url" type="text" autocomplete="off" placeholder="https://… (empty to stop mirroring)" value=(repo.mirror.as_ref().map(|m| m.url.as_str()).unwrap_or(""));
+                                }
+                                label class="check" { input type="checkbox" name="enabled" checked[repo.mirror.as_ref().is_some_and(|m| m.enabled)]; span { "Pushes attempted" } }
+                                div class="acts" { button class="btn2" type="submit" { "Save mirror" } }
+                            }
                         }
-                        label class="tick" { input type="checkbox" name="enabled" checked[repo.mirror.as_ref().is_some_and(|m| m.enabled)]; "Pushes attempted" }
-                        button class="vbtn" type="submit" { "Save mirror" }
                     }
-                }
-
-                div class="sechead later" { b { "Description" } span {} }
-                form class="stack" method="post" action={ "/" (repo.name) "/settings/description" } {
-                    div {
-                        label for="description" { "What this repository is for" }
-                        input id="description" name="description" type="text" autocomplete="off" maxlength="300" value=(repo.description);
+                    div class="panel" id="description" {
+                        form class="pref" method="post" action={ (base) "/description" } {
+                            h3 { "Description" }
+                            div class="field" {
+                                label for="description" { "What this repository is for" }
+                                input id="description" name="description" type="text" autocomplete="off" maxlength="300" value=(repo.description);
+                            }
+                            div class="acts" { button class="btn2" type="submit" { "Save" } }
+                        }
                     }
-                    button class="vbtn" type="submit" { "Save" }
-                }
-
-                div class="sechead later" { b { "Name" } span { (repo.name) } }
-                p class="note" { "Everything follows the new name; the old one answers not found." }
-                form class="stack" method="post" action={ "/" (repo.name) "/settings/rename" } {
-                    div {
-                        label for="rename-to" { "New name" }
-                        input id="rename-to" name="to" type="text" autocomplete="off" autocapitalize="none" placeholder="lowercase, digits, hyphens" required;
+                    div class="panel" id="name" {
+                        form class="pref" method="post" action={ (base) "/rename" } {
+                            h3 { "Name" span class="n" { (repo.name) } }
+                            p class="what" { "Everything follows the new name; the old one answers not found." }
+                            div class="field" {
+                                label for="rename-to" { "New name" }
+                                input id="rename-to" name="to" type="text" autocomplete="off" autocapitalize="none" placeholder="lowercase, digits, hyphens" required;
+                            }
+                            div class="acts" { button class="btn2" type="submit" { "Rename" } }
+                        }
                     }
-                    button class="vbtn" type="submit" { "Rename" }
-                }
-
-                div class="sechead later" { b { "Archive" } span { @if repo.archived { "archived" } @else { "active" } } }
-                @if repo.archived {
-                    p class="note" { "Read-only: nothing new lands here until it is unarchived." }
-                    form class="stack" method="post" action={ "/" (repo.name) "/settings/archive" } {
-                        input type="hidden" name="archived" value="no";
-                        button class="vbtn" type="submit" { "Unarchive" }
+                    div class="panel" id="archive" {
+                        form class="pref" method="post" action={ (base) "/archive" } {
+                            h3 { "Archive" span class="n" { @if repo.archived { "archived" } @else { "active" } } }
+                            @if repo.archived {
+                                p class="what" { "Read-only: nothing new lands here until it is unarchived." }
+                                input type="hidden" name="archived" value="no";
+                                div class="acts" { button class="btn2" type="submit" { "Unarchive" } }
+                            } @else {
+                                p class="what" { "An archived repository stays readable and clonable; pushes, new changes and new tasks are refused." }
+                                input type="hidden" name="archived" value="yes";
+                                div class="acts" { button class="btn2" type="submit" { "Archive" } }
+                            }
+                        }
                     }
-                } @else {
-                    p class="note" { "An archived repository stays readable and clonable; pushes, new changes and new tasks are refused." }
-                    form class="stack" method="post" action={ "/" (repo.name) "/settings/archive" } {
-                        input type="hidden" name="archived" value="yes";
-                        button class="vbtn" type="submit" { "Archive" }
+                    div class="panel" id="delete" {
+                        form class="pref" method="post" action={ (base) "/delete" } {
+                            h3 class="bad-t" { "Delete" }
+                            p class="what" { "Its changes, claims, verdicts and discussion go with it; the log keeps what happened. Tasks and lessons stay. Type its name to confirm." }
+                            div class="field" {
+                                label for="confirm" { "Repository name" }
+                                input id="confirm" name="confirm" type="text" autocomplete="off" autocapitalize="none" placeholder=(repo.name) required;
+                            }
+                            div class="acts" { button class="btn2 danger" type="submit" { "Delete this repository" } }
+                        }
                     }
-                }
-
-                div class="sechead later" { b { "Delete" } span {} }
-                p class="note" { "Its changes, claims, verdicts and discussion go with it; the log keeps what happened. Tasks and lessons stay. Type its name to confirm." }
-                form class="stack" method="post" action={ "/" (repo.name) "/settings/delete" } {
-                    div {
-                        label for="confirm" { "Repository name" }
-                        input id="confirm" name="confirm" type="text" autocomplete="off" autocapitalize="none" placeholder=(repo.name) required;
-                    }
-                    button class="vbtn danger" type="submit" { "Delete this repository" }
                 }
             }
         },
@@ -2210,7 +2220,7 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
                     a href="#sessions" { "Sessions" }
                     a href="#appearance" { "Appearance" }
                 }
-                div class="stack panels" {
+                div class="panels" {
                     div class="panel" id="email" {
                         div class="pref" {
                             h3 { "Email" }
@@ -3120,142 +3130,222 @@ pub fn too_many_page(theme: Theme) -> Markup {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn repository(
-    theme: Theme,
-    who: Reading<'_>,
-    repo: &str,
-    branch: &str,
-    tip: Option<&str>,
-    path: &str,
-    entries: &[Entry],
-    readme: Option<&str>,
-    sidebar: &Sidebar,
-    clone_url: &str,
-    description: &str,
-) -> Markup {
-    layout_reading(
+/// The rules a branch lands under, as the sentences the change page
+/// uses, so the same words appear wherever a rule is named.
+fn rule_words(policy: &ambolt_core::Policy) -> Vec<String> {
+    let mut rules = Vec::new();
+    if policy.require_executed_check {
+        rules.push("Tests pass on the judged revision".to_owned());
+    }
+    if policy.require_runner_verification {
+        rules.push(if policy.runner_quorum > 1 {
+            format!("{} runners reproduced the same claim", policy.runner_quorum)
+        } else {
+            "A runner reproduced a claim".to_owned()
+        });
+    }
+    rules.push(match policy.independence {
+        Independence::HumanOrTwoModels => "Someone other than the author approves it".to_owned(),
+        Independence::HumanOnly => "A person approves it".to_owned(),
+        Independence::Anyone => "Anyone but the owner approves it".to_owned(),
+        Independence::None => "Nobody has to approve it".to_owned(),
+    });
+    if policy.require_concerns_resolved {
+        rules.push("Every concern is resolved".to_owned());
+    }
+    for domain in &policy.required_domains {
+        rules.push(format!("Reviewed for {}", domain.as_str()));
+    }
+    rules
+}
+
+pub struct RepoPage<'a> {
+    pub theme: Theme,
+    pub who: Reading<'a>,
+    pub repo: &'a Repo,
+    pub tip: Option<&'a str>,
+    pub path: &'a str,
+    pub entries: &'a [Entry],
+    pub readme: Option<&'a str>,
+    pub sidebar: &'a Sidebar,
+    pub clone_url: &'a str,
+    pub people: &'a People,
+}
+
+pub fn repository(page: RepoPage<'_>) -> Markup {
+    let RepoPage {
         theme,
         who,
-        Some(repo),
-        Some(Tab::Code),
         repo,
-        html! {
-            div class="cols2" {
-                div {
-                    div class="repo-bar" {
-                        span class="branch" { (branch) }
-                        @if let Some(tip) = tip {
-                            span class="tip" { code { (short(tip)) } }
-                        }
-                        span class="stats" { "clone " code { (clone_url) } }
-                        @if !description.is_empty() { p class="desc" { (description) } }
-                    }
-                    @if !path.is_empty() {
-                        div class="crumbs" { (breadcrumbs(repo, path)) }
-                    }
-                    @if tip.is_none() {
-                        p class="empty" { "Empty repository. Push to " code { "refs/for/" (branch) } " to open its first change." }
-                    } @else if entries.is_empty() && !path.is_empty() {
-                        p class="empty" { "Nothing here." }
-                    }
-                    div class="ftable" {
-                        @for entry in entries {
-                            @let target = if path.is_empty() {
-                                entry.name.clone()
-                            } else {
-                                format!("{path}/{}", entry.name)
-                            };
-                            div class="trow link" {
-                                a class={ "fname" @if entry.is_dir { " dir" } }
-                                  href={ "/" (repo) "/tree/" (target) } { (entry.name) }
-                                @if let Some(change) = &entry.change {
-                                    a class="last sec2" href={ "/" (repo) "/changes/" (change.number) } {
-                                        "#" (change.number) " " (change.title)
-                                    }
-                                    span class="sec3 r" { (change.owner) }
-                                } @else {
-                                    span class="last sec2" { (entry.subject.as_deref().unwrap_or("")) }
-                                    span {}
-                                }
-                            }
-                        }
-                    }
-                    @if let Some(readme) = readme {
-                        div class="panel readme" {
-                            header { (ic("file", "")) h2 { "README.md" } }
-                            div class="prose" { (markdown(readme)) }
-                        }
+        tip,
+        path,
+        entries,
+        readme,
+        sidebar,
+        clone_url,
+        people,
+    } = page;
+    let name = repo.name.as_str();
+    let branch = repo.default_branch.as_str();
+    let short_name = ambolt_core::split_repo_name(name)
+        .map(|(_, s)| s)
+        .unwrap_or(name);
+    let owner = who
+        .viewer()
+        .is_some_and(|v| v.1.admin || v.1.owned.iter().any(|r| r == name));
+    let rail = html! {
+        div class="panel" {
+            header { h2 { "Rules of " (branch) } }
+            div class="pad reqs" {
+                @for rule in rule_words(&repo.policy) {
+                    div class="req met" { span class="st" { (ic("check", "")) } div { b { (rule) } } }
+                }
+            }
+            @if owner {
+                div class="foot" { a href={ "/" (name) "/settings#policy" } { "Change the rules" } }
+            }
+        }
+        div class="panel" {
+            header { h2 { "Open changes" } span class="n" { (sidebar.open_changes.len()) } }
+            @if sidebar.open_changes.is_empty() { div class="empty" { "None open." } }
+            @for change in &sidebar.open_changes {
+                @let (display, agent) = people.name(&change.owner);
+                a class="ev-row" href={ "/" (name) "/changes/" (change.number) } {
+                    (avatar(change.owner.as_str(), display, agent, false))
+                    div {
+                        div class="h" { b { "#" (change.number) " " (change.title) } }
+                        div class="sub" { (display) " · revision " (change.latest_revision) }
                     }
                 }
-                div class="colr" {
-                    section class="side-sec" {
-                        header {
-                            h2 { "Open changes" }
-                            span { (sidebar.open_changes.len()) }
-                        }
-                        @if sidebar.open_changes.is_empty() { p class="none" { "None open." } }
-                        @for change in &sidebar.open_changes {
-                            a class="srow" href={ "/" (repo) "/changes/" (change.number) } {
-                                (state_dot(change.state))
-                                span class="t" { "#" (change.number) " " (change.title) }
-                                span class="age" { "r" (change.latest_revision) }
-                            }
-                        }
+            }
+        }
+        @if !sidebar.queue.is_empty() {
+            div class="panel" {
+                header { h2 { "Landing on " (branch) } span class="n" { (sidebar.queue.len()) } }
+                @for (index, entry) in sidebar.queue.iter().enumerate() {
+                    div class="ev-row" {
+                        span class={ "chip" @if index == 0 { " acc" } } { (index + 1) }
+                        div { div class="h" { b { (change_short(&sidebar.numbers, entry.change.as_str())) } } }
                     }
-                    section class="side-sec" {
-                        header {
-                            h2 { "Landing" }
-                            span { (branch) }
-                        }
-                        @if sidebar.queue.is_empty() { p class="none" { "Queue is empty." } }
-                        @for (index, entry) in sidebar.queue.iter().enumerate() {
-                            div class="srow" {
-                                span class="sec3" { (index + 1) }
-                                span class={ "t" @if index == 0 { " landing-line" } } {
-                                    (change_short(&sidebar.numbers, entry.change.as_str()))
-                                }
-                            }
-                        }
-                    }
-                    section class="side-sec" {
-                        header {
-                            h2 { "Fleet" }
-                            span { (sidebar.sessions.len()) }
-                        }
-                        @if sidebar.sessions.is_empty() { p class="none" { "No active sessions." } }
-                        @for session in &sidebar.sessions {
-                            @let held = sidebar
-                                .leases
-                                .iter()
-                                .find(|l| l.session == session.id);
-                            div class="srow" {
-                                span class="dot ok" {}
-                                span class="t" { (session.agent) }
-                                @if let Some(lease) = held {
-                                    span class="age" { (lease.paths.join(", ")) }
-                                } @else {
-                                    span class="age" { "working" }
-                                }
-                            }
-                        }
-                    }
-                    @if !sidebar.tags.is_empty() {
-                        section class="side-sec" {
-                            header {
-                                h2 { "Tags" }
-                                span { (sidebar.tags.len()) }
-                            }
-                            @for tag in sidebar.tags.iter().take(8) {
-                                div class="srow" {
-                                    span class="t" { code { (tag.name) } }
-                                    span class="age" { code { (short(&tag.commit_oid)) } " " (tag.by.as_str()) }
-                                }
-                            }
+                }
+            }
+        }
+        div class="panel" {
+            header { h2 { "At work here" } span class="n" { (sidebar.sessions.len()) } }
+            @if sidebar.sessions.is_empty() {
+                div class="empty" { b { "No agent is working here." } "Grant one push on this repository and it can start." }
+            }
+            @for session in &sidebar.sessions {
+                @let held = sidebar.leases.iter().find(|l| l.session == session.id);
+                @let (display, agent) = people.name(&session.agent);
+                div class="ev-row" {
+                    (avatar(session.agent.as_str(), display, agent, true))
+                    div {
+                        div class="h" { b { (display) } }
+                        @match held {
+                            Some(lease) => { span class="cmd" { (lease.paths.join(", ")) } }
+                            None => { div class="sub" { "working" } }
                         }
                     }
                 }
             }
+        }
+        @if !sidebar.tags.is_empty() {
+            div class="panel" {
+                header { h2 { "Tags" } span class="n" { (sidebar.tags.len()) } }
+                @for tag in sidebar.tags.iter().take(8) {
+                    div class="ev-row" {
+                        span class="chip" { (ic("tag", "")) (tag.name) }
+                        div { div class="sub" { code { (short(&tag.commit_oid)) } " · " (people.name(&tag.by).0) } }
+                    }
+                }
+            }
+        }
+    };
+    layout_reading_with(
+        theme,
+        who,
+        Some(name),
+        Some(Tab::Code),
+        name,
+        html! {
+            div class="pagehead" {
+                div {
+                    h1 { (short_name) }
+                    p class="sub" { @if repo.description.is_empty() { @if tip.is_none() { "Nothing here yet." } } @else { (repo.description) } }
+                    div class="chips" {
+                        @if repo.visibility == Visibility::Public { span class="chip" { (ic("globe", "")) "Public" } } @else { span class="chip" { (ic("lock", "")) "Private" } }
+                        span class="chip" { (ic("branch", "")) (branch) }
+                        @if let Some(tag) = sidebar.tags.first() { span class="chip" { (ic("tag", "")) (tag.name) } }
+                        @if let Some(tip) = tip { span class="chip" { code { (short(tip)) } } }
+                        @if repo.archived { span class="chip bad" { (ic("archive", "")) "Archived" } }
+                    }
+                }
+                div class="acts" {
+                    details class="clone" {
+                        summary class="btn2 sm" { (ic("download", "sm")) "Clone" }
+                        div class="pop" {
+                            code id="clone-url" { "git clone " (clone_url) }
+                            span class="s" { "git asks for a password: paste a token of yours." }
+                            button class="ghost sm" type="button" data-copy="clone-url" { (ic("copy", "sm")) "Copy" }
+                        }
+                    }
+                }
+            }
+            @if tip.is_none() {
+                div class="first anvil" {
+                    h2 { "Put something on the anvil" }
+                    p class="sec2" { "Push from a clone you already have, import history, or let an agent start. The first push opens a change, and the change is what gets reviewed and landed." }
+                    div class="seg" data-tabs="first" {
+                        button class="on" type="button" data-pane="first-push" { (ic("terminal", "sm")) "Push a change" }
+                        button type="button" data-pane="first-import" { (ic("download", "sm")) "Import history" }
+                        button type="button" data-pane="first-agent" { (ic("agents", "sm")) "Let an agent start" }
+                    }
+                    div class="code" id="first-push" data-pane-of="first" {
+                        header { code { "terminal" } div class="right" { button class="ghost sm" type="button" data-copy="first-push-cmd" { (ic("copy", "sm")) "Copy" } } }
+                        pre class="lines" { code class="src" id="first-push-cmd" { "git remote add ambolt " (clone_url) "\ngit push ambolt HEAD:refs/for/" (branch) "\n# git asks for a password: paste a token of yours" } }
+                    }
+                    div class="code" id="first-import" data-pane-of="first" {
+                        header { code { "terminal" } }
+                        pre class="lines" { code class="src" { "ambolt import https://github.com/you/" (short_name) ".git\n# what arrives is recorded as imported, never as reviewed" } }
+                    }
+                    div class="code" id="first-agent" data-pane-of="first" {
+                        header { code { "terminal" } }
+                        pre class="lines" { code class="src" { "ambolt mcp --server " (clone_url.split("/git/").next().unwrap_or("")) " --token $AGENT_TOKEN\n# the agent opens a task, then a change, from its own side" } }
+                    }
+                }
+            } @else {
+                @if !path.is_empty() {
+                    div class="crumbs" { (breadcrumbs(name, path)) }
+                }
+                div class="panel files" {
+                    @if entries.is_empty() && !path.is_empty() { div class="empty" { "Nothing here." } }
+                    @for entry in entries {
+                        @let target = if path.is_empty() { entry.name.clone() } else { format!("{path}/{}", entry.name) };
+                        div class="row file" {
+                            a class="t" href={ "/" (name) "/tree/" (target) } {
+                                @if entry.is_dir { (ic("folder", "")) } @else { (ic("file", "")) }
+                                (entry.name) @if entry.is_dir { "/" }
+                            }
+                            @if let Some(change) = &entry.change {
+                                a class="s" href={ "/" (name) "/changes/" (change.number) } { "#" (change.number) " " (change.title) }
+                                span class="age" { (people.name(&change.owner).0) }
+                            } @else {
+                                span class="s" { (entry.subject.as_deref().unwrap_or("")) }
+                                span class="age" {}
+                            }
+                        }
+                    }
+                }
+                @if let Some(readme) = readme {
+                    div class="panel readme" {
+                        header { (ic("file", "")) h2 { "README.md" } }
+                        div class="prose" { (markdown(readme)) }
+                    }
+                }
+            }
         },
+        Some(rail),
     )
 }
 

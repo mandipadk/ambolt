@@ -38,19 +38,22 @@
     });
   });
 
-  // Segments: buttons that show one pane of a group.
+  // Segments: buttons that show one pane of a group. Without the
+  // script every pane shows; with it, the chosen one.
   document.querySelectorAll('[data-tabs]').forEach(function (group) {
     var name = group.getAttribute('data-tabs');
     var buttons = group.querySelectorAll('[data-pane]');
-    buttons.forEach(function (button) {
-      button.addEventListener('click', function (event) {
-        event.preventDefault();
-        buttons.forEach(function (b) { b.classList.toggle('on', b === button); });
-        document.querySelectorAll('[data-pane-of="' + name + '"]').forEach(function (pane) {
-          pane.hidden = pane.id !== button.getAttribute('data-pane');
-        });
+    function show(button) {
+      buttons.forEach(function (b) { b.classList.toggle('on', b === button); });
+      document.querySelectorAll('[data-pane-of="' + name + '"]').forEach(function (pane) {
+        pane.hidden = pane.id !== button.getAttribute('data-pane');
       });
+    }
+    buttons.forEach(function (button) {
+      button.addEventListener('click', function (event) { event.preventDefault(); show(button); });
     });
+    var chosen = group.querySelector('.on[data-pane]') || buttons[0];
+    if (chosen) show(chosen);
   });
 
   // The palette: ⌘K or the search box opens it; typing asks /search.json;
