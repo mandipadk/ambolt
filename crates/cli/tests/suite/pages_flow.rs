@@ -13,8 +13,6 @@ async fn the_sidebar_marks_every_page_you_can_be_on() {
     let (_, cookie) = sign_in_as(&forge, "ada").await;
     for (path, label) in [
         ("/you", "Your changes"),
-        ("/you/tokens", "Tokens"),
-        ("/you/sessions", "Sessions"),
         ("/you/settings", "Settings"),
         ("/agents", "Agents"),
         ("/inbox", "Inbox"),

@@ -14,7 +14,7 @@ async fn sessions_are_listed_and_ended_from_settings() {
     let (_, laptop) = sign_in_as(&forge, "ada").await;
     let phone = sign_in(app, "ada", PASSWORD).await.1.unwrap();
 
-    let (status, page) = page_with_cookie(app, "/you/sessions", &laptop).await;
+    let (status, page) = page_with_cookie(app, "/you/settings", &laptop).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(page.matches("this session").count(), 1, "{page}");
     assert_eq!(
@@ -32,7 +32,7 @@ async fn sessions_are_listed_and_ended_from_settings() {
         .to_owned();
     let (status, location) = post_form(app, "/you/sessions", &laptop, &format!("id={id}")).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
-    assert_eq!(location, "/you/sessions?done=1");
+    assert_eq!(location, "/you/settings?done=1");
     assert_eq!(
         get_with_cookie(app, "/you/settings", &phone).await,
         StatusCode::SEE_OTHER,
@@ -56,7 +56,7 @@ async fn sessions_are_listed_and_ended_from_settings() {
         get_with_cookie(app, "/you/settings", &work).await,
         StatusCode::SEE_OTHER
     );
-    let (_, page) = page_with_cookie(app, "/you/sessions", &laptop).await;
+    let (_, page) = page_with_cookie(app, "/you/settings", &laptop).await;
     assert_eq!(page.matches(r#"name="id""#).count(), 0, "{page}");
 
     // Somebody else's id is not yours to end.
@@ -71,11 +71,11 @@ async fn sessions_are_listed_and_ended_from_settings() {
         .await;
         sign_in_as(&forge, "bee").await
     };
-    let (_, bee_page) = page_with_cookie(app, "/you/sessions", &bee_cookie).await;
+    let (_, bee_page) = page_with_cookie(app, "/you/settings", &bee_cookie).await;
     assert!(bee_page.contains("this session"));
     let (_, location) = post_form(app, "/you/sessions", &bee_cookie, &format!("id={id}")).await;
     assert_eq!(
-        location, "/you/sessions?done=1",
+        location, "/you/settings?done=1",
         "answers the same, ends nothing of ada's"
     );
     assert_eq!(

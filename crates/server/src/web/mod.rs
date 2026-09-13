@@ -693,6 +693,7 @@ async fn settings_page(
     State(app): State<AppState>,
     Palette(theme): Palette,
     viewer: Viewer,
+    headers: HeaderMap,
     Query(flash): Query<Flash>,
 ) -> Response {
     let contact = app
@@ -700,27 +701,37 @@ async fn settings_page(
         .unwrap_or_default();
     let passkeys = app
         .with_store(|s| s.passkeys_of(&viewer.0))
-        .unwrap_or_default();
+        .ok()
+        .filter(|_| crate::passkeys::enabled(&app));
     let identities = app
         .with_store(|s| s.identities_of(&viewer.0))
         .unwrap_or_default();
     let provider = crate::oidc::label(&app);
-    views::settings(
+    let tokens = app
+        .with_store(|s| s.tokens_of(&viewer.0))
+        .unwrap_or_default();
+    let current = cookie(&headers, SESSION_COOKIE);
+    let sessions = app
+        .with_store(|s| s.sessions_of(&viewer.0, current.as_deref()))
+        .unwrap_or_default();
+    let once = take(&app, &viewer.0, flash.once.as_deref());
+    views::settings(views::SettingsPage {
         theme,
-        &viewer,
-        &contact,
-        app.mailer().is_some(),
-        crate::passkeys::enabled(&app).then_some(passkeys.as_slice()),
-        provider
-            .as_deref()
-            .map(|label| (label, identities.as_slice())),
-        views::SettingsNote {
+        viewer: &viewer,
+        contact: &contact,
+        can_mail: app.mailer().is_some(),
+        passkeys: passkeys.as_deref(),
+        identities: provider.as_deref().map(|p| (p, identities.as_slice())),
+        tokens: &tokens,
+        sessions: &sessions,
+        fresh: once.secret.as_deref(),
+        note: views::SettingsNote {
             error: flash.error.as_deref(),
             done: flash.done.is_some(),
             sent: flash.sent.is_some(),
             first: flash.first.is_some(),
         },
-    )
+    })
     .into_response()
 }
 
@@ -731,20 +742,9 @@ pub(crate) fn user_agent(headers: &HeaderMap) -> Option<&str> {
 }
 
 /// Every session you hold, the one you are on marked, each one endable.
-async fn sessions_page(
-    State(app): State<AppState>,
-    Palette(theme): Palette,
-    viewer: Viewer,
-    headers: HeaderMap,
-    Query(flash): Query<Flash>,
-) -> Response {
-    let current = cookie(&headers, SESSION_COOKIE);
-    match app.with_store(|s| s.sessions_of(&viewer.0, current.as_deref())) {
-        Ok(sessions) => {
-            views::sessions(theme, &viewer, &sessions, flash.done.is_some()).into_response()
-        }
-        Err(err) => oops(err),
-    }
+/// Sessions live on the settings page now; the old address still answers.
+async fn sessions_page() -> Response {
+    Redirect::permanent("/you/settings#sessions").into_response()
 }
 
 #[derive(Deserialize)]
@@ -772,8 +772,8 @@ async fn sessions_action(
             .map(|_| ()),
     };
     match result {
-        Ok(()) => Redirect::to("/you/sessions?done=1").into_response(),
-        Err(err) => flash("/you/sessions", &humane(&err)),
+        Ok(()) => Redirect::to("/you/settings?done=1").into_response(),
+        Err(err) => flash("/you/settings", &humane(&err)),
     }
 }
 
@@ -1086,24 +1086,9 @@ async fn change_password(
 }
 
 /// Your tokens: what exists, and the two things you can do to them.
-async fn tokens_page(
-    State(app): State<AppState>,
-    Palette(theme): Palette,
-    viewer: Viewer,
-    Query(flash): Query<Flash>,
-) -> Response {
-    let once = take(&app, &viewer.0, flash.once.as_deref());
-    match app.with_store(|s| s.tokens_of(&viewer.0)) {
-        Ok(tokens) => views::tokens(
-            theme,
-            &viewer,
-            &tokens,
-            once.secret.as_deref(),
-            flash.error.as_deref(),
-        )
-        .into_response(),
-        Err(err) => oops(err),
-    }
+/// Tokens live on the settings page now; the old address still answers.
+async fn tokens_page() -> Response {
+    Redirect::permanent("/you/settings#tokens").into_response()
 }
 
 #[derive(Deserialize)]
@@ -1157,14 +1142,15 @@ async fn token_action(
                 mailed: None,
             };
             match park(&app, &viewer.0, &once) {
-                Some(id) => Redirect::to(&format!("/you/tokens?once={id}")).into_response(),
-                None => Redirect::to("/you/tokens?error=Could+not+show+the+token").into_response(),
+                Some(id) => Redirect::to(&format!("/you/settings?once={id}")).into_response(),
+                None => {
+                    Redirect::to("/you/settings?error=Could+not+show+the+token").into_response()
+                }
             }
         }
-        Ok(None) => Redirect::to("/you/tokens").into_response(),
-        Err(err) => {
-            Redirect::to(&format!("/you/tokens?error={}", urlencode(&humane(&err)))).into_response()
-        }
+        Ok(None) => Redirect::to("/you/settings").into_response(),
+        Err(err) => Redirect::to(&format!("/you/settings?error={}", urlencode(&humane(&err))))
+            .into_response(),
     }
 }
 
@@ -1204,7 +1190,21 @@ async fn teams_page(
     });
     match data {
         Ok((teams, repos)) => {
-            views::teams(theme, &viewer, &teams, &repos, flash.error.as_deref()).into_response()
+            let people = people_named(
+                &app,
+                teams
+                    .iter()
+                    .flat_map(|t| t.members.iter().map(|m| m.as_str())),
+            );
+            views::teams(
+                theme,
+                &viewer,
+                &teams,
+                &repos,
+                flash.error.as_deref(),
+                &people,
+            )
+            .into_response()
         }
         Err(err) => oops(err),
     }
@@ -2265,6 +2265,7 @@ async fn owner_page(
             }
             Who::Anonymous(_) => false,
         };
+    let people = people_named(&app, members.iter().map(|m| m.as_str()));
     views::owner(
         theme,
         who.reading(),
@@ -2275,6 +2276,7 @@ async fn owner_page(
         may_manage,
         allowances,
         query.error.as_deref(),
+        &people,
     )
     .into_response()
 }

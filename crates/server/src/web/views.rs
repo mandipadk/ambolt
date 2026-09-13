@@ -387,8 +387,8 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
                         }
                         div class="pop" {
                             a class=[only("you")] href="/you" { (ic("changes", "sm")) "Your changes" @if chrome.yours > 0 { span class="n" { (chrome.yours) } } }
-                            a class=[only("tokens")] href="/you/tokens" { (ic("key", "sm")) "Tokens" }
-                            a class=[only("sessions")] href="/you/sessions" { (ic("globe", "sm")) "Sessions" }
+                            a href="/you/settings#tokens" { (ic("key", "sm")) "Tokens" }
+                            a href="/you/settings#sessions" { (ic("globe", "sm")) "Sessions" }
                             a class=[only("settings")] href="/you/settings" { (ic("settings", "sm")) "Settings" }
                             div class="lab" { "Theme" }
                             form class="seg" method="post" action="/theme" {
@@ -461,8 +461,6 @@ fn section_label(section: &str) -> &str {
         "you" => "Your changes",
         "tasks" => "Tasks",
         "agents" => "Agents",
-        "tokens" => "Tokens",
-        "sessions" => "Sessions",
         "settings" => "Settings",
         "people" => "People",
         "teams" => "Teams",
@@ -2144,248 +2142,250 @@ fn browser_family(agent: Option<&str>) -> &'static str {
     }
 }
 
-pub fn sessions(theme: Theme, viewer: &Viewer, sessions: &[BrowserSession], done: bool) -> Markup {
-    let others = sessions.iter().filter(|s| !s.current).count();
-    layout_section(
-        theme,
-        viewer,
-        "sessions",
-        "Sessions",
-        html! {
-            div class="sechead" {
-                b { "Where you are signed in" }
-                span { (sessions.len()) }
-                @if others > 0 {
-                    form method="post" action="/you/sessions" class="right" {
-                        input type="hidden" name="others" value="1";
-                        button class="act" type="submit" { "Sign out everywhere else" }
-                    }
-                }
-            }
-            @if done { p class="done" { "Done." } }
-            @for session in sessions {
-                div class="trow sessions" {
-                    span {
-                        (browser_family(session.agent.as_deref()))
-                        @if session.current { span class="sec3" { " · this session" } }
-                    }
-                    span class="sec3" { "signed in " (day_of(&session.created)) }
-                    span class="sec3" {
-                        @match &session.last_seen {
-                            Some(seen) => { "seen " (day_of(seen)) " " (clock_of(seen)) }
-                            None => { "" }
-                        }
-                    }
-                    span {
-                        @if !session.current {
-                            form method="post" action="/you/sessions" {
-                                input type="hidden" name="id" value=(session.id);
-                                button class="quiet" type="submit" { "Sign out" }
-                            }
-                        }
-                    }
-                }
-            }
-            p class="hint pad" {
-                "Changing your password ends every session, this one included. Ending one here ends only that one."
-            }
-        },
-    )
+/// Everything about the account, one panel per section behind a
+/// sub-navigation: address, how you sign in, tokens, sessions, how the
+/// pages look. Tokens and sessions used to be pages of their own.
+pub struct SettingsPage<'a> {
+    pub theme: Theme,
+    pub viewer: &'a Viewer,
+    pub contact: &'a Contact,
+    pub can_mail: bool,
+    pub passkeys: Option<&'a [PasskeyRecord]>,
+    pub identities: Option<(&'a str, &'a [ambolt_core::IdentityLink])>,
+    pub tokens: &'a [ambolt_core::TokenInfo],
+    pub sessions: &'a [BrowserSession],
+    /// A token just minted, shown this once.
+    pub fresh: Option<&'a str>,
+    pub note: SettingsNote<'a>,
 }
 
-pub fn settings(
-    theme: Theme,
-    viewer: &Viewer,
-    contact: &Contact,
-    can_mail: bool,
-    passkeys: Option<&[PasskeyRecord]>,
-    identities: Option<(&str, &[ambolt_core::IdentityLink])>,
-    note: SettingsNote<'_>,
-) -> Markup {
+pub fn settings(page: SettingsPage<'_>) -> Markup {
+    let SettingsPage {
+        theme,
+        viewer,
+        contact,
+        can_mail,
+        passkeys,
+        identities,
+        tokens,
+        sessions,
+        fresh,
+        note,
+    } = page;
     let SettingsNote {
         error,
         done,
         sent,
         first,
     } = note;
+    let now = jiff::Timestamp::now().to_string();
+    let live = tokens
+        .iter()
+        .filter(|t| !t.revoked && t.until.as_deref().is_none_or(|u| u > now.as_str()))
+        .count();
+    let others = sessions.iter().filter(|s| !s.current).count();
     layout_section(
         theme,
         viewer,
         "settings",
         "Settings",
         html! {
-            div class="narrowcol" {
-                div class="sechead" { b { "Settings" } span { (viewer.0.as_str()) } }
-                @if let Some(error) = error { p class="error" { (error) } }
-                @if done { p class="done" { "Saved." } }
-                @if sent { p class="done" { "A confirmation link is on its way." } }
-                @if first {
-                    p class="note" { "You are signed in from an invitation, which worked once. Set a password, or add a passkey, to sign in next time." }
-                }
-
-                section class="pref" {
-                    h3 { "Email" }
-                    p class="status" {
-                        @match (&contact.email, &contact.pending) {
-                            (Some(email), None) => { (email) " — confirmed" }
-                            (Some(email), Some(pending)) => { (email) " — confirmed. " (pending) " is awaiting confirmation." }
-                            (None, Some(pending)) => { (pending) " — awaiting confirmation; follow the link we sent." }
-                            (None, None) => { "No address on record. One is needed for password resets and sign-in links." }
-                        }
-                    }
-                    @if can_mail {
-                        form class="row" method="post" action="/you/settings/email" {
-                            input name="email" type="email" autocomplete="email" required
-                                  placeholder=(if contact.email.is_some() { "new address" } else { "you@example.org" })
-                                  aria-label="Email address";
-                            button class="btn" type="submit" { "Send a confirmation link" }
-                        }
-                        p class="hint" { "Kept beside your credentials, not in the log; shown to nobody; trusted only once you have followed the link." }
-                    } @else {
-                        p class="hint" { "This forge does not send mail, so an address cannot be confirmed here." }
-                    }
-                }
-
-                @if let Some(passkeys) = passkeys {
-                    section class="pref" {
-                        h3 { "Passkeys" }
-                        p class="status" {
-                            @if passkeys.is_empty() { "None yet. A passkey signs you in with the device in your hand — no password." }
-                            @else { (passkeys.len()) " registered" }
-                        }
-                        @for key in passkeys {
-                            div class="keyrow" {
-                                span { (key.label) }
-                                span class="sec3" {
-                                    @match &key.last_used {
-                                        Some(used) => { "last used " (day_of(used)) }
-                                        None => { "added " (day_of(&key.created)) }
-                                    }
-                                }
-                                form method="post" action="/you/passkeys/remove" {
-                                    input type="hidden" name="cred_id" value=(key.cred_id);
-                                    button class="quiet danger" type="submit" { "Remove" }
-                                }
-                            }
-                        }
-                        div class="row" {
-                            input id="passkey-label" type="text" placeholder="a name for this device" autocomplete="off" aria-label="Passkey name";
-                            button class="btn" type="button" data-passkey="register" data-say="passkey-note" { "Add a passkey" }
-                        }
-                        p class="hint" id="passkey-note" { "Your device asks you to confirm; nothing leaves it but a public key." }
-                    }
-                }
-
-                @if let Some((provider, links)) = identities {
-                    section class="pref" {
-                        h3 { "Sign in with " (provider) }
-                        p class="status" {
-                            @if links.is_empty() { "Not linked. Link your " (provider) " account and it signs you in here; nothing links itself." }
-                            @else { "Linked." }
-                        }
-                        @for link in links {
-                            div class="keyrow" {
-                                span { (link.email.as_deref().unwrap_or(&link.subject)) }
-                                span class="sec3" { "linked " (day_of(&link.linked_at)) }
-                                form method="post" action="/you/settings/oidc/unlink" {
-                                    input type="hidden" name="subject" value=(link.subject);
-                                    button class="quiet danger" type="submit" { "Unlink" }
-                                }
-                            }
-                        }
-                        @if links.is_empty() {
-                            a class="vbtn" href="/you/settings/oidc/link" { "Link " (provider) }
-                        }
-                    }
-                }
-
-                section class="pref" {
-                    h3 { "Password" }
-                    form class="stack" method="post" action="/you/settings" {
-                        div {
-                            label for="password" { "New password" }
-                            input id="password" name="password" type="password"
-                                  autocomplete="new-password" minlength="12" required;
-                        }
-                        div {
-                            label for="confirm" { "Again" }
-                            input id="confirm" name="confirm" type="password"
-                                  autocomplete="new-password" minlength="12" required;
-                        }
-                        p class="hint" {
-                            "Changing this signs out everywhere, including here — a password \
-                             change that leaves old sessions alive has not locked anyone out."
-                        }
-                        button class="btn" type="submit" { "Change password" }
-                    }
-                }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            @if done { div class="notice" { (ic("check", "")) span { "Saved." } } }
+            @if sent { div class="notice" { (ic("send", "")) span { "A confirmation link is on its way." } } }
+            @if first {
+                div class="notice" { (ic("key", "")) span { "You are signed in from an invitation, which worked once. Set a password, or add a passkey, to sign in next time." } }
             }
-        },
-    )
-}
-
-pub fn tokens(
-    theme: Theme,
-    viewer: &Viewer,
-    tokens: &[ambolt_core::TokenInfo],
-    fresh: Option<&str>,
-    error: Option<&str>,
-) -> Markup {
-    let now = jiff::Timestamp::now().to_string();
-    let live = tokens
-        .iter()
-        .filter(|t| !t.revoked && t.until.as_deref().is_none_or(|u| u > now.as_str()))
-        .count();
-    layout_section(
-        theme,
-        viewer,
-        "tokens",
-        "Tokens",
-        html! {
-            div class="sechead" { b { "Your tokens" } span { (live) } }
-            @if let Some(error) = error { p class="error" { (error) } }
-
             @if let Some(secret) = fresh {
                 div class="once" {
                     p { b { "Copy this now." } " It is stored only as a hash, so this is the one time it can be shown." }
                     code class="secret" { (secret) }
                 }
             }
-
-            form class="inline" method="post" action="/you/tokens" {
-                input type="hidden" name="action" value="mint";
-                input name="label" type="text" placeholder="what it is for" autocomplete="off";
-                select name="days" aria-label="Expires" {
-                    option value="30" { "expires in 30 days" }
-                    option value="90" selected { "expires in 90 days" }
-                    option value="365" { "expires in a year" }
-                    option value="never" { "until revoked" }
+            div class="settings" {
+                nav class="subnav" {
+                    a href="#email" { "Email" }
+                    a href="#security" { "Security" }
+                    a href="#tokens" { "Tokens" }
+                    a href="#sessions" { "Sessions" }
+                    a href="#appearance" { "Appearance" }
                 }
-                button class="btn" type="submit" { "Mint a token" }
-            }
-
-            @if tokens.is_empty() {
-                p class="empty" { "None yet." }
-            }
-            @for token in tokens {
-                div class="trow tokens" {
-                    span { (token.label.as_deref().unwrap_or("unlabelled")) }
-                    code class="sec3" { (token.id.0) }
-                    span class="sec3" {
-                        @match &token.until {
-                            Some(until) if until.as_str() <= now.as_str() => { "expired" }
-                            Some(until) => { "until " (day_of(until)) }
-                            None => { "until revoked" }
+                div class="stack panels" {
+                    div class="panel" id="email" {
+                        div class="pref" {
+                            h3 { "Email" }
+                            p class="what" {
+                                @match (&contact.email, &contact.pending) {
+                                    (Some(email), None) => { (email) ", confirmed." }
+                                    (Some(email), Some(pending)) => { (email) ", confirmed. " (pending) " is awaiting confirmation." }
+                                    (None, Some(pending)) => { (pending) " is awaiting confirmation; follow the link we sent." }
+                                    (None, None) => { "No address on record. One is needed for password resets and sign-in links." }
+                                }
+                            }
+                            @if can_mail {
+                                form class="line" method="post" action="/you/settings/email" {
+                                    input class="input" name="email" type="email" autocomplete="email" required
+                                          placeholder=(if contact.email.is_some() { "new address" } else { "you@example.org" })
+                                          aria-label="Email address";
+                                    button class="btn2" type="submit" { "Send a confirmation" }
+                                }
+                                span class="hint" { "Kept beside your credentials, not in the log; shown to nobody; trusted only once you have followed the link." }
+                            } @else {
+                                span class="hint" { "This forge does not send mail, so an address cannot be confirmed here." }
+                            }
                         }
                     }
-                    span {
-                        @if token.revoked {
-                            span class="sec3" { "revoked" }
-                        } @else {
-                            form method="post" action="/you/tokens" {
-                                input type="hidden" name="action" value="revoke";
-                                input type="hidden" name="token" value=(token.id.0);
-                                button class="quiet danger" type="submit" { "Revoke" }
+                    div class="panel" id="security" {
+                        div class="pref" {
+                            h3 { "Security" }
+                            @if let Some(passkeys) = passkeys {
+                                div class="field" {
+                                    label { "Passkeys" }
+                                    @if passkeys.is_empty() { span class="what" { "None yet. A passkey signs you in with the device in your hand, no password needed." } }
+                                    @for key in passkeys {
+                                        div class="keyrow" {
+                                            span { (ic("key", "sm")) " " (key.label) }
+                                            span class="sec3" {
+                                                @match &key.last_used {
+                                                    Some(used) => { "last used " (day_of(used)) }
+                                                    None => { "added " (day_of(&key.created)) }
+                                                }
+                                            }
+                                            form method="post" action="/you/passkeys/remove" {
+                                                input type="hidden" name="cred_id" value=(key.cred_id);
+                                                button class="ghost sm danger" type="submit" { "Remove" }
+                                            }
+                                        }
+                                    }
+                                    div class="line" {
+                                        input class="input sm" id="passkey-label" type="text" placeholder="A name for this device" autocomplete="off" aria-label="Passkey name";
+                                        button class="btn2 sm" type="button" data-passkey="register" data-say="passkey-note" { "Add a passkey" }
+                                    }
+                                    span class="hint" id="passkey-note" { "Your device asks you to confirm; nothing leaves it but a public key." }
+                                }
+                            }
+                            @if let Some((provider, links)) = identities {
+                                div class="field" {
+                                    label { "Sign in with " (provider) }
+                                    @if links.is_empty() { span class="what" { "Not linked. Link your " (provider) " account and it signs you in here; nothing links itself." } }
+                                    @for link in links {
+                                        div class="keyrow" {
+                                            span { (link.email.as_deref().unwrap_or(&link.subject)) }
+                                            span class="sec3" { "linked " (day_of(&link.linked_at)) }
+                                            form method="post" action="/you/settings/oidc/unlink" {
+                                                input type="hidden" name="subject" value=(link.subject);
+                                                button class="ghost sm danger" type="submit" { "Unlink" }
+                                            }
+                                        }
+                                    }
+                                    @if links.is_empty() {
+                                        div class="line" { a class="btn2 sm" href="/you/settings/oidc/link" { "Link " (provider) } }
+                                    }
+                                }
+                            }
+                            form class="form" method="post" action="/you/settings" {
+                                div class="field" {
+                                    label for="password" { "New password" }
+                                    input id="password" name="password" type="password" autocomplete="new-password" minlength="12" required;
+                                }
+                                div class="field" {
+                                    label for="confirm" { "Again" }
+                                    input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="12" required;
+                                    span class="hint" { "At least 12 characters. Changing it signs you out everywhere, including here." }
+                                }
+                                div class="acts" { button class="btn2" type="submit" { "Change password" } }
+                            }
+                        }
+                    }
+                    div class="panel" id="tokens" {
+                        div class="pref" {
+                            h3 { "Tokens" span class="n" { (live) " live" } }
+                            p class="what" { "A token is a password for git and the API. Give one to each machine and revoke it here when the machine goes." }
+                            @if tokens.is_empty() { span class="what" { "None yet." } }
+                            @for token in tokens {
+                                div class="keyrow" {
+                                    span {
+                                        (token.label.as_deref().unwrap_or("unlabelled"))
+                                        " " code class="sec3" { (token.id.0) }
+                                    }
+                                    span class="sec3" {
+                                        @if token.revoked { "revoked" }
+                                        @else {
+                                            @match &token.until {
+                                                Some(until) if until.as_str() <= now.as_str() => { "expired" }
+                                                Some(until) => { "until " (day_of(until)) }
+                                                None => { "until revoked" }
+                                            }
+                                        }
+                                    }
+                                    @if !token.revoked {
+                                        form method="post" action="/you/tokens" {
+                                            input type="hidden" name="action" value="revoke";
+                                            input type="hidden" name="token" value=(token.id.0);
+                                            button class="ghost sm danger" type="submit" { "Revoke" }
+                                        }
+                                    } @else { span {} }
+                                }
+                            }
+                            form class="line" method="post" action="/you/tokens" {
+                                input type="hidden" name="action" value="mint";
+                                input class="input" name="label" type="text" placeholder="What it is for" autocomplete="off" aria-label="Label";
+                                select class="input" name="days" aria-label="Expires" {
+                                    option value="30" { "Expires in 30 days" }
+                                    option value="90" selected { "Expires in 90 days" }
+                                    option value="365" { "Expires in a year" }
+                                    option value="never" { "Never expires" }
+                                }
+                                button class="btn2" type="submit" { "Mint a token" }
+                            }
+                        }
+                    }
+                    div class="panel" id="sessions" {
+                        div class="pref" {
+                            h3 { "Where you are signed in" span class="n" { (sessions.len()) } }
+                            @for session in sessions {
+                                div class="keyrow" {
+                                    span {
+                                        (browser_family(session.agent.as_deref()))
+                                        span class="sec3" { " · signed in " (day_of(&session.created)) }
+                                        @if session.current { span class="sec3" { " · this session" } }
+                                    }
+                                    span class="sec3" {
+                                        @match &session.last_seen {
+                                            Some(seen) => { "seen " (day_of(seen)) " " (clock_of(seen)) }
+                                            None => { "" }
+                                        }
+                                    }
+                                    @if session.current {
+                                        span class="chip good" { "current" }
+                                    } @else {
+                                        form method="post" action="/you/sessions" {
+                                            input type="hidden" name="id" value=(session.id);
+                                            button class="ghost sm danger" type="submit" { "Sign out" }
+                                        }
+                                    }
+                                }
+                            }
+                            @if others > 0 {
+                                form class="line" method="post" action="/you/sessions" {
+                                    input type="hidden" name="others" value="1";
+                                    button class="btn2 sm" type="submit" { "Sign out everywhere else" }
+                                }
+                            }
+                            span class="hint" { "Changing your password ends every session, this one included. Ending one here ends only that one." }
+                        }
+                    }
+                    div class="panel" id="appearance" {
+                        div class="pref" {
+                            h3 { "Appearance" }
+                            div class="field" {
+                                label { "Theme" }
+                                form class="seg" method="post" action="/theme" {
+                                    input type="hidden" name="back" value="/you/settings#appearance";
+                                    button class=[(theme == Theme::Light).then_some("on")] type="submit" name="to" value="light" { (ic("sun", "sm")) "Light" }
+                                    button class=[(theme == Theme::Dark).then_some("on")] type="submit" name="to" value="dark" { (ic("moon", "sm")) "Dark" }
+                                    button class=[(theme == Theme::System).then_some("on")] type="submit" name="to" value="system" { "Match system" }
+                                }
                             }
                         }
                     }
@@ -2395,12 +2395,14 @@ pub fn tokens(
     )
 }
 
+/// Teams: authority held in one place and carried by whoever is on it.
 pub fn teams(
     theme: Theme,
     viewer: &Viewer,
     teams: &[super::TeamRow],
     repos: &[String],
     error: Option<&str>,
+    people: &People,
 ) -> Markup {
     layout_section(
         theme,
@@ -2408,87 +2410,110 @@ pub fn teams(
         "teams",
         "Teams",
         html! {
-            div class="sechead" { b { "Teams" } span { (teams.len()) } }
-            @if let Some(error) = error { p class="error" { (error) } }
-            @if teams.is_empty() {
-                p class="empty" { "None yet. A team holds authority; whoever is on it carries that authority, and loses it on leaving." }
-            }
-            @for row in teams {
-                div class="agent" {
-                    div class="trow roster" {
-                        span class="strong" { (row.principal.id.as_str()) }
-                        span class="sec3" {
-                            @if row.members.is_empty() { "nobody yet" }
-                            @else { (row.members.iter().map(|m| m.as_str()).collect::<Vec<_>>().join(", ")) }
-                        }
-                        span class="sec3" {
-                            @if row.grants.is_empty() { "holds nothing" }
-                            @else {
-                                (row.grants.iter().map(|g| format!("{} on {}",
-                                    g.actions.iter().map(|a| a.as_str()).collect::<Vec<_>>().join("/"),
-                                    g.repo.as_deref().unwrap_or("everything"))).collect::<Vec<_>>().join("; "))
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            div class="sec top" {
+                div class="sh" { h2 { "Teams" } span class="n" { (teams.len()) } div class="right" { a class="btn sm" href="#add" { (ic("plus", "sm")) "Add a team" } } }
+                p class="lede" { "A team holds authority; whoever is on it carries that authority, and loses it on leaving. An organisation is a team that owns repositories." }
+                @if teams.is_empty() { div class="panel" { div class="empty" { b { "None yet." } "Make one, add people, and grant it what its members should all hold." } } }
+                div class="grid2" {
+                    @for row in teams {
+                        @let id = row.principal.id.as_str();
+                        div class="panel agent" {
+                            header {
+                                (avatar(id, &row.principal.display, false, false))
+                                div class="tt" {
+                                    h2 { (row.principal.display) }
+                                    span class="s" { (id) " · " (row.members.len()) @if row.members.len() == 1 { " member" } @else { " members" } }
+                                }
+                            }
+                            div class="pad ag" {
+                                div {
+                                    span class="lbl" { "Members" }
+                                    @if row.members.is_empty() { div class="s" { "Nobody yet." } }
+                                    div class="line" {
+                                        @for member in &row.members {
+                                            @let (display, agent) = people.name(member);
+                                            span class="chip" {
+                                                (avatar(member.as_str(), display, agent, false))
+                                                a href={ "/" (member.as_str()) } { (display) }
+                                                form method="post" action="/teams" {
+                                                    input type="hidden" name="action" value="remove";
+                                                    input type="hidden" name="team" value=(id);
+                                                    input type="hidden" name="member" value=(member.as_str());
+                                                    button class="x" type="submit" aria-label={ "Remove " (member.as_str()) } title={ "Remove " (member.as_str()) } { (ic("x", "sm")) }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    form class="line" method="post" action="/teams" {
+                                        input type="hidden" name="action" value="add";
+                                        input type="hidden" name="team" value=(id);
+                                        input class="input sm" name="member" type="text" placeholder="Add a person or agent" autocomplete="off" aria-label="Member";
+                                        button class="btn2 sm" type="submit" { "Add" }
+                                    }
+                                }
+                                div {
+                                    span class="lbl" { "Holds" }
+                                    @if row.grants.is_empty() { div class="s" { "Nothing yet." } }
+                                    @for grant in &row.grants {
+                                        div class="line" {
+                                            @for action in &grant.actions { span class="chip" { (action.as_str()) } }
+                                            span class="s" { "on " (grant.repo.as_deref().unwrap_or("everything")) }
+                                        }
+                                    }
+                                    @if viewer.1.admin {
+                                        details class="fold" {
+                                            summary class="ghost sm" { (ic("plus", "sm")) "Grant something" }
+                                            form class="form" method="post" action="/teams" {
+                                                input type="hidden" name="action" value="grant";
+                                                input type="hidden" name="team" value=(id);
+                                                div class="line" {
+                                                    @for capability in ["task", "push", "review", "merge", "verify", "admin"] {
+                                                        label class="check" { input type="checkbox" name=(capability) value="on"; span { (capability) } }
+                                                    }
+                                                }
+                                                div class="line" {
+                                                    select class="input sm" name="repo" aria-label="Where" {
+                                                        option value="" { "Everywhere" }
+                                                        @for repo in repos { option value=(repo) { (repo) } }
+                                                    }
+                                                    button class="btn2 sm" type="submit" { "Grant" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                    div class="composer" {
-                        form class="inline" method="post" action="/teams" {
-                            input type="hidden" name="action" value="add";
-                            input type="hidden" name="team" value=(row.principal.id.as_str());
-                            input name="member" type="text" placeholder="add a person or agent" autocomplete="off";
-                            button class="vbtn" type="submit" { "Add" }
-                        }
-                        @for member in &row.members {
-                            form class="inline" method="post" action="/teams" {
-                                input type="hidden" name="action" value="remove";
-                                input type="hidden" name="team" value=(row.principal.id.as_str());
-                                input type="hidden" name="member" value=(member.as_str());
-                                button class="quiet danger" type="submit" { "Remove " (member.as_str()) }
+                    div class="panel" id="add" {
+                        header { (ic("plus", "")) h2 { "Add a team" } }
+                        form class="pad form" method="post" action="/teams" {
+                            input type="hidden" name="action" value="create";
+                            div class="field" {
+                                label for="id" { "Name" }
+                                input id="id" name="id" type="text" autocomplete="off" placeholder="lowercase, digits and hyphens" required;
                             }
+                            div class="field" {
+                                label for="display" { "Display name" }
+                                input id="display" name="display" type="text" autocomplete="off";
+                            }
+                            div class="acts" { button class="btn" type="submit" { "Add a team" } }
                         }
                     }
-                    form class="composer" method="post" action="/teams" {
-                        input type="hidden" name="action" value="grant";
-                        input type="hidden" name="team" value=(row.principal.id.as_str());
-                        select name="repo" aria-label="Repository" {
-                            option value="" { "every repository" }
-                            @for repo in repos { option value=(repo) { (repo) } }
-                        }
-                        @for (name, label) in [("task", "task"), ("push", "push"), ("review", "review"), ("merge", "merge"), ("verify", "verify"), ("admin", "admin")] {
-                            label class="tick" { input type="checkbox" name=(name) value="1"; " " (label) }
-                        }
-                        button class="vbtn" type="submit" { "Grant" }
-                    }
                 }
-            }
-
-            div class="sechead later" { b { "Add a team" } span {} }
-            form class="stack narrowcol" method="post" action="/teams" {
-                input type="hidden" name="action" value="create";
-                div {
-                    label for="id" { "Name" }
-                    input id="id" name="id" type="text" autocomplete="off"
-                          placeholder="lowercase, digits and hyphens" required;
-                }
-                div {
-                    label for="display" { "Display name" }
-                    input id="display" name="display" type="text" autocomplete="off";
-                }
-                button class="btn" type="submit" { "Add a team" }
             }
         },
     )
 }
 
-/// An owner's page: who they are, and every repository of theirs the
-/// reader may see. A person or an organisation; for an organisation,
-/// its members too.
 /// One line of "what you are using, out of what you may".
 fn allowance(what: &str, used: String, limit: Option<String>) -> Markup {
     html! {
-        div class="trow" {
-            span class="fname" { (what) }
-            span class="last sec2" { (used) }
-            span class="sec3 r" {
+        div class="row allow" {
+            span class="t" { (what) }
+            span class="s" { (used) }
+            span class="age" {
                 @match limit {
                     Some(limit) => { "of " (limit) }
                     None => { "no limit" }
@@ -2498,6 +2523,9 @@ fn allowance(what: &str, used: String, limit: Option<String>) -> Markup {
     }
 }
 
+/// An owner's page: who they are, and every repository of theirs the
+/// reader may see. A person or an organisation; for an organisation,
+/// its members too.
 #[allow(clippy::too_many_arguments)] // one page, one set of facts about its owner
 pub fn owner(
     theme: Theme,
@@ -2513,8 +2541,10 @@ pub fn owner(
     // is is their business.
     allowances: Option<(ambolt_core::Usage, ambolt_core::Quota)>,
     error: Option<&str>,
+    people: &People,
 ) -> Markup {
     let organisation = owner.kind == ambolt_core::PrincipalKind::Team;
+    let agent = owner.kind == ambolt_core::PrincipalKind::Agent;
     layout_reading(
         theme,
         who,
@@ -2522,41 +2552,47 @@ pub fn owner(
         None,
         owner.id.as_str(),
         html! {
-            div class="owner" {
-                header class="owner-head" {
-                    h1 { (owner.display) }
-                    p class="sec2" {
-                        code { (owner.id.as_str()) }
-                        " · "
-                        @if organisation { "organisation" } @else if owner.kind == ambolt_core::PrincipalKind::Agent { "agent" } @else { "person" }
-                        @if !owner.active { " · deactivated" }
-                    }
-                }
-                div class="sechead" {
-                    b { "Repositories" } span { (repos.len()) }
-                    @if may_create {
-                        a class="btn" href={ "/new?owner=" (owner.id.as_str()) } { "New" }
-                    }
-                }
-                @if repos.is_empty() {
-                    p class="empty" { "Nothing here yet." }
-                }
-                div class="ftable" {
-                    @for repo in repos {
-                        @let short = ambolt_core::split_repo_name(&repo.name).map(|(_, s)| s).unwrap_or(&repo.name);
-                        div class="trow link" {
-                            a class="fname" href={ "/" (repo.name) } { (short) }
-                            span class="last sec2" { (repo.description) }
-                            span class="sec3 r" {
-                                @if repo.visibility == ambolt_core::Visibility::Public { "public" } @else { "private" }
-                                @if repo.archived { " · archived" }
-                            }
+            div class="pagehead" {
+                div class="who" {
+                    span class="av lg" { (avatar(owner.id.as_str(), &owner.display, agent, false)) }
+                    div {
+                        h1 { (owner.display) }
+                        div class="meta" {
+                            code { (owner.id.as_str()) }
+                            @if organisation { span class="chip" { (ic("agents", "")) "Organisation" } }
+                            @else if agent { span class="chip" { (ic("agents", "")) "Agent" } }
+                            @else { span class="chip" { (ic("user", "")) "Person" } }
+                            @if !owner.active { span class="chip bad" { "Deactivated" } }
                         }
                     }
                 }
-                @if let Some((usage, quota)) = allowances {
-                    div class="sechead" { b { "Allowance" } span {} }
-                    div class="ftable" {
+                @if may_create {
+                    div class="acts" { a class="btn sm" href={ "/new?owner=" (owner.id.as_str()) } { (ic("plus", "sm")) "New repository" } }
+                }
+            }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            div class="sec" {
+                div class="sh" { h2 { "Repositories" } span class="n" { (repos.len()) } }
+                div class="panel" {
+                    @if repos.is_empty() { div class="empty" { "Nothing here yet." } }
+                    @for repo in repos {
+                        @let short = ambolt_core::split_repo_name(&repo.name).map(|(_, s)| s).unwrap_or(&repo.name);
+                        a class="row need" href={ "/" (repo.name) } {
+                            @if repo.visibility == ambolt_core::Visibility::Public { span class="chip" { (ic("globe", "")) "Public" } } @else { span class="chip" { (ic("lock", "")) "Private" } }
+                            span class="tt" {
+                                span class="t" { (short) }
+                                span class="s" { @if repo.description.is_empty() { (repo.name) } @else { (repo.description) } }
+                            }
+                            span class="avs" {}
+                            span class="age" { @if repo.archived { "archived" } }
+                        }
+                    }
+                }
+            }
+            @if let Some((usage, quota)) = allowances {
+                div class="sec" {
+                    div class="sh" { h2 { "Allowance" } span class="n" { "what this account uses, of what it may" } }
+                    div class="panel" {
                         (allowance("Repositories", usage.repos.to_string(), quota.repos.map(|n| n.to_string())))
                         (allowance("Disk", crate::in_bytes(usage.disk), quota.disk.map(crate::in_bytes)))
                         (allowance("Agents", usage.agents.to_string(), quota.agents.map(|n| n.to_string())))
@@ -2565,34 +2601,39 @@ pub fn owner(
                         (allowance("Tokens", usage.tokens.to_string(), quota.tokens.map(|n| n.to_string())))
                     }
                 }
-                @if organisation {
-                    div class="sechead" { b { "Members" } span { (members.len()) } }
-                    @if let Some(error) = error { p class="error" { (error) } }
-                    @if members.is_empty() { p class="empty" { "Nobody yet." } }
-                    div class="ftable" {
+            }
+            @if organisation {
+                div class="sec" {
+                    div class="sh" { h2 { "Members" } span class="n" { (members.len()) } }
+                    div class="panel" {
+                        @if members.is_empty() { div class="empty" { "Nobody yet." } }
                         @for member in members {
-                            div class="trow link" {
-                                a class="fname" href={ "/" (member.as_str()) } { (member.as_str()) }
-                                span {}
-                                span {
+                            @let (display, agent) = people.name(member);
+                            div class="row member" {
+                                (avatar(member.as_str(), display, agent, false))
+                                span class="tt" {
+                                    a class="t" href={ "/" (member.as_str()) } { (display) }
+                                    span class="s" { (member.as_str()) }
+                                }
+                                span class="acts" {
                                     @if may_manage {
-                                        form class="inline" method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                        form method="post" action={ "/" (owner.id.as_str()) "/members" } {
                                             input type="hidden" name="action" value="remove";
                                             input type="hidden" name="member" value=(member.as_str());
-                                            button class="linkish" type="submit" { "Remove" }
+                                            button class="ghost sm danger" type="submit" { "Remove" }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                    @if may_manage {
-                        form class="inline" method="post" action={ "/" (owner.id.as_str()) "/members" } {
-                            input type="hidden" name="action" value="add";
-                            input type="text" name="member" placeholder="who" pattern="[a-z0-9-]{2,64}" required;
-                            button class="btn" type="submit" { "Add member" }
+                        @if may_manage {
+                            form class="foot" method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                input type="hidden" name="action" value="add";
+                                input class="input sm" type="text" name="member" placeholder="Who" pattern="[a-z0-9-]{2,64}" required aria-label="Member";
+                                button class="btn2 sm" type="submit" { "Add member" }
+                                span class="hint" { "Members create under the organisation and hold what it holds; a member cannot leave it empty." }
+                            }
                         }
-                        p class="hint" { "Members create under the organisation and hold what it holds; a member cannot leave it empty." }
                     }
                 }
             }
@@ -2706,6 +2747,8 @@ pub fn reports(
     )
 }
 
+/// Everyone with an account, for whoever runs the forge: who can sign
+/// in, who is invited, who is gone, and a way to add someone.
 pub fn people(
     theme: Theme,
     viewer: &Viewer,
@@ -2721,9 +2764,7 @@ pub fn people(
         "people",
         "People",
         html! {
-            div class="sechead" { b { "People" } span { (people.len()) } }
-            @if let Some(error) = error { p class="error" { (error) } }
-
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
             @if let Some(link) = join_link {
                 div class="once" {
                     @if let Some(to) = mailed {
@@ -2734,87 +2775,100 @@ pub fn people(
                     code class="secret" { (link) }
                 }
             }
-
-            @for row in people {
-                div class="trow people" {
-                    span class="strong" { (row.principal.id.as_str()) }
-                    span class="sec3" { (row.principal.display) }
-                    span class="sec3" {
-                        @if !row.principal.active { "deactivated" }
-                        @else if row.admin { "runs the forge" }
-                        @else if row.has_password { "can sign in" }
-                        @else { "no password yet" }
-                        @match (&row.contact.email, &row.contact.pending) {
-                            (Some(_), _) => { " · email confirmed" }
-                            (None, Some(_)) => { " · email pending" }
-                            (None, None) => { " · no email" }
-                        }
-                        @if let Some(invite) = &row.invitation {
-                            " · invited"
-                            @if let Some(until) = &invite.until { ", link good until " (day_of(until)) }
-                        }
-                    }
-                    span class="acts" {
-                        @if row.principal.active {
-                        form method="post" action="/people" {
-                            input type="hidden" name="action" value="relink";
-                            input type="hidden" name="id" value=(row.principal.id.as_str());
-                            button class="quiet" type="submit" {
-                                @if can_mail && (row.contact.email.is_some() || row.contact.pending.is_some()) { "Send a new sign-in link" } @else { "Make a sign-in link" }
-                            }
-                        }
-                        }
-                        @if row.principal.id != viewer.0 {
-                            form method="post" action="/people" {
-                                input type="hidden" name="action" value={ @if row.principal.active { "deactivate" } @else { "reactivate" } };
-                                input type="hidden" name="id" value=(row.principal.id.as_str());
-                                // What goes down with them is said on the
-                                // control, and that it does not come back
-                                // with them: retired agents are brought back
-                                // one at a time, by whoever holds them.
-                                @if row.principal.active {
-                                    button class="quiet danger" type="submit" {
-                                        @match row.agents {
-                                            0 => { "Deactivate" }
-                                            1 => { "Deactivate, and their agent" }
-                                            n => { "Deactivate, and their " (n) " agents" }
-                                        }
+            div class="sec top" {
+                div class="sh" { h2 { "People" } span class="n" { (people.len()) } div class="right" { a class="btn sm" href="#add" { (ic("plus", "sm")) "Add a person" } } }
+                div class="panel" {
+                    @for row in people {
+                        @let id = row.principal.id.as_str();
+                        div class="row person" {
+                            (avatar(id, &row.principal.display, false, false))
+                            span class="tt" {
+                                span class="t" { (row.principal.display) }
+                                span class="s" {
+                                    (id)
+                                    @if !row.principal.active { " · deactivated" }
+                                    @else if row.admin { " · runs the forge" }
+                                    @else if row.has_password { " · can sign in" }
+                                    @else { " · no password yet" }
+                                    @match (&row.contact.email, &row.contact.pending) {
+                                        (Some(_), _) => { " · email confirmed" }
+                                        (None, Some(_)) => { " · email pending" }
+                                        (None, None) => { " · no email" }
                                     }
-                                } @else {
-                                    button class="quiet" type="submit" title="Their retired agents stay retired until brought back one by one" { "Reactivate" }
+                                    @if let Some(invite) = &row.invitation {
+                                        " · invited"
+                                        @if let Some(until) = &invite.until { ", link good until " (day_of(until)) }
+                                    }
                                 }
                             }
-                        }
-                        @if row.invitation.is_some() {
-                            form method="post" action="/people" {
-                                input type="hidden" name="action" value="cancel";
-                                input type="hidden" name="id" value=(row.principal.id.as_str());
-                                button class="quiet danger" type="submit" { "Cancel invitation" }
+                            span class="acts" {
+                                @if row.principal.active {
+                                    form method="post" action="/people" {
+                                        input type="hidden" name="action" value="relink";
+                                        input type="hidden" name="id" value=(id);
+                                        button class="ghost sm" type="submit" {
+                                            (ic("send", "sm"))
+                                            @if can_mail && (row.contact.email.is_some() || row.contact.pending.is_some()) { "Send a new sign-in link" } @else { "Make a sign-in link" }
+                                        }
+                                    }
+                                }
+                                @if row.principal.id != viewer.0 {
+                                    form method="post" action="/people" {
+                                        input type="hidden" name="action" value={ @if row.principal.active { "deactivate" } @else { "reactivate" } };
+                                        input type="hidden" name="id" value=(id);
+                                        // What goes down with them is said on the
+                                        // control, and that it does not come back
+                                        // with them: retired agents are brought back
+                                        // one at a time, by whoever holds them.
+                                        @if row.principal.active {
+                                            button class="ghost sm danger" type="submit" {
+                                                @match row.agents {
+                                                    0 => { "Deactivate" }
+                                                    1 => { "Deactivate, and their agent" }
+                                                    n => { "Deactivate, and their " (n) " agents" }
+                                                }
+                                            }
+                                        } @else {
+                                            button class="ghost sm" type="submit" title="Their retired agents stay retired until brought back one by one" { "Reactivate" }
+                                        }
+                                    }
+                                }
+                                @if row.invitation.is_some() {
+                                    form method="post" action="/people" {
+                                        input type="hidden" name="action" value="cancel";
+                                        input type="hidden" name="id" value=(id);
+                                        button class="ghost sm danger" type="submit" { "Cancel invitation" }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-
-            div class="sechead later" { b { "Add a person" } span {} }
-            form class="stack narrowcol" method="post" action="/people" {
-                input type="hidden" name="action" value="register";
-                div {
-                    label for="id" { "Name" }
-                    input id="id" name="id" type="text" autocomplete="off"
-                          placeholder="lowercase, digits and hyphens" required;
-                }
-                div {
-                    label for="display" { "Display name" }
-                    input id="display" name="display" type="text" autocomplete="off";
-                }
-                div {
-                    label for="email" { "Email" }
-                    input id="email" name="email" type="email" autocomplete="off"
-                          placeholder=(if can_mail { "the invitation goes here" } else { "optional; kept for password resets" });
-                }
-                button class="btn" type="submit" {
-                    @if can_mail { "Add and send an invitation" } @else { "Add and make a link" }
+            div class="sec" {
+                div class="panel narrow" id="add" {
+                    header { (ic("plus", "")) h2 { "Add a person" } }
+                    form class="pad form" method="post" action="/people" {
+                        input type="hidden" name="action" value="register";
+                        div class="field" {
+                            label for="id" { "Username" }
+                            input id="id" name="id" type="text" autocomplete="off" placeholder="lowercase, digits and hyphens" required;
+                        }
+                        div class="field" {
+                            label for="display" { "Display name" }
+                            input id="display" name="display" type="text" autocomplete="off";
+                        }
+                        div class="field" {
+                            label for="email" { "Email" }
+                            input id="email" name="email" type="email" autocomplete="off"
+                                  placeholder=(if can_mail { "The invitation goes here" } else { "Optional; kept for password resets" });
+                        }
+                        div class="acts" {
+                            button class="btn" type="submit" {
+                                @if can_mail { "Add and send an invitation" } @else { "Add and make a link" }
+                            }
+                        }
+                    }
                 }
             }
         },

@@ -37,7 +37,7 @@ async fn a_minted_token_is_shown_once_and_then_never_again() {
         !again.contains("Copy this now"),
         "the same URL shows nothing twice"
     );
-    let (_, later) = page_with_cookie(app, "/you/tokens", "ambolt_dev=ada").await;
+    let (_, later) = page_with_cookie(app, "/you/settings", "ambolt_dev=ada").await;
     assert!(later.contains("laptop"), "the token is listed");
     assert!(
         !later.contains("Copy this now"),

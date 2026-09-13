@@ -768,6 +768,44 @@ details.thread[open] > summary .chip { visibility: hidden; }
 .try q { quotes: none; display: block; color: var(--ink2); font-size: 13.5px; }
 .try .ev-row { padding: 8px 0; border-top: 1px solid var(--hair); }
 
+/* Settings: one panel per section, a sub-navigation beside them. */
+.settings { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 22px; }
+.subnav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 76px; }
+.subnav a { padding: 7px 10px; border-radius: 8px; color: var(--ink2); font-size: 14px; font-weight: var(--wmed); }
+.subnav a:hover { background: var(--raise); color: var(--ink); }
+.stack.panels { gap: 16px; margin-top: 0; }
+.stack.panels .panel { scroll-margin-top: 70px; }
+.pref { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; }
+.pref h3 { font-size: 15px; margin: 0; display: flex; align-items: baseline; gap: 8px; }
+.pref h3 .n { font-size: 12.5px; color: var(--ink3); font-weight: var(--wbody); font-family: var(--sans); }
+.pref .what { color: var(--ink2); font-size: 13.5px; max-width: 60ch; margin: -6px 0 0; }
+.pref .line { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pref .line .input { width: auto; flex: 1; min-width: 160px; }
+.pref .line select.input { flex: none; }
+.pref .hint { font-size: 12.5px; color: var(--ink3); line-height: 1.5; }
+.pref .form { max-width: 420px; }
+.keyrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 9px 0; border-top: 1px solid var(--hair); font-size: 14px; }
+.keyrow:first-of-type { border-top: none; }
+.keyrow > span:first-child { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.keyrow code { font-size: 12px; }
+.keyrow form { display: contents; }
+.row.person, .row.member { grid-template-columns: 26px minmax(0, 1fr) auto; }
+.row .acts { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.row .acts form { display: contents; }
+.row.allow { grid-template-columns: 160px minmax(0, 1fr) auto; }
+.row.member a.t:hover { text-decoration: underline; }
+.panel.narrow { max-width: 520px; }
+.panel form.foot { flex-wrap: wrap; }
+.panel form.foot .input { width: auto; }
+.chip form { display: contents; }
+.chip .av { width: 16px; height: 16px; font-size: 7px; margin-left: -4px; }
+.chip .x { display: inline-flex; padding: 0; margin: 0 -3px 0 2px; color: var(--ink3); background: none; border: none; cursor: pointer; }
+.chip .x:hover { color: var(--bad); }
+.pagehead .who { display: flex; gap: 16px; align-items: center; }
+.pagehead .who .av.lg { width: 48px; height: 48px; font-size: 17px; }
+.pagehead .who .av.lg .av { width: 100%; height: 100%; font-size: inherit; }
+@media (max-width: 820px) { .settings { grid-template-columns: minmax(0, 1fr); } .subnav { position: static; flex-direction: row; flex-wrap: wrap; } }
+
 /* Home and Review: numbers first, then what needs you, then what happened. */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 22px; }
 .stat { background: var(--panel); border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -854,20 +892,7 @@ details.thread[open] > summary .chip { visibility: hidden; }
 .login .alt > button { margin-top: 4px; }
 .vbtn.wide { display: block; width: 100%; text-align: center; padding: 8px 12px; }
 
-/* Settings: sections with a heading, a status line, and one control each. */
-.pref { border-top: 1px solid var(--hair); padding: 22px 0 8px; margin-top: 14px; }
-.pref h3 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
-.pref .status { font-size: 12.5px; color: var(--ink3); margin: 0 0 14px; }
-.pref .row { display: flex; gap: 8px; align-items: stretch; }
-.pref .row + .hint, .pref .keyrow + .row { margin-top: 12px; }
-.pref .hint { font-size: 12px; color: var(--ink3); margin-top: 8px; }
-.keyrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--hair); font-size: 13px; }
-.keyrow:first-of-type { border-top: none; }
 
-/* Inputs in settings rows are inputs like any other. */.pref .row input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--ink); border: 1px solid var(--hair); border-radius: 6px; padding: 8px 10px; background: var(--raise); }
-.pref .row input:focus { outline: none; border-color: var(--ink2); }
-.hint:empty { display: none; }
-.keyrow .acts, .people .acts { display: flex; gap: 12px; justify-content: flex-end; }
 
 @media (max-width: 1100px) {
   .chg-split { grid-template-columns: minmax(0, 1fr); min-height: 0; }
@@ -882,12 +907,8 @@ details.thread[open] > summary .chip { visibility: hidden; }
 .sechead.later { margin-top: 30px; }
 .sechead .right, .sechead form.right { margin-left: auto; }
 .hint.pad { padding: 16px 22px; }
-.trow.people { grid-template-columns: 150px minmax(0, 1fr) auto auto; }
 .trow.mine { grid-template-columns: 120px minmax(0, 1fr) auto; }
 .trow.hits { grid-template-columns: 92px minmax(0, 1fr) auto; }
-.trow.tokens { grid-template-columns: minmax(0, 1fr) 260px 130px 90px; }
-.trow.tokens .sec3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.trow.sessions { grid-template-columns: minmax(0, 1fr) 150px 150px 90px; }
 .side a.onlynarrow { display: none; }
 @media (max-width: 600px) {
   .side a.onlynarrow { display: grid; }
