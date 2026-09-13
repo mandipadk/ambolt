@@ -1,0 +1,137 @@
+// The one script the pages carry. Every control here has a page that
+// works without it: the account menu is a <details>, the search box is
+// a link to /search, folded forms are open by default until this hides
+// them, and copy buttons sit beside text that can be selected.
+(function () {
+  'use strict';
+
+  // One account menu open at a time, and a click elsewhere closes it.
+  document.addEventListener('click', function (event) {
+    document.querySelectorAll('details.me[open]').forEach(function (menu) {
+      if (!menu.contains(event.target)) menu.removeAttribute('open');
+    });
+  });
+
+  // Folds: a control names the element it shows or hides.
+  document.querySelectorAll('[data-toggle]').forEach(function (button) {
+    var target = document.getElementById(button.getAttribute('data-toggle'));
+    if (!target) return;
+    if (button.hasAttribute('data-toggle-closed')) target.hidden = true;
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      target.hidden = !target.hidden;
+    });
+  });
+
+  // Copy: the button names the element whose text goes to the clipboard.
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function (event) {
+      event.preventDefault();
+      var source = document.getElementById(button.getAttribute('data-copy'));
+      if (!source || !navigator.clipboard) return;
+      var text = source.textContent.trim();
+      navigator.clipboard.writeText(text).then(function () {
+        var was = button.textContent;
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = was; }, 1200);
+      });
+    });
+  });
+
+  // Segments: buttons that show one pane of a group.
+  document.querySelectorAll('[data-tabs]').forEach(function (group) {
+    var name = group.getAttribute('data-tabs');
+    var buttons = group.querySelectorAll('[data-pane]');
+    buttons.forEach(function (button) {
+      button.addEventListener('click', function (event) {
+        event.preventDefault();
+        buttons.forEach(function (b) { b.classList.toggle('on', b === button); });
+        document.querySelectorAll('[data-pane-of="' + name + '"]').forEach(function (pane) {
+          pane.hidden = pane.id !== button.getAttribute('data-pane');
+        });
+      });
+    });
+  });
+
+  // The palette: ⌘K or the search box opens it; typing asks /search.json;
+  // Enter opens the first hit, or the search page with the same words.
+  var opener = document.getElementById('palette-open');
+  if (!opener) return;
+  var palette = null, input = null, list = null, hits = [], timer = null;
+
+  function build() {
+    palette = document.createElement('div');
+    palette.className = 'palette';
+    palette.hidden = true;
+    palette.innerHTML =
+      '<div class="palette-box" role="dialog" aria-label="Search">' +
+      '<input type="search" placeholder="Search repositories, changes, tasks, people" autocomplete="off" aria-label="Search">' +
+      '<div class="palette-list"></div>' +
+      '<div class="palette-foot">Enter opens the first · Esc closes · <a href="/search">all results</a></div>' +
+      '</div>';
+    document.body.appendChild(palette);
+    input = palette.querySelector('input');
+    list = palette.querySelector('.palette-list');
+    palette.addEventListener('click', function (event) { if (event.target === palette) close(); });
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(ask, 120);
+    });
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { close(); }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        var first = list.querySelector('a');
+        if (first) { window.location.href = first.getAttribute('href'); }
+        else { window.location.href = '/search?q=' + encodeURIComponent(input.value); }
+      }
+    });
+  }
+
+  function open(event) {
+    if (event) event.preventDefault();
+    if (!palette) build();
+    palette.hidden = false;
+    input.value = '';
+    list.innerHTML = '';
+    input.focus();
+  }
+
+  function close() {
+    if (palette) palette.hidden = true;
+  }
+
+  function ask() {
+    var q = input.value.trim();
+    if (!q) { list.innerHTML = ''; return; }
+    fetch('/search.json?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : { hits: [] }; })
+      .then(function (data) {
+        if (input.value.trim() !== q) return;
+        hits = data.hits || [];
+        list.innerHTML = '';
+        hits.slice(0, 8).forEach(function (hit) {
+          var a = document.createElement('a');
+          a.href = hit.href;
+          a.innerHTML = '<span class="k"></span><span class="t"></span><span class="d"></span>';
+          a.querySelector('.k').textContent = hit.kind;
+          a.querySelector('.t').textContent = hit.label;
+          a.querySelector('.d').textContent = hit.detail;
+          list.appendChild(a);
+        });
+        if (!hits.length) {
+          var none = document.createElement('div');
+          none.className = 'palette-none';
+          none.textContent = 'Nothing matches';
+          list.appendChild(none);
+        }
+      })
+      .catch(function () {});
+  }
+
+  opener.addEventListener('click', open);
+  document.addEventListener('keydown', function (event) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { open(event); }
+    if (event.key === 'Escape') close();
+  });
+})();

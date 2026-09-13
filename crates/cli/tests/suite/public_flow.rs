@@ -47,8 +47,8 @@ async fn a_public_repository_reads_without_signing_in_and_offers_nothing_to_do()
         "/ada/demo",
         "/ada/demo/changes",
         "/ada/demo/changes/1",
-        "/ada/demo/log",
-        "/ada/demo/landing",
+        "/ada/demo/activity",
+        "/ada/demo/review",
         "/ada/demo/lessons",
     ] {
         let (status, page) = page_with_cookie(app, path, "").await;

@@ -177,9 +177,9 @@ async fn the_pages_keep_the_same_boundary() {
         "/ada/demo/tree/",
         "/ada/demo/changes",
         "/ada/demo/changes/1",
-        "/ada/demo/log",
+        "/ada/demo/activity",
         "/ada/demo/lessons",
-        "/ada/demo/landing",
+        "/ada/demo/review",
     ] {
         assert_eq!(
             get_with_cookie(app, path, &cookie).await,

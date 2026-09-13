@@ -55,6 +55,7 @@ mod reset_flow;
 mod search_flow;
 mod security_flow;
 mod sessions_flow;
+mod shell_flow;
 mod simulate_flow;
 mod style_flow;
 mod tags_flow;

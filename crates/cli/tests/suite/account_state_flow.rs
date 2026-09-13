@@ -105,7 +105,7 @@ async fn deactivation_shuts_every_door_at_once_and_reactivation_reopens_them() {
     assert_eq!(location, "/people");
     let (status, _) = sign_in_as(&forge, "bee").await;
     assert_eq!(status, StatusCode::SEE_OTHER);
-    let (_, log) = page_with_cookie(app, "/ada/demo/log", &ada).await;
+    let (_, log) = page_with_cookie(app, "/ada/demo/activity", &ada).await;
     let _ = log;
 }
 

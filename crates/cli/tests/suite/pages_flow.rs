@@ -22,7 +22,8 @@ async fn the_sidebar_marks_every_page_you_can_be_on() {
         let (status, page) = page_with_cookie(app, path, &cookie).await;
         assert_eq!(status, StatusCode::OK, "{path}");
         let on = page
-            .find(r#"class="on""#)
+            .find(r#"class="item on""#)
+            .or_else(|| page.find(r#"class="on""#))
             .unwrap_or_else(|| panic!("{path} marks nothing"));
         let after = &page[on..on + 200];
         assert!(
@@ -61,7 +62,7 @@ async fn a_clone_address_is_one_you_can_paste_and_empty_lists_say_so() {
     );
     let (_, changes) = page_with_cookie(app, "/ada/demo/changes", &cookie).await;
     assert!(changes.contains("No changes yet"), "{changes}");
-    let (_, log) = page_with_cookie(app, "/ada/demo/log", &cookie).await;
+    let (_, log) = page_with_cookie(app, "/ada/demo/activity", &cookie).await;
     // Rows say when and who and what; no sequence numbers or event kinds.
     assert!(!log.contains("repo_created"), "{log}");
     assert!(log.contains("created ada/demo"), "{log}");

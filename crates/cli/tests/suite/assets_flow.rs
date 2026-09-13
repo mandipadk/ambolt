@@ -70,7 +70,7 @@ async fn the_page_links_a_hashed_stylesheet_that_may_be_cached_forever() {
     let (status, cache, css) = get(app, href).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(cache, "public, max-age=31536000, immutable");
-    assert!(css.contains("max-width: 760px"), "the real stylesheet");
+    assert!(css.contains("max-width: 820px"), "the real stylesheet");
 
     // The bare name still answers, but must be revalidated every time.
     let (status, cache, _) = get(app, "/assets/app.css").await;

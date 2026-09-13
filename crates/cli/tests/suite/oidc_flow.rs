@@ -181,7 +181,7 @@ async fn a_provider_identity_signs_in_only_once_it_is_linked() {
     let fresh = set_cookie.split(';').next().unwrap().to_owned();
     let (status, you) = page_with_cookie(app, "/you/settings", &fresh).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(you.contains(r#"title="ada""#), "signed in as ada: {you}");
+    assert!(you.contains("<span>ada"), "signed in as ada: {you}");
 
     // The same identity cannot be linked to somebody else.
     api_with_token(

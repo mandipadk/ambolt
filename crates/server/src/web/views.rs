@@ -46,23 +46,6 @@ impl Theme {
             Theme::Light => Some("light"),
         }
     }
-
-    /// The switch cycles system, light, dark, system.
-    fn next(self) -> &'static str {
-        match self {
-            Theme::System => "light",
-            Theme::Light => "dark",
-            Theme::Dark => "system",
-        }
-    }
-
-    fn switch_label(self) -> &'static str {
-        match self {
-            Theme::System => "Light",
-            Theme::Light => "Dark",
-            Theme::Dark => "Auto",
-        }
-    }
 }
 
 /// Every icon the pages use, once per page, referenced by `ic`. Adding an
@@ -75,8 +58,7 @@ fn sprite() -> Markup {
 }
 
 /// A line icon from the sprite, sized by class: `ic` alone is 18 px,
-/// `ic sm` 15, `ic lg` 22. The shell is the first page to draw one.
-#[allow(dead_code)]
+/// `ic sm` 15, `ic lg` 22.
 pub fn ic(name: &str, size: &str) -> Markup {
     html! {
         svg class={ "ic" @if !size.is_empty() { " " (size) } } {
@@ -142,10 +124,12 @@ pub struct Entry {
 pub enum Tab {
     Code,
     Changes,
-    Landing,
-    Verification,
+    Tasks,
+    Review,
+    Coverage,
+    Activity,
+    /// The lessons page has no tab of its own; it is reached from Tasks.
     Lessons,
-    Log,
     Settings,
 }
 
@@ -276,37 +260,26 @@ fn frame_in(
                 title { (title) " · ambolt" }
                 link rel="stylesheet" href=(super::stylesheet_href());
                 script defer src=(super::script_href()) {}
+                script defer src=(super::app_script_href()) {}
             }
             body {
                 (sprite())
                 @match who {
                     Some(who) => {
                         @let viewer = who.viewer();
-                        div class={ "app" @if rail.is_none() { " narrow" } } {
-                            (topbar(theme, viewer))
-                            (sidebar(who.chrome(), viewer.is_some(), section.or(repo)))
+                        div class="app" {
+                            (sidebar(theme, who, section.or(repo)))
                             main class="main" {
+                                (headrow(viewer, repo, section, title))
                                 @if let Some(repo) = repo {
-                                    div class="repohead" {
-                                        span class="repo" { (repo) }
-                                        div class="tabs" {
-                                            (tab(repo, "", "Code", active == Some(Tab::Code)))
-                                            (tab(repo, "/changes", "Changes", active == Some(Tab::Changes)))
-                                            (tab(repo, "/landing", "Landing", active == Some(Tab::Landing)))
-                                            (tab(repo, "/debt", "Verification", active == Some(Tab::Verification)))
-                                            (tab(repo, "/lessons", "Lessons", active == Some(Tab::Lessons)))
-                                            (tab(repo, "/log", "Log", active == Some(Tab::Log)))
-                                            @if let Some(viewer) = viewer
-                                                && (viewer.1.admin || viewer.1.owned.iter().any(|r| r == repo)) {
-                                                (tab(repo, "/settings", "Settings", active == Some(Tab::Settings)))
-                                            }
-                                        }
+                                    (repohead(repo, active, viewer, who.chrome()))
+                                }
+                                div class={ "cols" @if rail.is_some() { " railed" } } {
+                                    div class="content" id="content" { (body) }
+                                    @if let Some(rail) = rail {
+                                        aside class="rail" { (rail) }
                                     }
                                 }
-                                (body)
-                            }
-                            @if let Some(rail) = rail {
-                                aside class="rail" { (rail) }
                             }
                         }
                     }
@@ -317,113 +290,220 @@ fn frame_in(
     }
 }
 
-fn topbar(theme: Theme, viewer: Option<&Viewer>) -> Markup {
-    html! {
-        div class="bar" {
-            a class="brand" href="/" aria-label="Home" {
-                (mark())
-                b { "ambolt" }
-            }
-            form class="search" method="get" action="/search" {
-                input name="q" type="search" placeholder="Search repositories, changes, people"
-                      autocomplete="off" aria-label="Search";
-            }
-            div class="baractions" {
-                @if viewer.is_some() { a class="quiet" href="/new" { "New" } }
-                a class="quiet menu" href="#nav" { "Menu" }
-                form method="post" action="/theme" {
-                    input type="hidden" name="to" value=(theme.next());
-                    button class="quiet" type="submit" { (theme.switch_label()) }
-                }
-                @match viewer {
-                    Some(viewer) => {
-                        form method="post" action="/logout" {
-                            button class="quiet danger" type="submit" { "Sign out" }
-                        }
-                        (avatar(viewer.0.as_str(), viewer.0.as_str(), false, false))
-                    }
-                    None => { a class="quiet" href="/login" { "Sign in" } }
-                }
-            }
-        }
-    }
-}
-
-fn sidebar(chrome: &Chrome, signed: bool, current: Option<&str>) -> Markup {
+/// The sidebar: what is yours, where you can go, who is at work, and
+/// who you are. Every signed-in page renders inside it, so it is the
+/// product's shape rather than one page's.
+fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
+    let chrome = who.chrome();
+    let viewer = who.viewer();
+    let on = |key: &str| if current == Some(key) { " on" } else { "" };
+    let only = |key: &str| (current == Some(key)).then_some("on");
+    let chosen = |t: Theme| (theme == t).then_some("on");
     html! {
         nav class="side" id="nav" {
-            a class="onlynarrow" href="/search" { span { "Search" } span class="n" {} }
-            h4 { "Repositories" }
-            @if chrome.repos.is_empty() {
-                div class="row" { span class="n" { "None yet" } span {} }
+            a class="org" href="/" aria-label="Home" {
+                span class="orgmark" { (mark()) }
+                span class="name" { "ambolt" }
             }
-            @for repo in &chrome.repos {
-                a class={ @if current == Some(repo.name.as_str()) { "on" } @else { "" } }
-                  href={ "/" (repo.name) } {
-                    span { (repo.name) }
-                    span class="n" { @if repo.open > 0 { (repo.open) } }
+            a class="search" href="/search" id="palette-open" {
+                (ic("search", "sm"))
+                span { "Search or jump to" }
+                kbd { "⌘K" }
+            }
+            @if viewer.is_some() {
+                div class="nav" {
+                    a class={ "item" (on("home")) } href="/" { (ic("home", "")) span { "Home" } }
+                    a class={ "item" (on("inbox")) } href="/inbox" {
+                        (ic("inbox", "")) span { "Inbox" }
+                        @if chrome.unread > 0 { span class="badge" { (chrome.unread) } }
+                    }
+                    a class={ "item" (on("tasks")) } href="/tasks" { (ic("tasks", "")) span { "Tasks" } }
+                    a class={ "item" (on("agents")) } href="/agents" { (ic("agents", "")) span { "Agents" } }
                 }
             }
-
-            @if !chrome.working.is_empty() {
-                div class="sep" {}
-                h4 { "Working now" }
-                @for worker in &chrome.working {
-                    div class="row" title=(worker.paths.join(", ")) {
-                        span class="dotline" { span class="mini live" {} (worker.who) }
-                        span class="n" { @if let Some(repo) = &worker.repo { (repo) } }
+            h4 {
+                "Repositories"
+                @if viewer.is_some() { a class="plus" href="/new" aria-label="New repository" title="New repository" { (ic("plus", "sm")) } }
+            }
+            div class="nav" {
+                @if chrome.repos.is_empty() {
+                    div class="none" { "None yet" }
+                }
+                @for repo in &chrome.repos {
+                    a class={ "item repo" @if current == Some(repo.name.as_str()) { " on" } } href={ "/" (repo.name) } {
+                        (ic("repo", ""))
+                        span class="t" { (repo.name) }
+                        @if repo.open > 0 { span class="n" { (repo.open) } }
                     }
                 }
             }
-
-            @if signed {
-            div class="sep" {}
-            h4 { "You" }
-            a class={ @if current == Some("inbox") { "on" } @else { "" } } href="/inbox" {
-                span { "Inbox" } span class="n" { @if chrome.unread > 0 { (chrome.unread) } }
-            }
-            a class={ @if current == Some("you") { "on" } @else { "" } } href="/you" {
-                span { "Your changes" } span class="n" { @if chrome.yours > 0 { (chrome.yours) } }
-            }
-            a class={ @if current == Some("tasks") { "on" } @else { "" } } href="/tasks" {
-                span { "Tasks" } span class="n" {}
+            @if !chrome.working.is_empty() {
+                h4 { "At work now" }
+                div class="nav" {
+                    @for worker in &chrome.working {
+                        div class="who" title=(worker.paths.join(", ")) {
+                            (avatar(&worker.who, &worker.display, worker.agent, true))
+                            span class="t" {
+                                b { (worker.display) }
+                                @if let Some(repo) = &worker.repo {
+                                    span { (repo) @if let Some(path) = worker.paths.first() { " · " (path) } }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             @if chrome.admin {
-                a class={ @if current == Some("log") { "on" } @else { "" } } href="/log" {
-                    span { "Forge log" } span class="n" {}
+                h4 { "Operator" }
+                div class="nav" {
+                    a class={ "item" (on("people")) } href="/people" { (ic("user", "")) span { "People" } }
+                    a class={ "item" (on("teams")) } href="/teams" { (ic("agents", "")) span { "Teams" } }
+                    a class={ "item" (on("reports")) } href="/reports" { (ic("alert", "")) span { "Reports" } }
+                    a class={ "item" (on("log")) } href="/log" { (ic("activity", "")) span { "Forge log" } }
                 }
             }
-            a class={ @if current == Some("agents") { "on" } @else { "" } } href="/agents" {
-                span { "Agents" } span class="n" {}
-            }
-            @if chrome.admin {
-                a class={ @if current == Some("people") { "on" } @else { "" } } href="/people" {
-                    span { "People" } span class="n" {}
+            @match viewer {
+                Some(viewer) => {
+                    details class="me" {
+                        summary {
+                            (avatar(viewer.0.as_str(), &chrome.display, false, false))
+                            span class="t" {
+                                b { (chrome.display) }
+                                span { (viewer.0.as_str()) @if chrome.admin { " · operator" } }
+                            }
+                            (ic("chev", "sm"))
+                        }
+                        div class="pop" {
+                            a class=[only("you")] href="/you" { (ic("changes", "sm")) "Your changes" @if chrome.yours > 0 { span class="n" { (chrome.yours) } } }
+                            a class=[only("tokens")] href="/you/tokens" { (ic("key", "sm")) "Tokens" }
+                            a class=[only("sessions")] href="/you/sessions" { (ic("globe", "sm")) "Sessions" }
+                            a class=[only("settings")] href="/you/settings" { (ic("settings", "sm")) "Settings" }
+                            div class="lab" { "Theme" }
+                            form class="seg" method="post" action="/theme" {
+                                button class=[chosen(Theme::Light)] type="submit" name="to" value="light" { (ic("sun", "sm")) "Light" }
+                                button class=[chosen(Theme::Dark)] type="submit" name="to" value="dark" { (ic("moon", "sm")) "Dark" }
+                                button class=[chosen(Theme::System)] type="submit" name="to" value="system" { "Auto" }
+                            }
+                            form method="post" action="/logout" {
+                                button class="danger" type="submit" { (ic("logout", "sm")) "Sign out" }
+                            }
+                        }
+                    }
                 }
-                a class={ @if current == Some("reports") { "on" } @else { "" } } href="/reports" {
-                    span { "Reports" } span class="n" {}
+                None => {
+                    div class="me anon" {
+                        a class="btn2 sm" href="/login" { "Sign in" }
+                        form class="seg" method="post" action="/theme" {
+                            button class=[chosen(Theme::Light)] type="submit" name="to" value="light" aria-label="Light" { (ic("sun", "sm")) }
+                            button class=[chosen(Theme::Dark)] type="submit" name="to" value="dark" aria-label="Dark" { (ic("moon", "sm")) }
+                            button class=[chosen(Theme::System)] type="submit" name="to" value="system" { "Auto" }
+                        }
+                    }
                 }
-                a class={ @if current == Some("teams") { "on" } @else { "" } } href="/teams" {
-                    span { "Teams" } span class="n" {}
-                }
-            }
-            a class={ @if current == Some("tokens") { "on" } @else { "" } } href="/you/tokens" {
-                span { "Tokens" } span class="n" {}
-            }
-            a class={ @if current == Some("sessions") { "on" } @else { "" } } href="/you/sessions" {
-                span { "Sessions" } span class="n" {}
-            }
-            a class={ @if current == Some("settings") { "on" } @else { "" } } href="/you/settings" {
-                span { "Settings" } span class="n" {}
-            }
             }
         }
     }
 }
 
-fn tab(repo: &str, path: &str, label: &str, active: bool) -> Markup {
+/// The row at the top of every page: where you are, and the one thing
+/// you can do from here.
+fn headrow(
+    viewer: Option<&Viewer>,
+    repo: Option<&str>,
+    section: Option<&str>,
+    title: &str,
+) -> Markup {
     html! {
-        a class={ "tab" @if active { " active" } } href={ "/" (repo) (path) } { (label) }
+        div class="head" {
+            @match (repo, section) {
+                (Some(repo), _) => {
+                    div class="where" {
+                        (ic("repo", ""))
+                        @match repo.split_once('/') {
+                            Some((owner, name)) => {
+                                a href={ "/" (owner) } { (owner) }
+                                span class="sep" { "/" }
+                                b { (name) }
+                            }
+                            None => { b { (repo) } }
+                        }
+                    }
+                }
+                (None, Some(section)) => { h1 { (section_label(section)) } }
+                (None, None) => { h1 { (title) } }
+            }
+            div class="acts" {
+                a class="quiet menu" href="#nav" { (ic("menu", "sm")) " Menu" }
+                @if viewer.is_some() {
+                    a class="btn2 sm" href="/new" { (ic("plus", "sm")) "New repository" }
+                }
+            }
+        }
+    }
+}
+
+/// What a sidebar section is called on its own page.
+fn section_label(section: &str) -> &str {
+    match section {
+        "inbox" => "Inbox",
+        "you" => "Your changes",
+        "tasks" => "Tasks",
+        "agents" => "Agents",
+        "tokens" => "Tokens",
+        "sessions" => "Sessions",
+        "settings" => "Settings",
+        "people" => "People",
+        "teams" => "Teams",
+        "reports" => "Reports",
+        "log" => "Forge log",
+        "search" => "Search",
+        "new" => "New repository",
+        "task" => "Task",
+        other => other,
+    }
+}
+
+/// Inside a repository, its tabs head the page. The tabs are the
+/// places a repository has: its code, its changes, its tasks, what
+/// needs review, how much of it is verified, what happened.
+fn repohead(repo: &str, active: Option<Tab>, viewer: Option<&Viewer>, chrome: &Chrome) -> Markup {
+    let open = chrome
+        .repos
+        .iter()
+        .find(|r| r.name == repo)
+        .map(|r| r.open)
+        .unwrap_or(0);
+    html! {
+        div class="repohead" {
+            div class="tabs" {
+                (tab(repo, "", "code", "Code", 0, active == Some(Tab::Code)))
+                (tab(repo, "/changes", "changes", "Changes", open, active == Some(Tab::Changes)))
+                @if viewer.is_some() {
+                    (tab_to(&format!("/tasks?repo={repo}"), "tasks", "Tasks", 0, active == Some(Tab::Tasks)))
+                }
+                (tab(repo, "/review", "review", "Review", 0, active == Some(Tab::Review)))
+                (tab(repo, "/coverage", "coverage", "Coverage", 0, active == Some(Tab::Coverage)))
+                (tab(repo, "/activity", "activity", "Activity", 0, active == Some(Tab::Activity)))
+                @if let Some(viewer) = viewer
+                    && (viewer.1.admin || viewer.1.owned.iter().any(|r| r == repo)) {
+                    (tab(repo, "/settings", "settings", "Settings", 0, active == Some(Tab::Settings)))
+                }
+            }
+        }
+    }
+}
+
+fn tab(repo: &str, path: &str, icon: &str, label: &str, count: usize, active: bool) -> Markup {
+    tab_to(&format!("/{repo}{path}"), icon, label, count, active)
+}
+
+fn tab_to(href: &str, icon: &str, label: &str, count: usize, active: bool) -> Markup {
+    html! {
+        a class={ "tab" @if active { " on" } } href=(href) {
+            (ic(icon, ""))
+            (label)
+            @if count > 0 { span class="n" { (count) } }
+        }
     }
 }
 
@@ -813,7 +893,7 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                 @for worker in &viewer.1.working {
                     div class="line" {
                         span {
-                            b { (worker.who) }
+                            b { (worker.display) }
                             @if let Some(repo) = &worker.repo { " · " (repo) }
                             @if !worker.paths.is_empty() {
                                 br;
@@ -845,7 +925,7 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
             div class="block homeneed" {
                 div class="sechead" { b { "Needs you" } span { (data.needs_you.len()) } }
                 @if data.needs_you.is_empty() {
-                    div class="trow sec3" { span {} span { "Nothing is waiting on a human." } span {} }
+                    div class="empty" { "Nothing is waiting on a human." }
                 }
                 @for entry in &data.needs_you {
                     a class="trow" href={ "/" (entry.repo) "/changes/" (entry.item.change.number) }
@@ -1495,7 +1575,7 @@ pub fn forge_log(
                         span class="sec3" { (day_of(&envelope.ts)) " " (clock_of(&envelope.ts)) }
                         span class="sec2" { (envelope.actor) }
                         span {
-                            @if let Some(Some(repo)) = scopes.get(&envelope.seq.0) { a class="link sec3" href={ "/" (repo) "/log" } { (repo) } " · " }
+                            @if let Some(Some(repo)) = scopes.get(&envelope.seq.0) { a class="link sec3" href={ "/" (repo) "/activity" } { (repo) } " · " }
                             (text)
                             @if let Some(via) = &envelope.via {
                                 span class="sec3" { " · in session " (short(via.as_str())) }
@@ -3682,7 +3762,7 @@ pub fn landing(
         theme,
         who,
         Some(repo),
-        Some(Tab::Landing),
+        Some(Tab::Review),
         "Landing",
         html! {
             div class="cols2" {
@@ -3691,7 +3771,7 @@ pub fn landing(
                     div class="need" {
                         div class="sechead" { b { "Needs you" } span { (data.needs_you.len()) } }
                         @if data.needs_you.is_empty() {
-                            div class="trow sec3" { span {} span { "Nothing is waiting on a human." } span {} }
+                            div class="empty" { "Nothing is waiting on a human." }
                         }
                         @for item in &data.needs_you {
                             a class="trow" href={ "/" (repo) "/changes/" (item.change.number) }
@@ -4237,7 +4317,7 @@ pub fn log(
         theme,
         who,
         Some(repo),
-        Some(Tab::Log),
+        Some(Tab::Activity),
         "Log",
         html! {
             div class="sechead" {
@@ -4306,7 +4386,7 @@ pub fn blame(theme: Theme, who: Reading<'_>, repo: &str, path: &str, rows: &[Bla
                 @if with_gaps > 0 { span class="sep" { "·" } span class="warn" { (with_gaps) " under a declared gap" } }
                 @if argued > 0 { span class="sep" { "·" } span { (argued) " argued only" } }
                 @if unattributed > 0 { span class="sep" { "·" } span { (unattributed) " imported" } }
-                a class="link" href={ "/" (repo) "/debt" } { "Whole repository" }
+                a class="link" href={ "/" (repo) "/coverage" } { "Whole repository" }
                 a class="right-link link" href={ "/" (repo) "/tree/" (path) } { "Source" }
             }
             div class="source blame" {
@@ -4472,7 +4552,7 @@ pub fn debt(
         theme,
         who,
         Some(repo),
-        Some(Tab::Verification),
+        Some(Tab::Coverage),
         "Verification",
         html! {
             div class="sechead" {
@@ -4718,18 +4798,18 @@ mod tests {
     }
 
     #[test]
-    fn the_theme_cycles_and_only_a_choice_stamps_the_root() {
+    fn only_a_chosen_theme_stamps_the_root() {
         assert_eq!(Theme::System.attr(), None);
         assert_eq!(Theme::Light.attr(), Some("light"));
-        assert_eq!(Theme::System.next(), "light");
-        assert_eq!(Theme::Light.next(), "dark");
-        assert_eq!(Theme::Dark.next(), "system");
+        assert_eq!(Theme::Dark.attr(), Some("dark"));
     }
 
     #[test]
     fn every_icon_the_pages_ask_for_is_in_the_sprite() {
         for name in [
-            "home", "inbox", "tasks", "agents", "repo", "check", "x", "alert",
+            "home", "inbox", "tasks", "agents", "repo", "check", "x", "alert", "search", "plus",
+            "code", "changes", "review", "coverage", "activity", "settings", "chev", "user", "key",
+            "globe", "sun", "moon", "logout", "menu",
         ] {
             assert!(SPRITE.contains(&format!("id=\"i-{name}\"")), "{name}");
         }

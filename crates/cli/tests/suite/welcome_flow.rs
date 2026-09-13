@@ -48,7 +48,7 @@ async fn a_stranger_gets_the_page_rather_than_a_sign_in_form() {
         "a signed-out page must not name repositories: {}",
         &body[..body.len().min(400)]
     );
-    assert!(!body.contains("Needs you") && !body.contains("Working now"));
+    assert!(!body.contains("Needs you") && !body.contains("At work now"));
 }
 
 /// Signed in, the same URL is the home. One address, two answers.

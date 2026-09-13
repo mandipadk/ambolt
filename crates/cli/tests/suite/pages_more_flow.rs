@@ -73,7 +73,7 @@ async fn tasks_have_a_page_with_their_runs_and_changes() {
     let (_, t) = api(app, "GET", &format!("/api/tasks/{task_id}"), "ada", None).await;
     assert_eq!(t["state"], "landed");
     // The sidebar knows the page.
-    assert!(page.contains(r#"class="on" href="/tasks""#), "{page}");
+    assert!(page.contains(r#"class="item on" href="/tasks""#), "{page}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -174,7 +174,7 @@ async fn whoever_runs_the_forge_reads_the_whole_log() {
         "{log}"
     );
     assert!(
-        log.contains(r#"href="/ada/demo/log""#),
+        log.contains(r#"href="/ada/demo/activity""#),
         "events name their repository: {log}"
     );
     api_with_token(

@@ -104,6 +104,7 @@ pub fn routes() -> Router<AppState> {
         .route("/logout", post(logout))
         .route("/theme", post(set_theme))
         .route("/search", get(search_page))
+        .route("/search.json", get(search_json))
         .route("/new", get(new_page).post(create_from_form))
         .route("/inbox", get(inbox_page))
         .route("/inbox/read", post(inbox_read))
@@ -176,10 +177,13 @@ pub fn routes() -> Router<AppState> {
             "/{owner}/{repo}/changes/{number}/abandon",
             post(submit_abandon),
         )
-        .route("/{owner}/{repo}/landing", get(landing_page))
-        .route("/{owner}/{repo}/debt", get(debt_page))
+        .route("/{owner}/{repo}/review", get(landing_page))
+        .route("/{owner}/{repo}/landing", get(moved_to_review))
+        .route("/{owner}/{repo}/coverage", get(debt_page))
+        .route("/{owner}/{repo}/debt", get(moved_to_coverage))
         .route("/{owner}/{repo}/debt/tasks", post(debt_tasks_action))
-        .route("/{owner}/{repo}/log", get(log_page))
+        .route("/{owner}/{repo}/activity", get(log_page))
+        .route("/{owner}/{repo}/log", get(moved_to_activity))
         .route("/{owner}/{repo}/settings", get(repo_settings_page))
         .route("/{owner}/{repo}/settings/visibility", post(repo_visibility))
         .route("/{owner}/{repo}/settings/rename", post(repo_rename))
@@ -207,6 +211,18 @@ static STYLE_HASH: std::sync::LazyLock<String> =
 static SCRIPT_HASH: std::sync::LazyLock<String> =
     std::sync::LazyLock::new(|| short_hash(crate::passkeys::SCRIPT.as_bytes()));
 
+/// The page's own script: menus, folds, copy buttons, segments and the
+/// search palette. Small, self-hosted, and optional: every control it
+/// touches works as a plain page without it.
+const APP_SCRIPT: &str = include_str!("app.js");
+
+static APP_SCRIPT_HASH: std::sync::LazyLock<String> =
+    std::sync::LazyLock::new(|| short_hash(APP_SCRIPT.as_bytes()));
+
+pub(crate) fn app_script_href() -> String {
+    format!("/assets/app.{}.js", *APP_SCRIPT_HASH)
+}
+
 pub(crate) fn script_href() -> String {
     format!("/assets/passkeys.{}.js", *SCRIPT_HASH)
 }
@@ -225,6 +241,9 @@ async fn asset(Path(file): Path<String>) -> Response {
     }
     if file == "app.css" {
         return served(STYLE.as_str(), "text/css; charset=utf-8", "no-cache");
+    }
+    if file == format!("app.{}.js", *APP_SCRIPT_HASH) {
+        return served(APP_SCRIPT, "text/javascript; charset=utf-8", FOREVER);
     }
     if file == format!("passkeys.{}.js", *SCRIPT_HASH) {
         return served(
@@ -297,6 +316,48 @@ fn hit_href(hit: &ambolt_core::SearchHit) -> String {
         (Lesson, Some(repo), _, _) => format!("/{repo}/lessons"),
         (Person, _, _, Some(who)) => format!("/search?q=by:{}", urlencode(who.as_str())),
         _ => "/".to_owned(),
+    }
+}
+
+/// A repository's pages were renamed for what they are for; the old
+/// addresses stay as permanent redirects so nobody's link breaks.
+async fn moved_to_review(Path((owner, repo)): Path<(String, String)>) -> Response {
+    Redirect::permanent(&format!("/{owner}/{repo}/review")).into_response()
+}
+
+async fn moved_to_coverage(Path((owner, repo)): Path<(String, String)>) -> Response {
+    Redirect::permanent(&format!("/{owner}/{repo}/coverage")).into_response()
+}
+
+async fn moved_to_activity(Path((owner, repo)): Path<(String, String)>) -> Response {
+    Redirect::permanent(&format!("/{owner}/{repo}/activity")).into_response()
+}
+
+/// The same search, as the palette asks for it: the hits with the
+/// addresses the page would link, so the script never has to know how
+/// a hit becomes a link.
+async fn search_json(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    Query(query): Query<SearchQuery>,
+) -> Response {
+    let parsed = ambolt_core::SearchQuery::parse(&query.q);
+    match app.with_store(|store| store.search(&viewer.0, &parsed, 20)) {
+        Ok(hits) => {
+            let hits: Vec<serde_json::Value> = hits
+                .iter()
+                .map(|hit| {
+                    serde_json::json!({
+                        "kind": hit.kind.as_str(),
+                        "label": hit.title,
+                        "detail": hit.detail,
+                        "href": hit_href(hit),
+                    })
+                })
+                .collect();
+            axum::Json(serde_json::json!({ "hits": hits })).into_response()
+        }
+        Err(err) => oops(err),
     }
 }
 
@@ -1832,15 +1893,29 @@ fn chrome_for(app: &AppState, who: &PrincipalId) -> Result<Chrome, ambolt_core::
             .filter(|session| leases.iter().any(|l| l.session == session.id))
             .map(|session| {
                 let lease = leases.iter().find(|l| l.session == session.id);
+                let principal = store.principal(&session.agent).ok().flatten();
                 Working {
                     who: session.agent.as_str().to_owned(),
+                    display: principal
+                        .as_ref()
+                        .map(|p| p.display.clone())
+                        .unwrap_or_else(|| session.agent.as_str().to_owned()),
+                    agent: principal
+                        .as_ref()
+                        .is_none_or(|p| p.kind == ambolt_core::PrincipalKind::Agent),
                     repo: lease.map(|l| l.repo.clone()),
                     paths: lease.map(|l| l.paths.clone()).unwrap_or_default(),
                 }
             })
             .collect();
 
+        let display = store
+            .principal(who)?
+            .map(|p| p.display)
+            .unwrap_or_else(|| who.as_str().to_owned());
+
         Ok(Chrome {
+            display,
             repos,
             working,
             yours,
@@ -1911,6 +1986,8 @@ pub struct ChromeRepo {
 /// Somebody working right now: an agent or a person mid-session.
 pub struct Working {
     pub who: String,
+    pub display: String,
+    pub agent: bool,
     pub repo: Option<String>,
     pub paths: Vec<String>,
 }
@@ -1922,6 +1999,8 @@ pub struct Working {
 /// have the same answer, and threading it through thirteen page
 /// functions would only invite them to drift apart.
 pub struct Chrome {
+    /// How the viewer is named on the page.
+    pub display: String,
     pub repos: Vec<ChromeRepo>,
     pub working: Vec<Working>,
     pub yours: usize,
@@ -2012,6 +2091,7 @@ fn chrome_public(app: &AppState) -> Result<Chrome, ambolt_core::CoreError> {
             });
         }
         Ok(Chrome {
+            display: String::new(),
             repos,
             working: Vec::new(),
             yours: 0,
@@ -4027,7 +4107,7 @@ async fn debt_tasks_action(
     RepoName(repo): RepoName,
     Form(form): Form<PayDownForm>,
 ) -> Response {
-    let back = format!("/{repo}/debt");
+    let back = format!("/{repo}/coverage");
     let count = form.count.trim().parse::<usize>().unwrap_or(5);
     match crate::debt::create_pay_down_tasks(&app, &viewer.0, None, &repo, count).await {
         Ok(created) if created.is_empty() => flash(&back, "Every indebted file already has a task"),
@@ -4225,6 +4305,7 @@ struct VisibilityForm {
 #[derive(Deserialize)]
 struct TasksQuery {
     state: Option<String>,
+    repo: Option<String>,
 }
 
 async fn tasks_page(
@@ -4244,6 +4325,9 @@ async fn tasks_page(
                 .as_deref()
                 .is_none_or(|repo| s.may_read(&viewer.0, repo))
         });
+        if let Some(only) = query.repo.as_deref().filter(|r| !r.is_empty()) {
+            tasks.retain(|t| t.repo.as_deref() == Some(only));
+        }
         tasks.reverse();
         Ok::<_, ambolt_core::CoreError>(tasks)
     });

@@ -201,11 +201,11 @@ async fn every_line_is_backed_by_what_the_log_knows_and_the_map_rolls_it_up() {
     );
     // The page says the same, files most debt first, and blame marks each line.
     let (_, cookie) = sign_in_as(&forge, "ada").await;
-    let (status, page) = page_with_cookie(app, "/ada/demo/debt", &cookie).await;
+    let (status, page) = page_with_cookie(app, "/ada/demo/coverage", &cookie).await;
     assert_eq!(status, StatusCode::OK);
     assert!(page.contains("What backs this code"), "{page}");
     assert!(
-        page.contains(r#"class="tab active" href="/ada/demo/debt""#),
+        page.contains(r#"class="tab on" href="/ada/demo/coverage""#),
         "{page}"
     );
     let gap_at = page.find("gap.rs").unwrap();

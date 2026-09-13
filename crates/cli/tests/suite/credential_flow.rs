@@ -161,7 +161,7 @@ async fn a_session_credential_carries_its_scope_and_dies_with_the_session() {
 
     // The log says what was drawn and that it died, and never the secret.
     let (_, cookie) = sign_in_as(&forge, "ada").await;
-    let (_, log) = page_with_cookie(app, "/ada/demo/log", &cookie).await;
+    let (_, log) = page_with_cookie(app, "/ada/demo/activity", &cookie).await;
     assert!(log.contains("drew a credential from session"), "{log}");
     assert!(log.contains("credential died with it"), "{log}");
     assert!(!log.contains(&token), "{log}");

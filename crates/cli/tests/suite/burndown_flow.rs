@@ -251,7 +251,7 @@ async fn imported_code_is_paid_down_by_reproduced_covering_claims() {
 
     // The tab shows the burndown, who paid, and the button.
     let (_, ada) = sign_in_as(&forge, "ada").await;
-    let (status, page) = page_with_cookie(app, "/ada/demo/debt", &ada).await;
+    let (status, page) = page_with_cookie(app, "/ada/demo/coverage", &ada).await;
     assert_eq!(status, StatusCode::OK);
     assert!(
         page.contains("Burndown") && page.contains("class=\"burndown\""),

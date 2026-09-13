@@ -205,7 +205,7 @@ async fn a_rename_moves_everything_and_the_old_name_is_gone() {
     assert_eq!(changes.as_array().unwrap().len(), 1);
     // The log followed the name too, and says what happened.
     let (_, cookie) = sign_in_as(&forge, "ada").await;
-    let (status, log) = page_with_cookie(app, "/ada/shown/log", &cookie).await;
+    let (status, log) = page_with_cookie(app, "/ada/shown/activity", &cookie).await;
     assert_eq!(status, StatusCode::OK);
     assert!(log.contains("renamed ada/demo to ada/shown"), "{log}");
     assert!(

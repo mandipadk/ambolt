@@ -202,7 +202,7 @@ async fn web_ui_full_journey() {
 
     // While it is open, the landing page ranks it by the attention
     // engine and says what the ranking is made of.
-    let (_, body, _) = ada.get("/ada/demo/landing");
+    let (_, body, _) = ada.get("/ada/demo/review");
     assert!(
         body.contains("nobody re-ran") && body.contains("declared gap"),
         "needs-you should explain itself with signals"
@@ -223,14 +223,14 @@ async fn web_ui_full_journey() {
     // the tree now exists, and the file renders escaped.
     let (_, body, _) = ada.get("/ada/demo/changes/1");
     assert!(body.contains("merged"));
-    let (_, body, _) = ada.get("/ada/demo/landing");
+    let (_, body, _) = ada.get("/ada/demo/review");
     assert!(body.contains("landed"));
     let (_, body, _) = ada.get("/ada/demo");
     assert!(body.contains("greeting.txt"));
     assert!(!body.contains("Empty repository"));
     let (_, body, _) = ada.get("/ada/demo/tree/greeting.txt");
     assert!(body.contains("hello"));
-    let (_, body, _) = ada.get("/ada/demo/log");
+    let (_, body, _) = ada.get("/ada/demo/activity");
     assert!(
         body.contains("landed"),
         "the log says what happened in words: {body}"
@@ -256,8 +256,8 @@ async fn web_ui_full_journey() {
         &body[..200]
     );
     assert!(
-        body.contains(">Light<"),
-        "the switch offers the other palette"
+        body.contains(r#"<button class="on" type="submit" name="to" value="system""#),
+        "the menu marks the system as chosen: {body}"
     );
     let (status, _) = ada.post_form("/theme", &[("to", "light"), ("back", "/ada/demo")]);
     assert_eq!(status, 303);
@@ -266,14 +266,15 @@ async fn web_ui_full_journey() {
         body.contains(r#"data-theme="light""#),
         "the choice must persist"
     );
-    assert!(body.contains(">Dark<"));
+    assert!(body.contains(r#"<button class="on" type="submit" name="to" value="light""#));
     ada.post_form("/theme", &[("to", "dark"), ("back", "/ada/demo")]);
     let (_, body, _) = ada.get("/ada/demo");
     assert!(body.contains(r#"data-theme="dark""#));
     assert!(
-        body.contains(">Auto<"),
-        "dark offers the way back to the system"
+        body.contains(r#"<button class="on" type="submit" name="to" value="dark""#),
+        "dark is marked, and the way back to the system stays offered"
     );
+    assert!(body.contains(">Auto<"));
     ada.post_form("/theme", &[("to", "system"), ("back", "/ada/demo")]);
     let (_, body, _) = ada.get("/ada/demo");
     assert!(
@@ -291,7 +292,7 @@ async fn web_ui_full_journey() {
     assert!(body.contains(r#"class="cline""#), "lines are numbered rows");
 
     // Once it lands there is genuinely nothing for a human to do here.
-    let (status, body, _) = ada.get("/ada/demo/landing");
+    let (status, body, _) = ada.get("/ada/demo/review");
     assert_eq!(status, 200);
     assert!(body.contains("Nothing is waiting on a human."));
 
@@ -300,7 +301,7 @@ async fn web_ui_full_journey() {
     let (status, body, _) = ada.get("/ada/demo/lessons");
     assert_eq!(status, 200);
     assert!(body.contains("Has anyone tried this before?"));
-    let (_, body, _) = ada.get("/ada/demo/landing");
+    let (_, body, _) = ada.get("/ada/demo/review");
     assert!(
         body.contains("counted from the log"),
         "the brief should say where its numbers come from"

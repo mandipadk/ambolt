@@ -223,7 +223,7 @@ async fn the_budget_draws_the_top_change_a_day_and_the_draw_waits_for_a_human() 
     let (_, cookie) = sign_in_as(&forge, "ada").await;
     let (_, inbox) = page_with_cookie(app, "/inbox", &cookie).await;
     assert!(inbox.contains("was drawn for your look"), "{inbox}");
-    let (_, log) = page_with_cookie(app, "/ada/demo/log", &cookie).await;
+    let (_, log) = page_with_cookie(app, "/ada/demo/activity", &cookie).await;
     assert!(log.contains("the policy drew"), "{log}");
     assert!(log.contains("for a human look"), "{log}");
     let (_, home) = page_with_cookie(app, "/", &cookie).await;
