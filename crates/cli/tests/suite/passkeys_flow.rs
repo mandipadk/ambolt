@@ -92,6 +92,13 @@ async fn ceremonies_start_park_state_once_and_refuse_answers_they_did_not_ask_fo
         "{begin}"
     );
     assert_eq!(begin["options"]["publicKey"]["rp"]["id"], "forge.example");
+    // Sign-in is by discovery, so the browser must be asked for a
+    // discoverable credential, which is also what puts synced passkeys
+    // on its menu.
+    assert_eq!(
+        begin["options"]["publicKey"]["authenticatorSelection"]["residentKey"], "required",
+        "{begin}"
+    );
     let (status, login_begin) = post_json(app, "/passkeys/login/begin", "", json!({})).await;
     assert_eq!(status, StatusCode::OK, "{login_begin}");
     assert!(login_begin["options"]["publicKey"]["challenge"].is_string());

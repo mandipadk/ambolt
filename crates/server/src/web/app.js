@@ -32,6 +32,35 @@
     });
   });
 
+  // Repository filter: a long list narrows by text and by owner.
+  (function () {
+    var box = document.getElementById('repofilter');
+    var list = document.getElementById('repolist');
+    if (!box || !list) return;
+    var input = box.querySelector('.filter');
+    var owners = box.querySelectorAll('.owners button');
+    var none = document.getElementById('repolist-none');
+    var owner = '';
+    function apply() {
+      var q = input.value.trim().toLowerCase();
+      var shown = 0;
+      list.querySelectorAll('.item.repo').forEach(function (item) {
+        var ok = (!owner || item.getAttribute('data-owner') === owner) && item.textContent.toLowerCase().indexOf(q) !== -1;
+        item.hidden = !ok;
+        if (ok) shown += 1;
+      });
+      if (none) none.hidden = shown > 0;
+    }
+    input.addEventListener('input', apply);
+    owners.forEach(function (button) {
+      button.addEventListener('click', function () {
+        owner = button.getAttribute('data-owner') || '';
+        owners.forEach(function (b) { b.classList.toggle('on', b === button); });
+        apply();
+      });
+    });
+  })();
+
   // Copy: the button names the element whose text goes to the clipboard.
   document.querySelectorAll('[data-copy]').forEach(function (button) {
     button.addEventListener('click', function (event) {
@@ -117,6 +146,105 @@
 
   // The palette: ⌘K or the search box opens it; typing asks /search.json;
   // Enter opens the first hit, or the search page with the same words.
+  // Dropdowns: every select becomes a button and a list in the page's
+  // own type; the select stays underneath for the form and for no script.
+  (function () {
+    var openDd = null;
+    function closeDd() {
+      if (!openDd) return;
+      openDd.list.hidden = true;
+      openDd.button.setAttribute('aria-expanded', 'false');
+      openDd = null;
+    }
+    document.querySelectorAll('select').forEach(function (select) {
+      if (select.multiple) return;
+      var dd = document.createElement('div');
+      dd.className = 'dd' + (select.classList.contains('sm') ? ' sm' : '');
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'dd-btn';
+      button.setAttribute('aria-haspopup', 'listbox');
+      button.setAttribute('aria-expanded', 'false');
+      var named = select.getAttribute('aria-label');
+      if (!named && select.id) {
+        var label = document.querySelector('label[for="' + select.id + '"]');
+        if (label) named = label.textContent;
+      }
+      if (named) button.setAttribute('aria-label', named.trim());
+      var text = document.createElement('span');
+      text.className = 'dd-text';
+      button.appendChild(text);
+      button.insertAdjacentHTML('beforeend', '<svg class="ic sm" aria-hidden="true"><use href="#i-chev"></use></svg>');
+      var list = document.createElement('div');
+      list.className = 'dd-list';
+      list.setAttribute('role', 'listbox');
+      list.hidden = true;
+      var opts = [];
+      Array.from(select.options).forEach(function (option, index) {
+        var item = document.createElement('div');
+        item.className = 'dd-opt';
+        item.setAttribute('role', 'option');
+        item.tabIndex = -1;
+        item.textContent = option.textContent;
+        item.addEventListener('click', function () { choose(index); closeDd(); button.focus(); });
+        list.appendChild(item);
+        opts.push(item);
+      });
+      function paint() {
+        var i = select.selectedIndex;
+        text.textContent = i >= 0 ? select.options[i].textContent : '';
+        opts.forEach(function (o, k) { o.setAttribute('aria-selected', String(k === i)); });
+      }
+      function choose(index) {
+        if (select.selectedIndex === index) return;
+        select.selectedIndex = index;
+        paint();
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      function open() {
+        closeDd();
+        list.hidden = false;
+        button.setAttribute('aria-expanded', 'true');
+        openDd = { list: list, button: button };
+        var current = opts[Math.max(select.selectedIndex, 0)];
+        if (current) current.focus();
+      }
+      button.addEventListener('click', function () { if (list.hidden) open(); else closeDd(); });
+      button.addEventListener('keydown', function (event) {
+        if (['ArrowDown', 'ArrowUp', ' ', 'Enter'].indexOf(event.key) !== -1) { event.preventDefault(); open(); }
+      });
+      list.addEventListener('keydown', function (event) {
+        var i = opts.indexOf(document.activeElement);
+        var key = event.key;
+        if (key === 'ArrowDown') { event.preventDefault(); opts[Math.min(i + 1, opts.length - 1)].focus(); }
+        else if (key === 'ArrowUp') { event.preventDefault(); opts[Math.max(i - 1, 0)].focus(); }
+        else if (key === 'Home') { event.preventDefault(); opts[0].focus(); }
+        else if (key === 'End') { event.preventDefault(); opts[opts.length - 1].focus(); }
+        else if (key === 'Enter' || key === ' ') { event.preventDefault(); if (i >= 0) choose(i); closeDd(); button.focus(); }
+        else if (key === 'Escape') { event.preventDefault(); closeDd(); button.focus(); }
+        else if (key === 'Tab') { closeDd(); }
+        else if (key.length === 1) {
+          var c = key.toLowerCase();
+          var starts = function (o) { return o.textContent.toLowerCase().indexOf(c) === 0; };
+          var next = opts.slice(i + 1).filter(starts)[0] || opts.filter(starts)[0];
+          if (next) next.focus();
+        }
+      });
+      select.addEventListener('change', paint);
+      select.classList.add('dd-native');
+      select.tabIndex = -1;
+      select.setAttribute('aria-hidden', 'true');
+      paint();
+      dd.appendChild(button);
+      dd.appendChild(list);
+      select.parentNode.insertBefore(dd, select.nextSibling);
+    });
+    document.addEventListener('click', function (event) {
+      if (openDd && !(event.target.closest && event.target.closest('.dd'))) closeDd();
+    });
+    document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeDd(); });
+  })();
+
   var opener = document.getElementById('palette-open');
   if (!opener) return;
   var palette = null, input = null, list = null, hits = [], timer = null;

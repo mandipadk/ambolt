@@ -75,9 +75,19 @@ pub async fn register_begin(State(app): State<AppState>, viewer: Viewer) -> Resp
     let exclude = (!existing.is_empty()).then_some(existing);
     match webauthn.start_passkey_registration(uuid, who.as_str(), who.as_str(), exclude) {
         Ok((challenge, state)) => {
+            // Sign-in is by discovery, so the credential must be
+            // discoverable; the library's builder asks for the opposite,
+            // which keeps synced passkeys (iCloud Keychain, Google
+            // Password Manager) off the browser's menu.
+            let mut options = serde_json::to_value(&challenge).expect("options serialise");
+            if let Some(selection) = options["publicKey"]["authenticatorSelection"].as_object_mut()
+            {
+                selection.insert("residentKey".into(), json!("required"));
+                selection.insert("requireResidentKey".into(), json!(true));
+            }
             let state_json = serde_json::to_string(&state).expect("state serialises");
             match app.with_store(|s| s.put_webauthn_state(Some(&who), "register", &state_json)) {
-                Ok(id) => Json(json!({ "id": id, "options": challenge })).into_response(),
+                Ok(id) => Json(json!({ "id": id, "options": options })).into_response(),
                 Err(err) => crate::web::oops(err),
             }
         }
@@ -312,19 +322,13 @@ async fn settle(
     stored: Vec<Passkey>,
     result: &AuthenticationResult,
 ) -> Response {
-    // The stored key learns the new counter. A counter that did not move
-    // on an authenticator that is not backed up can mean a clone; the
-    // library says so, and a clone is refused rather than trusted.
+    // The library has already applied the counter rule and refused a
+    // clone before this point. Synced passkeys report a counter of zero
+    // for ever, so "nothing to update" is the ordinary case, not a sign.
     let Some(mut key) = stored.into_iter().find(|k| k.cred_id() == result.cred_id()) else {
         return bad("that passkey is not registered here");
     };
-    if key.update_credential(result) == Some(false) {
-        tracing::warn!(
-            who = who.as_str(),
-            "passkey sign-in refused: counter did not advance"
-        );
-        return bad("that passkey looks cloned and was refused");
-    }
+    key.update_credential(result);
     let json = serde_json::to_string(&key).expect("passkey serialises");
     if let Err(err) = app.with_store(|s| s.touch_passkey(&cred_id, &json)) {
         return crate::web::oops(err);
@@ -428,7 +432,9 @@ pub const SCRIPT: &str = r#"(function () {
   var login = document.querySelector('[data-passkey="login"]');
   if (login) login.addEventListener('click', function () {
     if (!window.PublicKeyCredential) { say(login, 'This browser has no passkey support.'); return; }
-    post('/passkeys/login/begin').then(function (begin) {
+    var named = document.getElementById('principal');
+    var who = named && named.value ? named.value.trim() : '';
+    post('/passkeys/login/begin', who ? { who: who } : {}).then(function (begin) {
       var pk = begin.options.publicKey;
       pk.challenge = dec(pk.challenge);
       (pk.allowCredentials || []).forEach(function (c) { c.id = dec(c.id); });
