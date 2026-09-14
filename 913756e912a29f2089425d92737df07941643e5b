@@ -1,0 +1,150 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ibump0137",
+      "id": "c-0xyvqharra7z01j2174b4ep19n",
+      "landed_oid": "913756e912a29f2089425d92737df07941643e5b",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 137,
+      "opened_at": "2026-09-14T00:21:30.703270705Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-79tvcxap6dnqzj460459ytg2vn",
+      "title": "Call the tree alpha.3",
+      "updated_at": "2026-09-14T00:22:30.95048916Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-0xyvqharra7z01j2174b4ep19n",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-2b9925ajsdz8et4d29bq5txctk",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1263,
+        "summary": "cargo test --workspace: the suite, all green; cargo check confirms the lock",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-0xyvqharra7z01j2174b4ep19n",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-5rsgftppw9cf37rzmmvbnwdp52",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1264,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "913756e912a29f2089425d92737df07941643e5b",
+    "landed_at": "2026-09-14T00:22:30.95048916Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-0xyvqharra7z01j2174b4ep19n",
+      "commit_oid": "913756e912a29f2089425d92737df07941643e5b",
+      "message": "Call the tree alpha.3\n\nThe workspace version and the README install lines say 0.1.0-alpha.3,\nso the binary and the archive built from this tree name the release\nthey are.\n\nChange-Id: Ibump0137\nTask: t-79tvcxap6dnqzj460459ytg2vn\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "README.md"
+      ],
+      "session": null
+    },
+    "seq": 1268,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-2b9925ajsdz8et4d29bq5txctk, cl-5rsgftppw9cf37rzmmvbnwdp52",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-5rsgftppw9cf37rzmmvbnwdp52",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 178 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 2 path(s) outside docs/, *.md: Cargo.lock, Cargo.toml",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-0xyvqharra7z01j2174b4ep19n",
+        "claim": "cl-2b9925ajsdz8et4d29bq5txctk",
+        "command": "cargo test --workspace",
+        "id": "vr-3aqevy5sa21x7qmewtdrttv626",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1265
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-0xyvqharra7z01j2174b4ep19n",
+        "claim": "cl-5rsgftppw9cf37rzmmvbnwdp52",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-5wy8cc2jjh5j6j7xve2vs3q3rh",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.66s",
+        "revision": 1,
+        "seq": 1266
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "UBEFPkBfd47lt65c4TK7LsymI1f68ewWVs6h2lVuNebxY/8nE72+cg2rq3ePRz+OBZPSVmHkMXPjdXogXHYjDQ=="
+  }
+}
