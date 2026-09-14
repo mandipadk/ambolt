@@ -19,7 +19,7 @@ dependencies = [
 
 [[package]]
 name = "ambolt"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "ambolt-client",
  "ambolt-core",
@@ -47,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "ambolt-client"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "ambolt-core"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "argon2",
  "jiff",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "ambolt-git"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "bytes",
  "futures-core",
@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "ambolt-server"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "ambolt-core",
  "ambolt-git",

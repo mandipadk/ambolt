@@ -132,9 +132,9 @@ checksums that cover it; everywhere else, build from source:
 
 ```sh
 # x86_64 Linux
-curl -sSfLO https://dl.ambolt.sh/releases/0.1.0-alpha.2/ambolt-0.1.0-alpha.2-x86_64-linux.tar.gz
-curl -sSfL https://dl.ambolt.sh/releases/0.1.0-alpha.2/SHA256SUMS | sha256sum -c --ignore-missing
-tar xzf ambolt-0.1.0-alpha.2-x86_64-linux.tar.gz && sudo install ambolt-0.1.0-alpha.2-x86_64-linux/ambolt /usr/local/bin/
+curl -sSfLO https://dl.ambolt.sh/releases/0.1.0-alpha.3/ambolt-0.1.0-alpha.3-x86_64-linux.tar.gz
+curl -sSfL https://dl.ambolt.sh/releases/0.1.0-alpha.3/SHA256SUMS | sha256sum -c --ignore-missing
+tar xzf ambolt-0.1.0-alpha.3-x86_64-linux.tar.gz && sudo install ambolt-0.1.0-alpha.3-x86_64-linux/ambolt /usr/local/bin/
 
 # anywhere with a Rust toolchain
 cargo install --git https://ambolt.sh/git/ambolt/ambolt ambolt
