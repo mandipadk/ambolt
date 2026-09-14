@@ -68,7 +68,7 @@ async fn ownership_is_offered_on_settings_and_accepted_from_the_inbox() {
     assert_eq!(location, "/ada/demo/settings?done=1");
     let (_, inbox) = page_with_cookie(app, "/inbox", &bee).await;
     assert!(
-        inbox.contains("ada offered you ownership of ada/demo"),
+        inbox.contains("</b> offered you ownership of ada/demo"),
         "{inbox}"
     );
     assert!(inbox.contains(r#"href="/ada/demo/transfer""#));

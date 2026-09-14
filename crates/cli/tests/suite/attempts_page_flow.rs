@@ -119,7 +119,7 @@ async fn the_task_page_reads_the_attempts_and_takes_the_comparison() {
     assert!(page.contains("Attempts"), "{page}");
     assert!(page.contains("claimed by 2 of 2"), "{page}");
     assert!(
-        page.contains("r1 aaaaaaa") && page.contains("r2 bbbbbbb"),
+        page.contains("revision 1 aaaaaaa") && page.contains("revision 2 bbbbbbb"),
         "{page}"
     );
     assert!(page.contains("(2 files)"), "{page}");
@@ -136,7 +136,7 @@ async fn the_task_page_reads_the_attempts_and_takes_the_comparison() {
         "{page}"
     );
     assert!(
-        page.contains(r#"<option value="2">r2 by arbiter"#),
+        page.contains(r#"<option value="2">Revision 2 by arbiter"#),
         "{page}"
     );
 
@@ -152,7 +152,10 @@ async fn the_task_page_reads_the_attempts_and_takes_the_comparison() {
     assert_eq!(status, StatusCode::SEE_OTHER, "{location}");
     assert_eq!(location, format!("/tasks/{task}"), "back to the task");
     let (_, page) = page_with_cookie(app, &format!("/tasks/{task}"), &ada).await;
-    assert!(page.contains("preferred r2 over r1"), "{page}");
+    assert!(
+        page.contains("preferred revision 2 over revision 1"),
+        "{page}"
+    );
     assert!(
         page.contains("r2 covers more and carries a claim."),
         "{page}"
@@ -180,5 +183,5 @@ async fn the_task_page_reads_the_attempts_and_takes_the_comparison() {
 
     // The change page says so too.
     let (_, page) = page_with_cookie(app, "/ada/demo/changes/1", &ada).await;
-    assert!(page.contains("r2 preferred"), "{page}");
+    assert!(page.contains("Revision 2 preferred"), "{page}");
 }

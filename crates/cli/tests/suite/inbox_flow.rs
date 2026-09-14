@@ -137,7 +137,7 @@ async fn the_page_shows_the_count_and_the_words() {
     let (status, page) = page_with_cookie(app, "/inbox", &cookie).await;
     assert_eq!(status, StatusCode::OK);
     assert!(
-        page.contains("scout opened #1 in ada/demo"),
+        page.contains("</b> opened #1 in ada/demo"),
         "the notice reads as a sentence"
     );
     assert!(page.contains("1 unread"));

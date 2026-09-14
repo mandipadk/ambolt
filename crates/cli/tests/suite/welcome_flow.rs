@@ -110,10 +110,9 @@ async fn a_company_asks_on_the_same_list_and_the_page_says_the_numbers() {
     )
     .into_owned();
     assert!(
-        page.contains("An account here gets 50 repositories, 25 agents"),
-        "the page says what an account gets, in numbers: {page}"
+        !page.contains("An account here gets"),
+        "the allowance sentence left the front page: {page}"
     );
-    assert!(page.contains("5.0 GiB of git storage"), "{page}");
     assert!(page.contains("for my company"), "{page}");
 }
 

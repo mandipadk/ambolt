@@ -61,7 +61,7 @@ fn sprite() -> Markup {
 /// `ic sm` 15, `ic lg` 22.
 pub fn ic(name: &str, size: &str) -> Markup {
     html! {
-        svg class={ "ic" @if !size.is_empty() { " " (size) } } {
+        svg class={ "ic" @if !size.is_empty() { " " (size) } } aria-hidden="true" {
             use href={ "#i-" (name) } {}
         }
     }
@@ -280,6 +280,7 @@ fn frame_in(
                     Some(who) => {
                         @let viewer = who.viewer();
                         div class="app" {
+                            a class="skip" href="#content" { "Skip to content" }
                             (sidebar(theme, who, section.or(repo)))
                             main class="main" {
                                 (headrow(viewer, repo, section, title))
@@ -309,6 +310,7 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
     let chrome = who.chrome();
     let viewer = who.viewer();
     let on = |key: &str| if current == Some(key) { " on" } else { "" };
+    let here = |key: &str| (current == Some(key)).then_some("page");
     let only = |key: &str| (current == Some(key)).then_some("on");
     let chosen = |t: Theme| (theme == t).then_some("on");
     html! {
@@ -317,20 +319,20 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
                 span class="orgmark" { (mark()) }
                 span class="name" { "ambolt" }
             }
-            a class="search" href="/search" id="palette-open" {
-                (ic("search", "sm"))
-                span { "Search or jump to" }
-                kbd { "⌘K" }
-            }
             @if viewer.is_some() {
+                a class="search" href="/search" id="palette-open" {
+                    (ic("search", "sm"))
+                    span { "Search or jump to" }
+                    kbd { "⌘K" }
+                }
                 div class="nav" {
-                    a class={ "item" (on("home")) } href="/" { (ic("home", "")) span { "Home" } }
-                    a class={ "item" (on("inbox")) } href="/inbox" {
+                    a class={ "item" (on("home")) } aria-current=[here("home")] href="/" { (ic("home", "")) span { "Home" } }
+                    a class={ "item" (on("inbox")) } aria-current=[here("inbox")] href="/inbox" {
                         (ic("inbox", "")) span { "Inbox" }
                         @if chrome.unread > 0 { span class="badge" { (chrome.unread) } }
                     }
-                    a class={ "item" (on("tasks")) } href="/tasks" { (ic("tasks", "")) span { "Tasks" } }
-                    a class={ "item" (on("agents")) } href="/agents" { (ic("agents", "")) span { "Agents" } }
+                    a class={ "item" (on("tasks")) } aria-current=[here("tasks")] href="/tasks" { (ic("tasks", "")) span { "Tasks" } }
+                    a class={ "item" (on("agents")) } aria-current=[here("agents")] href="/agents" { (ic("agents", "")) span { "Agents" } }
                 }
             }
             h4 {
@@ -368,10 +370,10 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
             @if chrome.admin {
                 h4 { "Operator" }
                 div class="nav" {
-                    a class={ "item" (on("people")) } href="/people" { (ic("user", "")) span { "People" } }
-                    a class={ "item" (on("teams")) } href="/teams" { (ic("agents", "")) span { "Teams" } }
-                    a class={ "item" (on("reports")) } href="/reports" { (ic("alert", "")) span { "Reports" } }
-                    a class={ "item" (on("log")) } href="/log" { (ic("activity", "")) span { "Forge log" } }
+                    a class={ "item" (on("people")) } aria-current=[here("people")] href="/people" { (ic("user", "")) span { "People" } }
+                    a class={ "item" (on("teams")) } aria-current=[here("teams")] href="/teams" { (ic("agents", "")) span { "Teams" } }
+                    a class={ "item" (on("reports")) } aria-current=[here("reports")] href="/reports" { (ic("alert", "")) span { "Reports" } }
+                    a class={ "item" (on("log")) } aria-current=[here("log")] href="/log" { (ic("activity", "")) span { "Forge log" } }
                 }
             }
             @match viewer {
@@ -509,7 +511,7 @@ fn tab(repo: &str, path: &str, icon: &str, label: &str, count: usize, active: bo
 
 fn tab_to(href: &str, icon: &str, label: &str, count: usize, active: bool) -> Markup {
     html! {
-        a class={ "tab" @if active { " on" } } href=(href) {
+        a class={ "tab" @if active { " on" } } href=(href) aria-current=[active.then_some("page")] {
             (ic(icon, ""))
             (label)
             @if count > 0 { span class="n" { (count) } }
@@ -543,7 +545,7 @@ pub fn signup(theme: Theme, state: super::Signup, error: Option<&str>) -> Markup
                     @if open {
                         form method="post" action="/signup" {
                             div class="field" {
-                                label for="name" { "Name" }
+                                label for="name" { "Username" }
                                 input id="name" name="name" type="text" autocomplete="username"
                                     autocapitalize="none" autofocus required pattern="[a-z0-9-]{2,64}";
                                 p class="hint" { "Lowercase letters, digits and hyphens. Your repositories live under it." }
@@ -578,27 +580,6 @@ pub fn signup(theme: Theme, state: super::Signup, error: Option<&str>) -> Markup
     )
 }
 
-/// What an account here gets, said in numbers from the forge's own
-/// defaults; "no limit" where there is none.
-fn allowance_words(quota: &ambolt_core::Quota) -> String {
-    let count = |n: Option<u32>, what: &str| match n {
-        Some(n) => format!("{n} {what}"),
-        None => format!("{what} without limit"),
-    };
-    let disk = match quota.disk {
-        Some(bytes) => format!("{} of git storage", crate::in_bytes(bytes)),
-        None => "git storage without limit".to_owned(),
-    };
-    format!(
-        "{}, {}, {} open at once, {} open at once, and {}",
-        count(quota.repos, "repositories"),
-        count(quota.agents, "agents"),
-        count(quota.open_tasks, "tasks"),
-        count(quota.open_changes, "changes"),
-        disk
-    )
-}
-
 /// What the front page can say in numbers, all counted from this forge
 /// so none of them is a claim. A number that cannot be computed is left
 /// out rather than made up.
@@ -628,13 +609,7 @@ fn story_req(story: Option<&str>, met: bool, rule: &str, evidence: Option<&str>)
 /// The front page: what this is, shown rather than described, and a way
 /// to be told when it opens up. Everything animated has a resting state
 /// the page shows without a script.
-pub fn welcome(
-    theme: Theme,
-    joined: bool,
-    error: Option<&str>,
-    quota: &ambolt_core::Quota,
-    numbers: &FrontNumbers,
-) -> Markup {
+pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontNumbers) -> Markup {
     layout(
         theme,
         None,
@@ -784,7 +759,7 @@ pub fn welcome(
                             div class="stage" { div class="panel" {
                                 div class="row need" { span class="chip bad" { "Disputed" } span class="tt" { span class="t" { "Bound the blame page by file size" } span class="s" { "Runner disagreed with Quill · two attempts" } } span class="avs" {} span class="age" { "2 h" } }
                                 div class="row need" { span class="chip" { "Unreviewed" } span class="tt" { span class="t" { "Write the agent quickstart" } span class="s" { "Scout stopped and left a lesson" } } span class="avs" {} span class="age" { "2 h" } }
-                                div class="row need" { span class="chip acc" { "Spot check" } span class="tt" { span class="t" { "Rename the client crate" } span class="s" { "drawn · nobody has looked" } } span class="avs" {} span class="age" { "4 h" } }
+                                div class="row need" { span class="chip acc" { "Spot check" } span class="tt" { span class="t" { "Rename the client crate" } span class="s" { "picked · nobody has looked" } } span class="avs" {} span class="age" { "4 h" } }
                             } }
                         }
                         div class="feat flip" {
@@ -862,7 +837,7 @@ pub fn welcome(
                                 button class="btn" type="submit" { "Join the waitlist" }
                             }
                             @if let Some(error) = error { p class="error" { (error) } }
-                            p class="alt" { "An account here gets " (allowance_words(quota)) ". Name a company and we make it a forge of its own instead, with its people and organisations as owners." }
+                            p class="alt" { "Name a company and we make it a forge of its own instead, with its people and organisations as owners." }
                             p class="alt" { "One address, kept so we can tell you when this opens up. Ask and it is deleted: it is deliberately not written to the log, because a log that cannot forget is the wrong place for a person's details." }
                         }
                         p class="alt" { "Or run it now: " code { "cargo install --git https://ambolt.sh/git/ambolt/ambolt ambolt" } }
@@ -1099,7 +1074,7 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                                 span class="t" { (item.change.title) }
                                 span class="s" {
                                     (entry.repo) " #" (item.change.number)
-                                    @if let Some(draw) = &item.drawn { " · drawn " (draw.day) }
+                                    @if let Some(draw) = &item.drawn { " · picked " (draw.day) }
                                     @for signal in item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn).take(2) {
                                         " · " (signal.description)
                                     }
@@ -1131,10 +1106,10 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                 }
             }
 
-            @if !data.recent.is_empty() {
                 div class="sec" {
                     div class="sh" { h2 { "Across your repositories" } }
                     div class="panel" {
+                        @if data.recent.is_empty() { div class="empty" { "Nothing has happened across your repositories yet." } }
                         @for line in &data.recent {
                             @let (display, agent) = people.name(&line.actor);
                             div class="row feed" {
@@ -1149,7 +1124,8 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                         }
                     }
                 }
-            }
+
+
 
             @if !data.lessons.is_empty() {
                 div class="sec" {
@@ -1200,7 +1176,7 @@ fn attention_chip(item: &ambolt_core::AttentionItem) -> (&'static str, &'static 
         Some(SignalKind::Blocked) => ("chip bad", "Blocked"),
         Some(SignalKind::NoExecutedCheck) => ("chip", "No check run"),
         Some(SignalKind::SpotCheck) => ("chip acc", "Spot check"),
-        _ if item.drawn.is_some() => ("chip acc", "Drawn"),
+        _ if item.drawn.is_some() => ("chip acc", "Picked"),
         _ => ("chip", "Unreviewed"),
     }
 }
@@ -1473,14 +1449,19 @@ pub fn inbox(
                                 i class={ "dot" @if !notice.read { " acc" } } {}
                                 (avatar(notice.actor.as_str(), display, agent, false))
                                 span class="tt" {
-                                    span class="t" { (notice.what) }
+                                    span class="t" {
+                                        @match notice.what.strip_prefix(notice.actor.as_str()).filter(|rest| rest.starts_with(' ')) {
+                                            Some(rest) => { b { (display) } (rest) }
+                                            None => { (notice.what) }
+                                        }
+                                    }
                                     span class="s" {
                                         @if let Some(repo) = &notice.repo { (repo) }
                                         @if let Some(number) = notice.number { " #" (number) }
                                     }
                                 }
                                 span class="chip" { (notice_kind_words(&notice.kind)) }
-                                span class="age" title=(notice.ts) { (clock_of(&notice.ts)) }
+                                span class="age" title=(notice.ts) { (ago(&notice.ts)) }
                             }
                         }
                     }
@@ -1841,13 +1822,13 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                             b { (display) }
                                             @if chosen { span class="chip acc" { (ic("check", "")) "chosen" } }
                                             @for session in &attempt.sessions {
-                                                span class="chip" { "session " (short(session.id.as_str())) " · " (session.state.as_str()) }
+                                                span class="chip" { "session · " (session.state.as_str()) }
                                             }
                                         }
                                         div class="cmd" {
                                             @for (index, revision) in attempt.revisions.iter().enumerate() {
                                                 @if index > 0 { " · " }
-                                                "r" (revision.number) " " (short(&revision.commit_oid))
+                                                "revision " (revision.number) " " (short(&revision.commit_oid))
                                                 @if !revision.paths.is_empty() { " (" (revision.paths.len()) " files)" }
                                             }
                                         }
@@ -1869,7 +1850,7 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                             div {
                                                 div class="h" {
                                                     b { (display) }
-                                                    span class="sec2" { "preferred r" (preference.revision) " over " @for (i, n) in preference.over.iter().enumerate() { @if i > 0 { ", " } "r" (n) } }
+                                                    span class="sec2" { "preferred revision " (preference.revision) " over " @for (i, n) in preference.over.iter().enumerate() { @if i > 0 { ", " } "revision " (n) } }
                                                     span class="sec3" { (short_day(&preference.at)) }
                                                 }
                                                 q { (preference.rationale) }
@@ -1884,10 +1865,10 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                     select class="input sm" name="revision" aria-label="Revision" {
                                         @for attempt in &attempts {
                                             @let latest = attempt.revisions.last().expect("an attempt has a revision");
-                                            option value=(latest.number) { "r" (latest.number) " by " (attempt.by) }
+                                            option value=(latest.number) { "Revision " (latest.number) " by " (attempt.by) }
                                         }
                                     }
-                                    input class="input sm" type="text" name="rationale" placeholder="Why this one and not the others" required;
+                                    input class="input sm" type="text" name="rationale" placeholder="Why this one and not the others" aria-label="Why this one and not the others" required;
                                     button class="btn2 sm" type="submit" { "Prefer" }
                                 }
                             }
@@ -1895,7 +1876,7 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                     }
                     @if let Some(trace) = &f.trace {
                         div class="sec" {
-                            div class="sh" { h2 { "Readiness of #" (f.change.number) } span class="n" { "revision " (f.change.judged_revision()) } }
+                            div class="sh" { h2 { "Before #" (f.change.number) " lands" } span class="n" { "revision " (f.change.judged_revision()) } }
                             div class="panel" {
                                 div class="pad reqs" {
                                     @for requirement in trace.requirements.iter().filter(|r| !r.satisfied) { (requirement_row(requirement)) }
@@ -1918,7 +1899,7 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                     span class="t" { (display) " " span class="sec3" { (session.state.as_str()) } }
                                     @if let Some(outcome) = &session.outcome { span class="s wrap" { (outcome) } }
                                 }
-                                span class="age" { (short(session.id.as_str())) }
+                                span class="age" title=(session.id.as_str()) { (session.state.as_str()) }
                             }
                         }
                     }
@@ -2090,10 +2071,10 @@ pub fn repo_settings(
                                 }
                             }
                             div class="field" {
-                                label for="attention_budget" { "Human looks drawn per day" }
+                                label for="attention_budget" { "Changes picked for a human look, per day" }
                                 input class="input sm num" id="attention_budget" name="attention_budget" type="number" min="0" max="100"
                                       value=(policy.attention_budget.map(|n| n.to_string()).unwrap_or_default());
-                                span class="hint" { "Empty for none. A drawn change waits for a person to look before it lands." }
+                                span class="hint" { "Empty for none. A picked change waits for a person to look before it lands." }
                             }
                             div class="field" {
                                 label { "Earned trust" }
@@ -3973,7 +3954,7 @@ pub fn change(page: ChangePage) -> Markup {
                     @if queued {
                         form class="dequeue" method="post" action={ (base) "/dequeue" } {
                             span { "In the queue; it lands from here." }
-                            input class="input sm" type="text" name="reason" placeholder="Why take it out (optional)" autocomplete="off";
+                            input class="input sm" type="text" name="reason" placeholder="Why take it out (optional)" aria-label="Why take it out (optional)" autocomplete="off";
                             button class="btn2 sm" type="submit" { "Take it out" }
                         }
                     } @else {
@@ -4016,11 +3997,11 @@ pub fn change(page: ChangePage) -> Markup {
                         option value="manual" { "Looked at it myself" }
                         option value="reasoning" { "Reasoning" }
                     }
-                    input class="input sm" type="text" name="command" placeholder="Command that produced it, so a runner can re-run it" autocomplete="off";
-                    input class="input sm" type="text" name="summary" placeholder="What you saw" required;
-                    input class="input sm" type="text" name="unchecked" placeholder="What this did not check, comma-separated";
+                    input class="input sm" type="text" name="command" placeholder="Command that produced it, so a runner can re-run it" aria-label="Command that produced it, so a runner can re-run it" autocomplete="off";
+                    input class="input sm" type="text" name="summary" placeholder="What you saw" aria-label="What you saw" required;
+                    input class="input sm" type="text" name="unchecked" placeholder="What this did not check, comma-separated" aria-label="What this did not check, comma-separated";
                     div class="line" {
-                        button class="btn sm" type="submit" name="passed" value="yes" { "Passed" }
+                        button class="btn2 sm" type="submit" name="passed" value="yes" { "Passed" }
                         button class="btn2 sm" type="submit" name="passed" value="no" { "Failed" }
                     }
                 }
@@ -4101,7 +4082,7 @@ pub fn change(page: ChangePage) -> Markup {
                         }
                         @if change.competing {
                             @match change.preferred_revision {
-                                Some(preferred) => { span class="chip" { (ic("rerun", "")) "r" (preferred) " preferred" } }
+                                Some(preferred) => { span class="chip" { (ic("rerun", "")) "Revision " (preferred) " preferred" } }
                                 None => { span class="chip" { (ic("rerun", "")) (authors.len()) " attempts" } }
                             }
                         }
@@ -4140,7 +4121,7 @@ pub fn change(page: ChangePage) -> Markup {
                             summary class="btn2 sm" aria-label="More" { (ic("more", "sm")) }
                             form class="pop" method="post" action={ (base) "/abandon" } {
                                 div class="lab" { "Abandon this change" }
-                                input class="input sm" type="text" name="reason" placeholder="Why, for whoever reads the log" required autocomplete="off";
+                                input class="input sm" type="text" name="reason" placeholder="Why, for whoever reads the log" aria-label="Why, for whoever reads the log" required autocomplete="off";
                                 button class="danger" type="submit" { (ic("x", "sm")) "Abandon" }
                             }
                         }
@@ -4160,7 +4141,7 @@ pub fn change(page: ChangePage) -> Markup {
                         @if shown > 1 {
                             @let previous = compared.unwrap_or(shown - 1);
                             a class=[compared.is_some().then_some("on")]
-                              href={ (base) "?r=" (shown) "&vs=" (shown - 1) }
+                              href={ (base) "?r=" (shown) "&vs=" (previous) }
                               title="What changed between the two revisions" {
                                 "What changed " (previous) " → " (shown)
                             }
@@ -4184,7 +4165,7 @@ pub fn change(page: ChangePage) -> Markup {
                                 @if signed && change.preferred_revision.is_none() {
                                     form class="choose" method="post" action={ (base) "/prefer" } {
                                         input type="hidden" name="revision" value=(revision.number);
-                                        input class="input sm" type="text" name="rationale" placeholder="Why this one and not the others" required;
+                                        input class="input sm" type="text" name="rationale" placeholder="Why this one and not the others" aria-label="Why this one and not the others" required;
                                         button class="btn2 sm" type="submit" { "Choose this attempt" }
                                     }
                                 }
@@ -4287,7 +4268,7 @@ pub fn change(page: ChangePage) -> Markup {
                             option value="design" { "Design" }
                             option value="style" { "Style" }
                         }
-                        input class="input sm" type="text" name="rationale" placeholder="Why, for the record" required;
+                        input class="input sm" type="text" name="rationale" placeholder="Why, for the record" aria-label="Why, for the record" required;
                         button class="btn2 sm" type="submit" name="disposition" value="approve" { (ic("check", "sm")) "Approve" }
                         button class="btn2 sm" type="submit" name="disposition" value="concern" { (ic("alert", "sm")) "Concern" }
                         button class="btn2 sm danger" type="submit" name="disposition" value="block" { (ic("x", "sm")) "Block" }
@@ -4335,7 +4316,7 @@ fn requirement_words(description: &str) -> String {
         }
         "owner's earned trust" => "The owner has earned trust".into(),
         d if d.starts_with("a human has looked at this change") => {
-            "A person has looked at it since it was drawn for one".into()
+            "A person has looked at it since it was picked for one".into()
         }
         d if d.starts_with("approved independently") => {
             "Someone other than the author approves it".into()
@@ -4471,7 +4452,7 @@ fn closure_words(thread: &Thread) -> String {
         Some(done) => match done.how {
             Resolution::Answered => format!("answered by {}", done.by),
             Resolution::Fixed => format!(
-                "fixed in r{} by {}",
+                "fixed in revision {} by {}",
                 done.revision.unwrap_or_default(),
                 done.by
             ),
@@ -4529,7 +4510,7 @@ fn thread_block(
                     div class="act" {
                         form method="post" action={ "/" (repo) "/changes/" (change.number) "/threads/" (thread.id.as_str()) "/reply" } {
                             input type="hidden" name="revision" value=(shown);
-                            input class="input sm" type="text" name="body" placeholder="Reply" required autocomplete="off";
+                            input class="input sm" type="text" name="body" placeholder="Reply" aria-label="Reply" required autocomplete="off";
                             button class="btn2 sm" type="submit" { "Reply" }
                         }
                         form class="resolve" method="post" action={ "/" (repo) "/changes/" (change.number) "/threads/" (thread.id.as_str()) "/resolve" } {
@@ -4542,7 +4523,7 @@ fn thread_block(
                                 option value="withdrawn" { "Withdrawn" }
                                 option value="overruled" { "Overruled" }
                             }
-                            input class="input sm" type="text" name="note" placeholder="Why (optional)" autocomplete="off";
+                            input class="input sm" type="text" name="note" placeholder="Why (optional)" aria-label="Why (optional)" autocomplete="off";
                             button class="btn2 sm" type="submit" { "Resolve" }
                         }
                     }
@@ -4596,9 +4577,9 @@ fn thread_composer(repo: &str, change: &Change, shown: i64, at: &ThreadAt) -> Ma
                     option value="concern" { "Concern" }
                     option value="note" { "Note" }
                 }
-                input class="input sm" type="text" name="body" placeholder="What do you want to say?" required autofocus autocomplete="off";
-                button class="btn sm" type="submit" { "Open" }
-                a class="btn2 sm" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) } { "Cancel" }
+                input class="input sm" type="text" name="body" placeholder="What do you want to say?" aria-label="What do you want to say?" required autofocus autocomplete="off";
+                button class="btn2 sm" type="submit" { "Open" }
+                a class="ghost sm" href={ "/" (repo) "/changes/" (change.number) "?r=" (shown) } { "Cancel" }
             }
         }
     }
@@ -4794,7 +4775,7 @@ pub fn landing(
                             span class="tt" {
                                 span class="t" { "#" (item.change.number) " " (item.change.title) }
                                 span class="s" {
-                                    @if let Some(draw) = &item.drawn { "drawn " (draw.day) " · " }
+                                    @if let Some(draw) = &item.drawn { "picked " (draw.day) " · " }
                                     @for (index, signal) in item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn).enumerate() {
                                         @if index > 0 { " · " }
                                         (signal.description)
@@ -4964,9 +4945,9 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         } => (
             "dot ok",
             html! {
-                b { (actor) } " preferred r" (revision) " of " (change_num(numbers, change.as_str()))
+                b { (actor) } " preferred revision " (revision) " of " (change_num(numbers, change.as_str()))
                 @if !over.is_empty() {
-                    " over " @for (index, other) in over.iter().enumerate() { @if index > 0 { ", " } "r" (other) }
+                    " over " @for (index, other) in over.iter().enumerate() { @if index > 0 { ", " } "revision " (other) }
                 }
             },
         ),
@@ -4996,7 +4977,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         } => (
             "dot idle",
             html! {
-                b { (actor) } " pushed r" (revision) " of " (change_num(numbers, change.as_str()))
+                b { (actor) } " pushed revision " (revision) " of " (change_num(numbers, change.as_str()))
             },
         ),
         Event::VerdictGiven {
@@ -5058,14 +5039,14 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::GrantIssued { grantee, .. } => (
             "dot idle",
             html! {
-                b { (actor) } " granted " (grantee.as_str())
+                b { (actor) } " granted " (people.name(grantee).0)
             },
         ),
         Event::GrantRevoked { .. } => ("dot idle", html! { b { (actor) } " revoked a grant" }),
         Event::RepoCreated { repo, .. } => ("dot idle", html! { b { (actor) } " created " (repo) }),
         Event::PasswordSet { principal, .. } => (
             "dot idle",
-            html! { b { (actor) } " set the password for " (principal.as_str()) },
+            html! { b { (actor) } " set the password for " (people.name(principal).0) },
         ),
         Event::HistoryImported {
             branch,
@@ -5088,7 +5069,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::RepoTransferOffered { repo, to } => (
             "dot idle",
             html! {
-                b { (actor) } " offered " (repo) " to " (to.as_str())
+                b { (actor) } " offered " (repo) " to " (people.name(to).0)
             },
         ),
         Event::RepoTransferAccepted { repo } => (
@@ -5106,13 +5087,13 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::TeamMemberAdded { team, member } => (
             "dot idle",
             html! {
-                b { (actor) } " added " (member.as_str()) " to " (team.as_str())
+                b { (actor) } " added " (people.name(member).0) " to " (team.as_str())
             },
         ),
         Event::PasswordResetRequested { principal } => (
             "dot idle",
             html! {
-                b { (principal.as_str()) } " asked for a new sign-in link"
+                b { (people.name(principal).0) } " asked for a new sign-in link"
             },
         ),
         Event::ThreadOpened {
@@ -5135,12 +5116,12 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         } => (
             "dot idle",
             html! {
-                "the policy drew " (change_num(numbers, change.as_str())) " for a human look"
+                "the rules picked " (change_num(numbers, change.as_str())) " for a human look"
                 @if !signals.is_empty() {
                     ": " (signals.iter().map(|s| s.as_str().replace('_', " ")).collect::<Vec<_>>().join(", "))
                 }
                 @if !reviewers.is_empty() {
-                    " · asked " (reviewers.iter().map(|r| r.as_str()).collect::<Vec<_>>().join(", "))
+                    " · asked " (reviewers.iter().map(|r| people.name(r).0).collect::<Vec<_>>().join(", "))
                 }
             },
         ),
@@ -5167,13 +5148,13 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
             principal, issuer, ..
         } => (
             "dot idle",
-            html! { b { (principal.as_str()) } " linked an identity at " (issuer) },
+            html! { b { (people.name(principal).0) } " linked an identity at " (issuer) },
         ),
         Event::IdentityUnlinked {
             principal, issuer, ..
         } => (
             "dot idle",
-            html! { b { (principal.as_str()) } " unlinked an identity at " (issuer) },
+            html! { b { (people.name(principal).0) } " unlinked an identity at " (issuer) },
         ),
         Event::WorkloadBound {
             principal,
@@ -5181,7 +5162,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
             subject,
         } => (
             "dot idle",
-            html! { b { (actor) } " bound workload " (subject) " at " (issuer) " to " (principal.as_str()) },
+            html! { b { (actor) } " bound workload " (subject) " at " (issuer) " to " (people.name(principal).0) },
         ),
         Event::WorkloadUnbound {
             principal,
@@ -5189,7 +5170,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
             subject,
         } => (
             "dot idle",
-            html! { b { (actor) } " unbound workload " (subject) " at " (issuer) " from " (principal.as_str()) },
+            html! { b { (actor) } " unbound workload " (subject) " at " (issuer) " from " (people.name(principal).0) },
         ),
         Event::WorkloadCredentialMinted { issuer, until, .. } => (
             "dot idle",
@@ -5197,11 +5178,11 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         ),
         Event::PrincipalDeactivated { principal } => (
             "dot bad",
-            html! { b { (actor) } " deactivated " (principal.as_str()) },
+            html! { b { (actor) } " deactivated " (people.name(principal).0) },
         ),
         Event::PrincipalReactivated { principal } => (
             "dot ok",
-            html! { b { (actor) } " reactivated " (principal.as_str()) },
+            html! { b { (actor) } " reactivated " (people.name(principal).0) },
         ),
         Event::RepoRenamed { repo, to } => (
             "dot idle",
@@ -5238,7 +5219,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::TeamMemberRemoved { team, member } => (
             "dot idle",
             html! {
-                b { (actor) } " removed " (member.as_str()) " from " (team.as_str())
+                b { (actor) } " removed " (people.name(member).0) " from " (team.as_str())
             },
         ),
         Event::PolicySet { repo, .. } => (
@@ -5281,13 +5262,13 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::PrincipalRegistered { principal, .. } => (
             "dot idle",
             html! {
-                b { (actor) } " registered " (principal.as_str())
+                b { (actor) } " registered " (people.name(principal).0)
             },
         ),
         Event::QuotaSet { owner, .. } | Event::QuotaOverridden { owner, .. } => (
             "dot idle",
             html! {
-                b { (actor) } " set what " (owner.as_str()) " may take up"
+                b { (actor) } " set what " (people.name(owner).0) " may take up"
             },
         ),
         Event::TaskStateChanged { state, .. } => (
@@ -5321,7 +5302,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::TokenMinted { principal, .. } => (
             "dot idle",
             html! {
-                b { (actor) } " minted a token for " (principal.as_str())
+                b { (actor) } " minted a token for " (people.name(principal).0)
             },
         ),
         Event::TokenRevoked { .. } => ("dot idle", html! { b { (actor) } " revoked a token" }),
@@ -5330,6 +5311,33 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
 
 /// What kind of thing an event is, for the filter pills: the log's own
 /// tag, grouped the way a reader thinks about it.
+/// Every principal an event names on a page, the actor first, so the
+/// page can look their names up once.
+pub fn named_in(envelope: &Envelope) -> Vec<&str> {
+    let mut ids = vec![envelope.actor.as_str()];
+    match &envelope.event {
+        Event::GrantIssued { grantee, .. } => ids.push(grantee.as_str()),
+        Event::PasswordSet { principal, .. }
+        | Event::PasswordResetRequested { principal, .. }
+        | Event::IdentityLinked { principal, .. }
+        | Event::IdentityUnlinked { principal, .. }
+        | Event::WorkloadBound { principal, .. }
+        | Event::WorkloadUnbound { principal, .. }
+        | Event::PrincipalDeactivated { principal, .. }
+        | Event::PrincipalReactivated { principal, .. }
+        | Event::PrincipalRegistered { principal, .. }
+        | Event::TokenMinted { principal, .. } => ids.push(principal.as_str()),
+        Event::RepoTransferOffered { to, .. } => ids.push(to.as_str()),
+        Event::TeamMemberAdded { member, .. } | Event::TeamMemberRemoved { member, .. } => {
+            ids.push(member.as_str())
+        }
+        Event::QuotaSet { owner, .. } => ids.push(owner.as_str()),
+        Event::AttentionDrawn { reviewers, .. } => ids.extend(reviewers.iter().map(|r| r.as_str())),
+        _ => {}
+    }
+    ids
+}
+
 pub fn event_group(event: &Event) -> &'static str {
     let tag = serde_json::to_value(event)
         .ok()
@@ -5384,9 +5392,9 @@ fn event_days(
                             span class="s wrap" {
                                 @if let Some(Some(repo)) = scopes.and_then(|s| s.get(&envelope.seq.0)) { a class="chip" href={ "/" (repo) "/activity" } { (repo) } " " }
                                 (text)
-                                @if let Some(via) = &envelope.via { span class="sec3" { " · in session " (short(via.as_str())) } }
+                                @if let Some(via) = &envelope.via { span class="sec3" title=(via.as_str()) { " · in a session" } }
                             }
-                            span class="age" title=(envelope.ts) { (clock_of(&envelope.ts)) }
+                            span class="age" title=(envelope.ts) { (ago(&envelope.ts)) }
                         }
                     }
                 }
@@ -5404,6 +5412,8 @@ pub struct ActivityPage<'a> {
     pub events: &'a [Envelope],
     pub group: Option<&'a str>,
     pub people: &'a People,
+    /// Where the next window of events starts, when this one was full.
+    pub next: Option<i64>,
 }
 
 pub fn log(page: ActivityPage<'_>) -> Markup {
@@ -5416,6 +5426,7 @@ pub fn log(page: ActivityPage<'_>) -> Markup {
         events,
         group,
         people,
+        next,
     } = page;
     let refs: Refs = numbers
         .iter()
@@ -5444,8 +5455,8 @@ pub fn log(page: ActivityPage<'_>) -> Markup {
                 }
             }
             (event_days(&refs, events, people, None))
-            @if let Some(last) = events.last() {
-                div class="sec" { a class="btn2 sm" href={ "/" (repo) "/activity?after=" (last.seq.0) @if let Some(g) = group { "&kind=" (g) } } { "Later events" } }
+            @if let Some(next) = next {
+                div class="sec" { a class="btn2 sm" href={ "/" (repo) "/activity?after=" (next) @if let Some(g) = group { "&kind=" (g) } } { "Later events" } }
             }
         },
     )
@@ -5843,6 +5854,7 @@ pub fn lessons(
     repo: &str,
     search: Option<&str>,
     lessons: &[ambolt_core::Lesson],
+    people: &People,
 ) -> Markup {
     layout_reading(
         theme,
@@ -5871,8 +5883,9 @@ pub fn lessons(
                         }
                     }
                     @for lesson in lessons {
+                        @let (display, agent) = people.name(&lesson.agent);
                         div class="row ls" {
-                            (avatar(lesson.agent.as_str(), lesson.agent.as_str(), true, false))
+                            (avatar(lesson.agent.as_str(), display, agent, false))
                             span class="tt" {
                                 span class="t" {
                                     (lesson.task_title) " "
@@ -5880,7 +5893,7 @@ pub fn lessons(
                                 }
                                 span class="s wrap" { (lesson.outcome) }
                             }
-                            span class="age" { (lesson.agent) }
+                            span class="age" { (display) }
                         }
                     }
                     div class="foot" { (ic("sparkle", "sm")) "When an agent stops, it says why. Those reasons are searched before the next attempt." }

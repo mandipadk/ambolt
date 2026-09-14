@@ -313,7 +313,7 @@ fn hit_href(hit: &ambolt_core::SearchHit) -> String {
     match (hit.kind, &hit.repo, hit.number, &hit.principal) {
         (Change, Some(repo), Some(number), _) => format!("/{repo}/changes/{number}"),
         (Repository, Some(repo), _, _) => format!("/{repo}"),
-        (Task, Some(repo), _, _) => format!("/{repo}/changes"),
+        (Task, Some(repo), _, _) => format!("/tasks?repo={repo}"),
         (Lesson, Some(repo), _, _) => format!("/{repo}/lessons"),
         (Person, _, _, Some(who)) => format!("/search?q=by:{}", urlencode(who.as_str())),
         _ => "/".to_owned(),
@@ -2384,9 +2384,6 @@ async fn root(
     Query(flash): Query<LandingQuery>,
 ) -> Response {
     let Some(viewer) = viewer_from(&headers, &app) else {
-        // What an account here gets, in numbers: the forge's defaults,
-        // which are what a new person is given.
-        let quota = app.with_store(|s| s.default_quota());
         // The numbers on the front page are the forge's own; one that
         // cannot be counted is left off the page.
         let numbers = match app.with_store(|s| s.metrics()) {
@@ -2401,7 +2398,6 @@ async fn root(
             theme,
             flash.joined.is_some(),
             flash.error.as_deref(),
-            &quota,
             &numbers,
         )
         .into_response();
@@ -3770,9 +3766,11 @@ async fn change_page(
             // reads and every viewer pays for. Cut it at a boundary the
             // parser understands, on a line, and say so.
             if full.len() > MAX_RENDERED_DIFF {
-                let cut = full[..MAX_RENDERED_DIFF]
-                    .rfind('\n')
-                    .unwrap_or(MAX_RENDERED_DIFF);
+                let mut end = MAX_RENDERED_DIFF;
+                while !full.is_char_boundary(end) {
+                    end -= 1;
+                }
+                let cut = full[..end].rfind('\n').unwrap_or(end);
                 format!(
                     "{}\n--- diff truncated at {} of {}; fetch the revision to see the rest ---\n",
                     &full[..cut],
@@ -4509,7 +4507,8 @@ async fn lessons_page(
     let search = query.q.as_deref().filter(|q| !q.trim().is_empty());
     match app.with_store(|s| s.lessons(Some(&repo), search, false, 100)) {
         Ok(lessons) => {
-            views::lessons(theme, who.reading(), &repo, search, &lessons).into_response()
+            let people = people_named(&app, lessons.iter().map(|l| l.agent.as_str()));
+            views::lessons(theme, who.reading(), &repo, search, &lessons, &people).into_response()
         }
         Err(err) => oops(err),
     }
@@ -4766,7 +4765,7 @@ async fn forge_log_page(
         Ok(found) => found,
         Err(err) => return oops(err),
     };
-    let people = people_named(&app, events.iter().map(|e| e.actor.as_str()));
+    let people = people_named(&app, events.iter().flat_map(views::named_in));
     views::forge_log(theme, &viewer, &numbers, &events, &scopes, after, &people).into_response()
 }
 
@@ -5309,10 +5308,15 @@ async fn log_page(
     match app.with_store(|s| s.events_for_repo(&repo, ambolt_core::EventSeq(after), 100)) {
         Ok(mut events) => {
             let group = query.kind.as_deref().filter(|k| !k.is_empty());
+            // The window is a hundred events before the filter, so the
+            // page can always say where the next window starts.
+            let next = (events.len() >= 100)
+                .then(|| events.last().map(|e| e.seq.0))
+                .flatten();
             if let Some(group) = group {
                 events.retain(|e| views::event_group(&e.event) == group);
             }
-            let people = people_named(&app, events.iter().map(|e| e.actor.as_str()));
+            let people = people_named(&app, events.iter().flat_map(views::named_in));
             views::log(views::ActivityPage {
                 theme,
                 who: who.reading(),
@@ -5322,6 +5326,7 @@ async fn log_page(
                 events: &events,
                 group,
                 people: &people,
+                next,
             })
             .into_response()
         }

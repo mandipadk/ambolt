@@ -154,7 +154,7 @@ async fn without_mail_the_request_reaches_whoever_runs_the_forge() {
     let (_, ada) = sign_in_as(&forge, "ada").await;
     let (_, inbox) = page_with_cookie(app, "/inbox", &ada).await;
     assert!(
-        inbox.contains("bee cannot sign in and asked for a new link"),
+        inbox.contains("</b> cannot sign in and asked for a new link"),
         "{inbox}"
     );
     assert!(inbox.contains(r#"href="/people""#));

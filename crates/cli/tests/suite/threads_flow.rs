@@ -185,12 +185,9 @@ async fn a_concern_holds_the_change_until_a_later_revision_resolves_it() {
     // ada, who raised it, hears what became of it.
     let (_, cookie) = sign_in_as(&forge, "ada").await;
     let (_, inbox) = page_with_cookie(app, "/inbox", &cookie).await;
+    assert!(inbox.contains("</b> replied to a concern on #1"), "{inbox}");
     assert!(
-        inbox.contains("scout replied to a concern on #1"),
-        "{inbox}"
-    );
-    assert!(
-        inbox.contains("scout resolved your concern on #1 as fixed"),
+        inbox.contains("</b> resolved your concern on #1 as fixed"),
         "{inbox}"
     );
     // And the log says it in words.

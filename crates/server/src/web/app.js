@@ -5,11 +5,17 @@
 (function () {
   'use strict';
 
-  // One account menu open at a time, and a click elsewhere closes it.
-  document.addEventListener('click', function (event) {
-    document.querySelectorAll('details.me[open]').forEach(function (menu) {
-      if (!menu.contains(event.target)) menu.removeAttribute('open');
+  // A menu closes when the page is clicked elsewhere or Escape is pressed.
+  function closeMenus(except) {
+    document.querySelectorAll('details.me[open], details.more[open], details.clone[open]').forEach(function (menu) {
+      if (menu !== except) menu.removeAttribute('open');
     });
+  }
+  document.addEventListener('click', function (event) {
+    closeMenus(event.target.closest ? event.target.closest('details') : null);
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeMenus(null);
   });
 
   // Folds: a control names the element it shows or hides.
@@ -17,9 +23,12 @@
     var target = document.getElementById(button.getAttribute('data-toggle'));
     if (!target) return;
     if (button.hasAttribute('data-toggle-closed')) target.hidden = true;
+    button.setAttribute('aria-controls', target.id);
+    button.setAttribute('aria-expanded', String(!target.hidden));
     button.addEventListener('click', function (event) {
       event.preventDefault();
       target.hidden = !target.hidden;
+      button.setAttribute('aria-expanded', String(!target.hidden));
     });
   });
 
@@ -31,10 +40,10 @@
       if (!source || !navigator.clipboard) return;
       var text = source.textContent.trim();
       navigator.clipboard.writeText(text).then(function () {
-        var was = button.textContent;
+        var was = button.innerHTML;
         button.textContent = 'Copied';
-        setTimeout(function () { button.textContent = was; }, 1200);
-      });
+        setTimeout(function () { button.innerHTML = was; }, 1200);
+      }).catch(function () {});
     });
   });
 
@@ -151,7 +160,9 @@
   }
 
   function close() {
-    if (palette) palette.hidden = true;
+    if (!palette || palette.hidden) return;
+    palette.hidden = true;
+    opener.focus();
   }
 
   function ask() {
