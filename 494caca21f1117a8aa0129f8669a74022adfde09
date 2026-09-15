@@ -1,0 +1,139 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Iclean0138",
+      "id": "c-2vz70prak31grcm6rj8abj9mgq",
+      "landed_oid": "494caca21f1117a8aa0129f8669a74022adfde09",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 155,
+      "opened_at": "2026-09-15T23:40:17.788094456Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-7cc2jf83rx7jsdq1t9z8tx6e06",
+      "title": "Give facts their names, rebuild Explore, and fix the members rows",
+      "updated_at": "2026-09-15T23:41:29.029990856Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-2vz70prak31grcm6rj8abj9mgq",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "covers": [],
+        "id": "cl-352w32cd4htekm7qt4nwgkbyyt",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1466,
+        "summary": "fmt, clippy -D warnings, the suite and the first-run walk pass. New: views::kv for named facts across 14 sites, ExplorePage with q/sort/topic and cards, row.member columns, member forms as panels, agent cards stretched with a menu; looked at in a seeded local forge in both themes.",
+        "unchecked": [
+          "Caps, quota attribution beyond open changes, and discard are the next landing; a proposer's push over git was exercised through the API path, not a real git push."
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "494caca21f1117a8aa0129f8669a74022adfde09",
+    "landed_at": "2026-09-15T23:41:29.029990856Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-2vz70prak31grcm6rj8abj9mgq",
+      "commit_oid": "494caca21f1117a8aa0129f8669a74022adfde09",
+      "message": "Give facts their names, rebuild Explore, and fix the members rows\n\nExplore was a list whose one row put the repository's name in the\navatar's column and cut it to a letter, under a heading the page head\nalready carried. It is now a page of cards: who owns it, what it is\nfor, what it is filed under, and three numbers with their names, landed\nthis week, open, and the share a runner reproduced; a search box, an\norder (busiest, newest, most reproduced, name) and a topic bar with\ncounts sit above, and the API takes the same q and sort.\n\nThe organisation's member rows wrapped their actions into the avatar's\ncolumn, so \"Make member\" and \"Remove\" showed as fragments; the row now\nhas a column for the role and one for the actions, and the add and\ninvite forms are two small labelled panels instead of one strip with a\nparagraph beside it.\n\nEverywhere a line jammed facts together with dots, the facts now carry\ntheir names: model, harness and holder on an agent; by, revision and\nopened on a change; filed, version and about on a report; commit and by\non a tag; revision, status and replies on a thread; lines and language\non a file; the coverage headers. Agent cards share a height and keep\ntheir actions in a menu; the add-agent form has its own panel. Long\nhints on the organisation page are one line each.\n\nTask: t-7cc2jf83rx7jsdq1t9z8tx6e06\nChange-Id: Iclean0138\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/attempts_page_flow.rs",
+        "crates/cli/tests/suite/code_flow.rs",
+        "crates/cli/tests/suite/debt_flow.rs",
+        "crates/cli/tests/suite/hardening_flow.rs",
+        "crates/cli/tests/suite/hygiene_flow.rs",
+        "crates/cli/tests/suite/web_flow.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/lib.rs",
+        "crates/core/src/types.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs"
+      ],
+      "session": null
+    },
+    "seq": 1469,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-352w32cd4htekm7qt4nwgkbyyt",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-352w32cd4htekm7qt4nwgkbyyt",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 209 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 13 path(s) outside docs/, *.md: crates/cli/tests/suite/attempts_page_flow.rs, crates/cli/tests/suite/code_flow.rs, crates/cli/tests/suite/debt_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-2vz70prak31grcm6rj8abj9mgq",
+        "claim": "cl-352w32cd4htekm7qt4nwgkbyyt",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "id": "vr-1ze5pfwqfc1mf625cs04db5ze9",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1467
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "2/bnV0Efltg0R3XyU6sHXOIo/vVPztUz8iVdc9vK3nyI7fvE56M+GqaZnUwQuLOlAm2d+PliQzuw1Huov876CQ=="
+  }
+}
