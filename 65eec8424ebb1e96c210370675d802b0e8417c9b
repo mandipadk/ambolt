@@ -1,0 +1,131 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ireport0130",
+      "id": "c-3yg478trgzpw12ty2tfwjfne4t",
+      "landed_oid": "65eec8424ebb1e96c210370675d802b0e8417c9b",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 147,
+      "opened_at": "2026-09-15T18:42:20.611237523Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-6vzmvzhg4k3vgdmswhcdmmswz0",
+      "title": "Let a place be reported, and let the forge act on it",
+      "updated_at": "2026-09-15T18:43:30.832412252Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-3yg478trgzpw12ty2tfwjfne4t",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "covers": [],
+        "id": "cl-2q5fm1h3pwqarvmbspxykpn8rv",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1402,
+        "summary": "fmt, clippy -D warnings, the suite and the first-run walk pass. New: reports carry a kind; Report links on public repository and profile pages; Hide, Stop and Dismiss on the reports page through the ordinary commands; a flow test walks report, hide, stop, dismiss and the stranger's refusal.",
+        "unchecked": [
+          "The console reads reports through the API and shows the new kind as a field; it has no Hide or Stop of its own yet."
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "65eec8424ebb1e96c210370675d802b0e8417c9b",
+    "landed_at": "2026-09-15T18:43:30.832412252Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-3yg478trgzpw12ty2tfwjfne4t",
+      "commit_oid": "65eec8424ebb1e96c210370675d802b0e8417c9b",
+      "message": "Let a place be reported, and let the forge act on it\n\nA public repository's page and a person's or organisation's page now\ncarry a Report link, which opens the form about that place and marks\nwhat it files as abuse rather than a bug; the place is filled in, so\nthe report says what it is about without the reporter spelling it.\nBeside such a report, the reports page offers what the forge can do:\nHide sets the repository private, Stop deactivates the account, and\nDismiss drops the report. Hiding and stopping are the ordinary acts,\nrecorded like any other and undone the ordinary way; the report stays\nuntil dismissed, so what was done about it is read from one row. A\nreport about a bug offers nothing but dismissal, whatever place it\nnames. Nothing is decided by a machine.\n\nTask: t-6vzmvzhg4k3vgdmswhcdmmswz0\nChange-Id: Ireport0130\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/report_flow.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/lib.rs",
+        "crates/core/src/store.rs",
+        "crates/core/src/types.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/views.rs",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1405,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-2q5fm1h3pwqarvmbspxykpn8rv",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-2q5fm1h3pwqarvmbspxykpn8rv",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 201 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 7 path(s) outside docs/, *.md: crates/cli/tests/suite/report_flow.rs, crates/core/src/commands.rs, crates/core/src/lib.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-3yg478trgzpw12ty2tfwjfne4t",
+        "claim": "cl-2q5fm1h3pwqarvmbspxykpn8rv",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "id": "vr-5e0t2shg9p81qbx33m4ap5nmya",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1403
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "36vt60kDB7DSUcWaB4mZuG0ZfQO7gc4kZjBKHg91XF+0L9owli2/6GjBayU+sa3f1gfKg+BA4pwVm1voHOC9CQ=="
+  }
+}
