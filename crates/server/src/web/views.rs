@@ -426,6 +426,18 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
                 }
                 div class="none" id="repolist-none" hidden { "No repository matches" }
             }
+            @if !chrome.orgs.is_empty() {
+                h4 { "Organisations" }
+                div class="nav" {
+                    @for (org, role) in &chrome.orgs {
+                        a class={ "item" @if current == Some(org.as_str()) { " on" } } href={ "/" (org) } {
+                            (ic("agents", ""))
+                            span class="t" { (org) }
+                            @if *role == ambolt_core::TeamRole::Owner { span class="n" { "owner" } }
+                        }
+                    }
+                }
+            }
             @if !chrome.working.is_empty() {
                 h4 { "At work now" }
                 div class="nav" {
@@ -2764,6 +2776,7 @@ pub fn teams(
                                             span class="chip" {
                                                 (avatar(member.as_str(), display, agent, false))
                                                 a href={ "/" (member.as_str()) } { (display) }
+                                                @if row.owners.contains(member) { span class="s" { "owner" } }
                                                 form method="post" action="/teams" {
                                                     input type="hidden" name="action" value="remove";
                                                     input type="hidden" name="team" value=(id);
@@ -2826,6 +2839,10 @@ pub fn teams(
                                 label for="display" { "Display name" }
                                 input id="display" name="display" type="text" autocomplete="off";
                             }
+                            div class="field" {
+                                label for="owner" { "Owner" }
+                                input id="owner" name="owner" type="text" autocomplete="off" placeholder="who runs it; put on it and named its owner";
+                            }
                             div class="acts" { button class="btn" type="submit" { "Add a team" } }
                         }
                     }
@@ -2860,9 +2877,12 @@ pub fn owner(
     who: Reading<'_>,
     owner: &ambolt_core::Principal,
     repos: &[ambolt_core::Repo],
-    members: &[ambolt_core::PrincipalId],
+    members: &[(ambolt_core::PrincipalId, ambolt_core::TeamRole)],
+    // What the viewer is to this organisation, if anything.
+    viewer_role: Option<ambolt_core::TeamRole>,
     may_create: bool,
-    // Whether the viewer may change who is on the organisation.
+    // Whether the viewer may change who is on the organisation: one of
+    // its owners, or whoever runs the forge.
     may_manage: bool,
     // What this owner is taking up and what they may, shown only to
     // them and to whoever runs the forge: how full somebody's account
@@ -2927,6 +2947,7 @@ pub fn owner(
                         (allowance("Open tasks", usage.open_tasks.to_string(), quota.open_tasks.map(|n| n.to_string())))
                         (allowance("Open changes", usage.open_changes.to_string(), quota.open_changes.map(|n| n.to_string())))
                         (allowance("Tokens", usage.tokens.to_string(), quota.tokens.map(|n| n.to_string())))
+                        @if organisation { (allowance("Members", usage.members.to_string(), quota.members.map(|n| n.to_string()))) }
                     }
                 }
             }
@@ -2935,20 +2956,33 @@ pub fn owner(
                     div class="sh" { h2 { "Members" } span class="n" { (members.len()) } }
                     div class="panel" {
                         @if members.is_empty() { div class="empty" { "Nobody yet." } }
-                        @for member in members {
+                        @for (member, role) in members {
                             @let (display, agent) = people.name(member);
+                            @let is_owner = *role == ambolt_core::TeamRole::Owner;
                             div class="row member" {
                                 (avatar(member.as_str(), display, agent, false))
                                 span class="tt" {
                                     a class="t" href={ "/" (member.as_str()) } { (display) }
                                     span class="s" { (member.as_str()) }
                                 }
+                                @if is_owner { span class="chip" { "Owner" } }
                                 span class="acts" {
                                     @if may_manage {
+                                        form method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                            input type="hidden" name="action" value=(if is_owner { "member" } else { "owner" });
+                                            input type="hidden" name="member" value=(member.as_str());
+                                            button class="ghost sm" type="submit" { @if is_owner { "Make member" } @else { "Make owner" } }
+                                        }
                                         form method="post" action={ "/" (owner.id.as_str()) "/members" } {
                                             input type="hidden" name="action" value="remove";
                                             input type="hidden" name="member" value=(member.as_str());
                                             button class="ghost sm danger" type="submit" { "Remove" }
+                                        }
+                                    } @else if viewer_role.is_some() && who.viewer().is_some_and(|v| v.0 == *member) {
+                                        form method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                            input type="hidden" name="action" value="remove";
+                                            input type="hidden" name="member" value=(member.as_str());
+                                            button class="ghost sm danger" type="submit" { "Leave" }
                                         }
                                     }
                                 }
@@ -2959,7 +2993,7 @@ pub fn owner(
                                 input type="hidden" name="action" value="add";
                                 input class="input sm" type="text" name="member" placeholder="Who" pattern="[a-z0-9-]{2,64}" required aria-label="Member";
                                 button class="btn2 sm" type="submit" { "Add member" }
-                                span class="hint" { "Members create under the organisation and hold what it holds; a member cannot leave it empty." }
+                                span class="hint" { "Owners run the organisation; members create under it and hold what it holds. An organisation keeps at least one owner." }
                             }
                         }
                     }
@@ -5395,6 +5429,14 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
                 b { (actor) } " removed " (people.name(member).0) " from " (team.as_str())
             },
         ),
+        Event::TeamRoleSet { team, member, role } => (
+            "dot idle",
+            html! {
+                b { (actor) } " made " (people.name(member).0)
+                @if *role == ambolt_core::TeamRole::Owner { " an owner of " } @else { " a member of " }
+                (team.as_str())
+            },
+        ),
         Event::PolicySet { repo, .. } => (
             "dot idle",
             html! {
@@ -5501,9 +5543,9 @@ pub fn named_in(envelope: &Envelope) -> Vec<&str> {
         | Event::PrincipalRegistered { principal, .. }
         | Event::TokenMinted { principal, .. } => ids.push(principal.as_str()),
         Event::RepoTransferOffered { to, .. } => ids.push(to.as_str()),
-        Event::TeamMemberAdded { member, .. } | Event::TeamMemberRemoved { member, .. } => {
-            ids.push(member.as_str())
-        }
+        Event::TeamMemberAdded { member, .. }
+        | Event::TeamMemberRemoved { member, .. }
+        | Event::TeamRoleSet { member, .. } => ids.push(member.as_str()),
         Event::QuotaSet { owner, .. } => ids.push(owner.as_str()),
         Event::AttentionDrawn { reviewers, .. } => ids.extend(reviewers.iter().map(|r| r.as_str())),
         _ => {}

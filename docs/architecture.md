@@ -10,9 +10,11 @@ Ambolt records the causal chain as structured, subscribable data.
 - **Owners** — a repository belongs to a person or an organisation and
   is addressed as `/owner/repo` everywhere; an organisation is a team
   that can own, its members hold what it holds, and names are unique
-  per owner. An owner has a quota — repositories, agents, open tasks,
-  open changes, standing tokens, disk — and a refusal names what they
-  have and what is allowed.
+  per owner. An organisation has owners, who run it, and members, who
+  work in it; it keeps at least one owner. An owner has a quota —
+  repositories, agents, open tasks, open changes, standing tokens,
+  disk, and for an organisation its members — and a refusal names what
+  they have and what is allowed.
 - **Tasks** — durable statements of intent. A task may allow more than
   one attempt; the attempts arrive as revisions of one change and are
   compared, not merged separately.
@@ -391,7 +393,11 @@ their teams' as one list, so joining a team is effective at once and
 leaving it is too. A team cannot sign in, cannot join a team, and has
 only people as members — an agent on a team would hold every grant and
 every agent the team holds. A team owns repositories and agents through
-its members, who act for it. Ownership is offered rather
+its members, who act for it. Its owners run it: they put people on
+it and take them off, name other owners, and are the ones a member
+cannot remove; a member may leave. The last owner stays until another
+is named, so an organisation with an owner never has none; whoever
+runs the forge can step in either way. Ownership is offered rather
 than assigned — the owner offers, the person is told, and nothing moves
 until they accept, because owning carries every capability on the
 repository and whatever is in it.

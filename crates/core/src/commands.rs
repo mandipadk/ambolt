@@ -2534,11 +2534,19 @@ impl Store {
             return Ok(true);
         }
         not_under_a_scope(acting, "change an organisation's members")?;
-        if raw::is_team_member(tx, team.as_str(), actor.as_str())? {
+        // Owners run the organisation; a member works in it and changes
+        // nobody's standing, their own excepted (they may leave).
+        if raw::is_team_owner(tx, team.as_str(), actor.as_str())? {
             return Ok(false);
         }
+        if raw::is_team_member(tx, team.as_str(), actor.as_str())? {
+            return Err(CoreError::Forbidden(format!(
+                "{actor} is a member of {team}, not an owner: its owners change who is on it, \
+                 or whoever runs the forge"
+            )));
+        }
         Err(CoreError::Forbidden(format!(
-            "{actor} is not on {team}: its members change who is, or whoever runs the forge"
+            "{actor} is not on {team}: its owners change who is on it, or whoever runs the forge"
         )))
     }
 
@@ -2568,6 +2576,20 @@ impl Store {
         require(who.kind == PrincipalKind::Human, || {
             format!("{member} is an agent; a team's members are people")
         })?;
+        require(
+            !raw::is_team_member(&tx, team.as_str(), member.as_str())?,
+            || format!("{member} is already on {team}"),
+        )?;
+        // How many people an organisation may have is part of what it
+        // may take up, like its repositories and its agents.
+        within_quota(
+            &tx,
+            &self.default_quota,
+            team,
+            "members",
+            |q| q.members,
+            |u| u.members,
+        )?;
         let env = append(
             &tx,
             actor,
@@ -2581,30 +2603,98 @@ impl Store {
         Ok(env)
     }
 
+    /// Make somebody an owner of the organisation, or an owner a member
+    /// again. Owners and whoever runs the forge may; the last owner is
+    /// never made a member, so an organisation with an owner keeps one.
+    pub fn set_team_role(
+        &mut self,
+        actor: &PrincipalId,
+        team: &PrincipalId,
+        member: &PrincipalId,
+        role: crate::types::TeamRole,
+    ) -> CoreResult<Envelope> {
+        use crate::types::TeamRole;
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            team,
+        )?;
+        let members = raw::members_with_roles(&tx, team.as_str())?;
+        let Some((_, current)) = members.iter().find(|(m, _)| m == member) else {
+            return Err(CoreError::NotFound(format!("{member} is not on {team}")));
+        };
+        if *current == role {
+            return Err(CoreError::Conflict(format!(
+                "{member} is already {} of {team}",
+                match role {
+                    TeamRole::Owner => "an owner",
+                    TeamRole::Member => "a member",
+                }
+            )));
+        }
+        let owners = members
+            .iter()
+            .filter(|(_, r)| *r == TeamRole::Owner)
+            .count();
+        if role == TeamRole::Member && owners == 1 {
+            return Err(CoreError::Conflict(format!(
+                "{member} is the last owner of {team}: name another owner first"
+            )));
+        }
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::TeamRoleSet {
+                team: team.clone(),
+                member: member.clone(),
+                role,
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
     pub fn remove_team_member(
         &mut self,
         actor: &PrincipalId,
         team: &PrincipalId,
         member: &PrincipalId,
     ) -> CoreResult<Envelope> {
+        use crate::types::TeamRole;
         let tx = self.conn.transaction()?;
-        let runs_the_forge = Self::may_manage_team(
-            &tx,
-            Acting::of(&self.scope, self.admin_elsewhere),
-            actor,
-            team,
-        )?;
-        let members = raw::members_of(&tx, team.as_str())?;
-        require(members.iter().any(|m| m == member), || {
-            format!("{member} is not on {team}")
-        })?;
-        // An organisation with nobody on it is nobody's: what it owns
-        // would be held by no one. A member cannot do that to it;
-        // whoever runs the forge can, and answers for what follows.
-        if !runs_the_forge && members.len() == 1 {
+        let acting = Acting::of(&self.scope, self.admin_elsewhere);
+        // Leaving is anybody's own act; removing somebody else is an
+        // owner's, or the forge's.
+        let runs_the_forge = if actor == member {
+            not_under_a_scope(acting, "leave an organisation")?;
+            let record = raw::principal(&tx, team.as_str())?
+                .ok_or_else(|| CoreError::NotFound(format!("principal {team}")))?;
+            require(record.kind == PrincipalKind::Team, || {
+                format!("{team} is not a team")
+            })?;
+            authorize(&tx, acting, actor, Capability::Admin, None).is_ok()
+        } else {
+            Self::may_manage_team(&tx, acting, actor, team)?
+        };
+        let members = raw::members_with_roles(&tx, team.as_str())?;
+        let Some((_, role)) = members.iter().find(|(m, _)| m == member) else {
+            return Err(CoreError::NotFound(format!("{member} is not on {team}")));
+        };
+        // An organisation with no owner is nobody's: what it owns would
+        // be run by no one. An owner cannot do that to it, not even by
+        // leaving; whoever runs the forge can, and answers for what
+        // follows.
+        let owners = members
+            .iter()
+            .filter(|(_, r)| *r == TeamRole::Owner)
+            .count();
+        if !runs_the_forge && *role == TeamRole::Owner && owners == 1 {
             return Err(CoreError::Conflict(format!(
-                "{member} is the last member of {team}: an organisation is not emptied by a \
-                 member; add somebody first, or ask whoever runs the forge"
+                "{member} is the last owner of {team}: name another owner first, or ask whoever \
+                 runs the forge"
             )));
         }
         let env = append(

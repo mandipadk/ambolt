@@ -958,3 +958,58 @@ async fn a_fresh_credential_per_request_is_not_a_fresh_allowance() {
         "six requests under a three-a-minute allowance, each with a new bad credential, must run out"
     );
 }
+
+/// How many people an organisation may have is part of what it may
+/// take up, and the refusal names both numbers like every other.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_organisation_past_its_members_cap_takes_nobody_else() {
+    let forge = boot().await;
+    let app = &forge.app;
+    for (id, display) in [("bee", "Bee"), ("cat", "Cat")] {
+        api(
+            app,
+            "POST",
+            "/api/principals",
+            "ada",
+            Some(json!({ "id": id, "kind": "human", "display": display })),
+        )
+        .await;
+    }
+    api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "crew", "kind": "team", "display": "Crew", "owner": "bee" })),
+    )
+    .await;
+    quota(&forge, "crew", json!({ "members": 1 })).await;
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/teams/crew/members",
+        "bee",
+        Some(json!({ "member": "cat" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["kind"], "over_quota");
+    let said = body["error"].as_str().unwrap_or_default();
+    assert!(
+        said.contains("has 1 members") && said.contains("allows 1"),
+        "{said}"
+    );
+    quota(&forge, "crew", json!({ "members": 2 })).await;
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/teams/crew/members",
+        "bee",
+        Some(json!({ "member": "cat" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) = api(app, "GET", "/api/principals/crew/quota", "bee", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["usage"]["members"], 2, "{body}");
+}

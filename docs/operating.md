@@ -536,10 +536,11 @@ to delete something or ask for more, and arrives as `409` with
 `"kind": "over_quota"` on the API.
 
 The forge's own numbers are the defaults: 50 repositories, 25 agents,
-200 open tasks, 500 open changes, 50 tokens and 5 GiB of disk. Change
-them for the whole forge with `--quota-repos`, `--quota-agents`,
-`--quota-open-tasks`, `--quota-open-changes`, `--quota-tokens` and
-`--quota-disk-mb`. Each takes a number or the word `none` for no limit
+200 open tasks, 500 open changes, 50 tokens, 5 GiB of disk, and 25
+members for an organisation. Change them for the whole forge with
+`--quota-repos`, `--quota-agents`, `--quota-open-tasks`,
+`--quota-open-changes`, `--quota-tokens`, `--quota-disk-mb` and
+`--quota-members`. Each takes a number or the word `none` for no limit
 at all; `0` means zero, because an operator who types 0 means none
 allowed.
 
@@ -864,9 +865,10 @@ Offline administration, against the database file (root authority):
   remove someone who asked to be forgotten.
 - `ambolt admin quota <owner> [--as <admin>] [--repos n|none]
   [--agents n|none] [--open-tasks n|none] [--open-changes n|none]
-  [--tokens n|none] [--disk-mb n|none]` — what one owner may take up and
-  what they are using; with no limits given, it only prints. `--as` is
-  required whenever a limit is given.
+  [--tokens n|none] [--disk-mb n|none] [--members n|none]` — what one
+  owner may take up and what they are using; with no limits given, it
+  only prints. `--as` is required whenever a limit is given. Members
+  bound an organisation only; the default is 25.
 - `ambolt admin gc [owner/name]` — prune what nothing refers to and
   measure again, in one repository or all of them.
 - `ambolt admin reports [--dismiss <id>]` — what people reported broke,
@@ -904,8 +906,9 @@ Other commands: `ambolt serve`, `ambolt mcp --server <url> --token <t>`,
   `--reads-per-minute <n>` (default 1200) and
   `--anonymous-reads-per-minute <n>` (default 240).
 - `--quota-repos`, `--quota-agents`, `--quota-open-tasks`,
-  `--quota-open-changes`, `--quota-tokens`, `--quota-disk-mb` (defaults
-  50, 25, 200, 500, 50 and 5120 MiB; each takes a number or `none`).
+  `--quota-open-changes`, `--quota-tokens`, `--quota-disk-mb`,
+  `--quota-members` (defaults 50, 25, 200, 500, 50, 5120 MiB and 25;
+  each takes a number or `none`).
 - `--trust-proxy` and `--proxy-hops <n>` (default 1).
 - `--signing-key-file <path>` (default `signing.key` beside the database).
 

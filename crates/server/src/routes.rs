@@ -112,7 +112,8 @@ pub struct RegisterPrincipal {
     pub model: Option<String>,
     pub harness: Option<String>,
     /// Whose agent this is: yourself unless said otherwise, or an
-    /// organisation you belong to.
+    /// organisation you belong to. For an organisation, the person who
+    /// runs it from the start: put on it and named its owner.
     pub owner: Option<PrincipalId>,
 }
 
@@ -147,8 +148,23 @@ pub async fn register_principal(
                 body.model.as_deref(),
                 body.harness.as_deref(),
             ),
-            (_, Some(_)) => Err(ambolt_core::CoreError::Invalid(
-                "a person and an organisation belong to themselves".to_owned(),
+            // An organisation made with its owner named: three facts,
+            // each one the log already knows how to say.
+            (PrincipalKind::Team, Some(owner)) => {
+                let made = s.register_principal(
+                    &actor.0,
+                    &id,
+                    PrincipalKind::Team,
+                    &body.display,
+                    None,
+                    None,
+                )?;
+                s.add_team_member(&actor.0, &id, owner)?;
+                s.set_team_role(&actor.0, &id, owner, ambolt_core::TeamRole::Owner)?;
+                Ok(made)
+            }
+            (PrincipalKind::Human, Some(_)) => Err(ambolt_core::CoreError::Invalid(
+                "a person belongs to themselves".to_owned(),
             )),
         }
     })?;
@@ -1960,8 +1976,51 @@ pub async fn list_members(
             "team not found".to_owned(),
         ));
     }
-    let members = app.with_store(|s| s.members_of(&team))?;
-    Ok(Json(json!({ "team": team, "members": members })))
+    let (members, owners) = app.with_store(|s| {
+        Ok::<_, ambolt_core::CoreError>((s.members_of(&team)?, s.owners_of(&team)?))
+    })?;
+    Ok(Json(
+        json!({ "team": team, "members": members, "owners": owners }),
+    ))
+}
+
+/// Make somebody an owner of the organisation: one of its owners may,
+/// and so may whoever runs the forge.
+pub async fn make_owner(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path(team): Path<String>,
+    Json(body): Json<Membership>,
+) -> ApiResult<Json<Value>> {
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref()).set_team_role(
+            &actor.0,
+            &PrincipalId(team),
+            &body.member,
+            ambolt_core::TeamRole::Owner,
+        )
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+/// An owner made a member again. The last owner stays.
+pub async fn unmake_owner(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path(team): Path<String>,
+    Json(body): Json<Membership>,
+) -> ApiResult<Json<Value>> {
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref()).set_team_role(
+            &actor.0,
+            &PrincipalId(team),
+            &body.member,
+            ambolt_core::TeamRole::Member,
+        )
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
 }
 
 pub async fn add_member(

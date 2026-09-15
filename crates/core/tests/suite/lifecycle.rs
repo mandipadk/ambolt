@@ -2134,6 +2134,86 @@ fn a_team_holds_authority_and_its_members_carry_it() {
     assert!(store.fsck().unwrap().is_empty());
 }
 
+/// An organisation has owners, who run it, and members, who work in
+/// it. The last owner stays; how many people it may have is quota.
+#[test]
+fn an_organisation_has_owners_and_keeps_its_last() {
+    use ambolt_core::{QuotaOverride, TeamRole};
+    let (mut store, human, _scout, _) = seeded();
+    let crew = principal("crew");
+    let bee = principal("bee");
+    let cat = principal("cat");
+    let dan = principal("dan");
+    store
+        .register_principal(&human, &crew, PrincipalKind::Team, "Crew", None, None)
+        .unwrap();
+    for (id, name) in [(&bee, "Bee"), (&cat, "Cat"), (&dan, "Dan")] {
+        store
+            .register_principal(&human, id, PrincipalKind::Human, name, None, None)
+            .unwrap();
+    }
+    // Whoever runs the forge puts bee on it and names bee its owner.
+    store.add_team_member(&human, &crew, &bee).unwrap();
+    store
+        .set_team_role(&human, &crew, &bee, TeamRole::Owner)
+        .unwrap();
+    assert!(store.is_team_owner(&crew, &bee).unwrap());
+    assert_eq!(
+        store.memberships_of(&bee).unwrap(),
+        vec![("crew".to_owned(), TeamRole::Owner)]
+    );
+    // An owner brings people in; a member does not.
+    store.add_team_member(&bee, &crew, &cat).unwrap();
+    assert!(matches!(
+        store.add_team_member(&cat, &crew, &dan).unwrap_err(),
+        CoreError::Forbidden(_)
+    ));
+    assert!(matches!(
+        store.remove_team_member(&cat, &crew, &bee).unwrap_err(),
+        CoreError::Forbidden(_)
+    ));
+    // The last owner is not made a member, and does not leave.
+    assert!(matches!(
+        store
+            .set_team_role(&bee, &crew, &bee, TeamRole::Member)
+            .unwrap_err(),
+        CoreError::Conflict(_)
+    ));
+    assert!(matches!(
+        store.remove_team_member(&bee, &crew, &bee).unwrap_err(),
+        CoreError::Conflict(_)
+    ));
+    // A member may leave; with another owner named, so may bee.
+    store.remove_team_member(&cat, &crew, &cat).unwrap();
+    store.add_team_member(&bee, &crew, &dan).unwrap();
+    store
+        .set_team_role(&bee, &crew, &dan, TeamRole::Owner)
+        .unwrap();
+    store.remove_team_member(&bee, &crew, &bee).unwrap();
+    assert_eq!(store.owners_of(&crew).unwrap(), vec![dan.clone()]);
+    // How many it may have is part of its quota, refused with both numbers.
+    store
+        .set_quota(
+            &human,
+            &crew,
+            &QuotaOverride {
+                members: Some(Some(1)),
+                ..QuotaOverride::default()
+            },
+        )
+        .unwrap();
+    let refused = store.add_team_member(&dan, &crew, &cat).unwrap_err();
+    assert!(
+        matches!(&refused, CoreError::OverQuota(said) if said.contains("1 members") && said.contains("allows 1")),
+        "{refused:?}"
+    );
+    assert_eq!(store.usage(&crew).unwrap().members, 1);
+    // Whoever runs the forge may take the last owner off.
+    store.remove_team_member(&human, &crew, &dan).unwrap();
+    assert!(store.owners_of(&crew).unwrap().is_empty());
+    assert!(store.fsck().unwrap().is_empty());
+}
+
 #[test]
 fn an_expired_token_identifies_nobody() {
     let (mut store, human, _, _) = seeded();

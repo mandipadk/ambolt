@@ -150,7 +150,7 @@ async fn an_organisation_owns_what_its_members_make_under_it() {
 /// An organisation's members change who is on it; nobody but the
 /// operator empties it.
 #[tokio::test(flavor = "multi_thread")]
-async fn members_manage_the_organisation_but_never_empty_it() {
+async fn owners_run_the_organisation_and_the_last_owner_stays() {
     let forge = boot().await;
     let app = &forge.app;
     for (id, display) in [("bee", "Bee"), ("cat", "Cat"), ("dan", "Dan")] {
@@ -163,18 +163,33 @@ async fn members_manage_the_organisation_but_never_empty_it() {
         )
         .await;
     }
+    // Whoever runs the forge makes the organisation and names who runs it.
     let (_, ada) = sign_in_as(&forge, "ada").await;
-    post_form(app, "/teams", &ada, "action=create&id=crew&display=Crew").await;
-    post_form(app, "/teams", &ada, "action=add&team=crew&member=bee").await;
-    // Bee, a member, brings cat in from the organisation's page.
+    let (status, location) = post_form(
+        app,
+        "/teams",
+        &ada,
+        "action=create&id=crew&display=Crew&owner=bee",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert_eq!(location, "/teams", "{location}");
+    let (_, page) = page_with_cookie(app, "/teams", &ada).await;
+    assert!(page.contains("crew") && page.contains("owner"), "{page}");
+    // Bee, its owner, brings cat in from the organisation's page, and the
+    // sidebar says what bee is to it.
     let (_, bee) = sign_in_as(&forge, "bee").await;
     let (status, location) = post_form(app, "/crew/members", &bee, "action=add&member=cat").await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(location, "/crew", "{location}");
     let (_, page) = page_with_cookie(app, "/crew", &bee).await;
     assert!(page.contains(r#"href="/cat""#), "{page}");
-    assert!(page.contains("Add member"), "{page}");
-    // Cat may now create under it.
+    assert!(
+        page.contains("Add member") && page.contains("Make owner"),
+        "{page}"
+    );
+    assert!(page.contains("Organisations"), "{page}");
+    // Cat, a member, creates under it, but changes nobody's standing.
     let (status, body) = api(
         app,
         "POST",
@@ -184,49 +199,65 @@ async fn members_manage_the_organisation_but_never_empty_it() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
+    let (_, cat) = sign_in_as(&forge, "cat").await;
+    let (_, location) = post_form(app, "/crew/members", &cat, "action=add&member=dan").await;
+    assert!(location.contains("error="), "{location}");
+    let (_, page) = page_with_cookie(app, "/crew", &cat).await;
+    assert!(!page.contains("Add member"), "{page}");
+    assert!(page.contains("Leave"), "{page}");
     // Dan is not on it and changes nothing; the page shows no form.
     let (_, dan) = sign_in_as(&forge, "dan").await;
     let (_, location) = post_form(app, "/crew/members", &dan, "action=add&member=dan").await;
     assert!(location.contains("error="), "{location}");
-    let (_, page) = page_with_cookie(app, "/crew", &dan).await;
-    assert!(!page.contains("Add member"), "{page}");
-    // Bee removes cat, then herself is refused: the last one stays.
-    let (_, location) = post_form(app, "/crew/members", &bee, "action=remove&member=cat").await;
-    assert_eq!(location, "/crew", "{location}");
+    // Bee cannot leave: the last owner stays until another is named.
     let (_, location) = post_form(app, "/crew/members", &bee, "action=remove&member=bee").await;
     assert!(
-        location.contains("last+member") || location.contains("last%20member"),
+        location.contains("last+owner") || location.contains("last%20owner"),
         "{location}"
     );
-    // The API says the same, on the public listener too: membership is
-    // a member's act, not the door's.
+    // Cat may leave, being a member; then bee brings dan in, names dan an
+    // owner, and may leave.
+    let (_, location) = post_form(app, "/crew/members", &cat, "action=remove&member=cat").await;
+    assert_eq!(location, "/crew", "{location}");
+    post_form(app, "/crew/members", &bee, "action=add&member=dan").await;
+    let (_, location) = post_form(app, "/crew/members", &bee, "action=owner&member=dan").await;
+    assert_eq!(location, "/crew", "{location}");
+    let (_, location) = post_form(app, "/crew/members", &bee, "action=remove&member=bee").await;
+    assert_eq!(location, "/crew", "{location}");
+    // The API says the same, on the public listener too: an owner's act,
+    // not the door's.
     let (public, _) = split_listeners(&forge);
     let (status, body) = api(
         &public,
         "POST",
         "/api/teams/crew/members",
-        "bee",
+        "dan",
         Some(json!({ "member": "cat" })),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    // Whoever runs the forge may empty it.
+    let (status, body) = api(&public, "GET", "/api/teams/crew/members", "cat", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["owners"], json!(["dan"]), "{body}");
     let (status, body) = api(
-        app,
+        &public,
         "POST",
-        "/api/teams/crew/members/remove",
-        "ada",
-        Some(json!({ "member": "cat" })),
+        "/api/teams/crew/owners/remove",
+        "dan",
+        Some(json!({ "member": "dan" })),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "{body}");
-    let (status, body) = api(
-        app,
-        "POST",
-        "/api/teams/crew/members/remove",
-        "ada",
-        Some(json!({ "member": "bee" })),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    // Whoever runs the forge may empty it, the last owner included.
+    for member in ["cat", "dan"] {
+        let (status, body) = api(
+            app,
+            "POST",
+            "/api/teams/crew/members/remove",
+            "ada",
+            Some(json!({ "member": member })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
 }

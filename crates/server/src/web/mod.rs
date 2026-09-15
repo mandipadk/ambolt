@@ -1159,6 +1159,7 @@ async fn token_action(
 pub struct TeamRow {
     pub principal: ambolt_core::Principal,
     pub members: Vec<PrincipalId>,
+    pub owners: Vec<PrincipalId>,
     pub grants: Vec<ambolt_core::Grant>,
 }
 
@@ -1181,6 +1182,7 @@ async fn teams_page(
             }
             teams.push(TeamRow {
                 members: store.members_of(&principal.id)?,
+                owners: store.owners_of(&principal.id)?,
                 grants: store.grants_of(&principal.id)?,
                 principal,
             });
@@ -1218,6 +1220,9 @@ struct TeamForm {
     id: String,
     #[serde(default)]
     display: String,
+    /// Who runs the organisation from the start, when one is made.
+    #[serde(default)]
+    owner: String,
     #[serde(default)]
     team: String,
     #[serde(default)]
@@ -1258,16 +1263,44 @@ async fn teams_action(
             } else {
                 display
             };
+            let owner = form.owner.trim();
+            let first_owner = if owner.is_empty() {
+                None
+            } else {
+                match PrincipalId::new(owner) {
+                    Some(owner) => Some(owner),
+                    None => return back(Some(format!("{owner} is not a valid name"))),
+                }
+            };
             app.with_store(|s| {
-                s.register_principal(
+                let made = s.register_principal(
                     &viewer.0,
                     &id,
                     ambolt_core::PrincipalKind::Team,
                     display,
                     None,
                     None,
-                )
+                )?;
+                if let Some(owner) = &first_owner {
+                    s.add_team_member(&viewer.0, &id, owner)?;
+                    s.set_team_role(&viewer.0, &id, owner, ambolt_core::TeamRole::Owner)?;
+                }
+                Ok(made)
             })
+        }
+        "owner" | "member" => {
+            let (Some(team), Some(member)) = (
+                PrincipalId::new(form.team.trim()),
+                PrincipalId::new(form.member.trim()),
+            ) else {
+                return back(Some("Say which team and who".to_owned()));
+            };
+            let role = if form.action == "owner" {
+                ambolt_core::TeamRole::Owner
+            } else {
+                ambolt_core::TeamRole::Member
+            };
+            app.with_store(|s| s.set_team_role(&viewer.0, &team, &member, role))
         }
         "add" | "remove" => {
             let (Some(team), Some(member)) = (
@@ -1957,6 +1990,7 @@ fn chrome_for(app: &AppState, who: &PrincipalId) -> Result<Chrome, ambolt_core::
             unread: store.unread_count(who)?,
             admin: store.is_admin(who),
             owned,
+            orgs: store.memberships_of(who)?,
         })
     })
 }
@@ -2046,6 +2080,8 @@ pub struct Chrome {
     pub admin: bool,
     /// Repositories the viewer owns, for the tabs that only an owner gets.
     pub owned: Vec<String>,
+    /// The organisations the viewer is on, and what they are to each.
+    pub orgs: Vec<(String, ambolt_core::TeamRole)>,
 }
 
 pub struct Viewer(pub PrincipalId, pub Chrome);
@@ -2133,6 +2169,7 @@ fn chrome_public(app: &AppState) -> Result<Chrome, ambolt_core::CoreError> {
             unread: 0,
             admin: false,
             owned: Vec::new(),
+            orgs: Vec::new(),
         })
     })
 }
@@ -2175,6 +2212,12 @@ async fn owner_members_action(
     let result = match form.action.as_str() {
         "add" => app.with_store(|s| s.add_team_member(&viewer.0, &team, &member)),
         "remove" => app.with_store(|s| s.remove_team_member(&viewer.0, &team, &member)),
+        "owner" => app.with_store(|s| {
+            s.set_team_role(&viewer.0, &team, &member, ambolt_core::TeamRole::Owner)
+        }),
+        "member" => app.with_store(|s| {
+            s.set_team_role(&viewer.0, &team, &member, ambolt_core::TeamRole::Member)
+        }),
         other => return back(Some(format!("unknown action {other}"))),
     };
     match result {
@@ -2229,10 +2272,19 @@ async fn owner_page(
     // principals, and the API says so; to a stranger it is a list of
     // names, which nothing else on the forge hands out for free.
     let members = if organisation && matches!(who, Who::Signed(_)) {
-        app.with_store(|s| s.members_of(&owner_id))
+        app.with_store(|s| s.members_with_roles(&owner_id))
             .unwrap_or_default()
     } else {
         Vec::new()
+    };
+    // What the viewer is to this organisation, if anything: an owner
+    // runs it from this page, a member may leave it from here.
+    let viewer_role = match &who {
+        Who::Signed(viewer) => members
+            .iter()
+            .find(|(m, _)| *m == viewer.0)
+            .map(|(_, role)| *role),
+        Who::Anonymous(_) => None,
     };
     let may_create = match &who {
         Who::Signed(viewer) => {
@@ -2254,24 +2306,22 @@ async fn owner_page(
             .ok(),
         _ => None,
     };
-    // Its members change who is on it; so does whoever runs the forge.
+    // Its owners change who is on it; so does whoever runs the forge.
     let may_manage = organisation
         && match &who {
             Who::Signed(viewer) => {
-                viewer.1.admin
-                    || app
-                        .with_store(|s| s.is_team_member(&owner_id, &viewer.0))
-                        .unwrap_or(false)
+                viewer.1.admin || viewer_role == Some(ambolt_core::TeamRole::Owner)
             }
             Who::Anonymous(_) => false,
         };
-    let people = people_named(&app, members.iter().map(|m| m.as_str()));
+    let people = people_named(&app, members.iter().map(|(m, _)| m.as_str()));
     views::owner(
         theme,
         who.reading(),
         &principal,
         &repos,
         &members,
+        viewer_role,
         may_create,
         may_manage,
         allowances,

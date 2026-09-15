@@ -1152,6 +1152,78 @@ pub(crate) mod raw {
             .collect())
     }
 
+    /// Everyone on the organisation and what they are to it, owners
+    /// first.
+    pub fn members_with_roles(
+        conn: &Connection,
+        team: &str,
+    ) -> CoreResult<Vec<(PrincipalId, crate::types::TeamRole)>> {
+        Ok(conn
+            .prepare_cached(
+                "SELECT member, role FROM team_members WHERE team = ?
+                  ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, member",
+            )?
+            .query_map(params![team], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|(member, role)| {
+                (
+                    PrincipalId(member),
+                    crate::types::TeamRole::parse(&role).unwrap_or(crate::types::TeamRole::Member),
+                )
+            })
+            .collect())
+    }
+
+    pub fn owners_of(conn: &Connection, team: &str) -> CoreResult<Vec<PrincipalId>> {
+        Ok(conn
+            .prepare_cached(
+                "SELECT member FROM team_members WHERE team = ? AND role = 'owner' ORDER BY member",
+            )?
+            .query_map(params![team], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(PrincipalId)
+            .collect())
+    }
+
+    pub fn is_team_owner(conn: &Connection, team: &str, member: &str) -> CoreResult<bool> {
+        Ok(conn
+            .prepare_cached(
+                "SELECT 1 FROM team_members WHERE team = ? AND member = ? AND role = 'owner'",
+            )?
+            .query_row(params![team, member], |_| Ok(()))
+            .optional()?
+            .is_some())
+    }
+
+    /// The organisations somebody belongs to and what they are to each,
+    /// active organisations only.
+    pub fn memberships_of(
+        conn: &Connection,
+        member: &str,
+    ) -> CoreResult<Vec<(String, crate::types::TeamRole)>> {
+        Ok(conn
+            .prepare_cached(
+                "SELECT m.team, m.role FROM team_members m JOIN principals p ON p.id = m.team
+                  WHERE m.member = ? AND p.active = 1 ORDER BY m.team",
+            )?
+            .query_map(params![member], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|(team, role)| {
+                (
+                    team,
+                    crate::types::TeamRole::parse(&role).unwrap_or(crate::types::TeamRole::Member),
+                )
+            })
+            .collect())
+    }
+
     /// What a principal may do: their own grants and their teams', as
     /// one list. Every authority check reads this, so joining a team is
     /// effective at once and leaving it is too.
@@ -1464,6 +1536,13 @@ pub(crate) mod raw {
             params![owner, jiff::Timestamp::now().to_string()],
             |row| row.get(0),
         )?;
+        // People on the organisation. A person has none; the count is
+        // zero and the limit never bites.
+        let members: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM team_members WHERE team = ?",
+            params![owner],
+            |row| row.get(0),
+        )?;
         let disk: i64 = conn.query_row(
             "SELECT COALESCE(SUM(bytes), 0) FROM repo_sizes
                WHERE repo IN (SELECT name FROM repos WHERE owner = ?)",
@@ -1477,6 +1556,7 @@ pub(crate) mod raw {
             disk: disk.max(0) as u64,
             open_changes: open_changes.max(0) as u32,
             tokens: tokens.max(0) as u32,
+            members: members.max(0) as u32,
         })
     }
 
@@ -1726,6 +1806,29 @@ impl Store {
 
     pub fn members_of(&self, team: &PrincipalId) -> CoreResult<Vec<PrincipalId>> {
         raw::members_of(&self.conn, team.as_str())
+    }
+
+    pub fn members_with_roles(
+        &self,
+        team: &PrincipalId,
+    ) -> CoreResult<Vec<(PrincipalId, crate::types::TeamRole)>> {
+        raw::members_with_roles(&self.conn, team.as_str())
+    }
+
+    pub fn owners_of(&self, team: &PrincipalId) -> CoreResult<Vec<PrincipalId>> {
+        raw::owners_of(&self.conn, team.as_str())
+    }
+
+    pub fn is_team_owner(&self, team: &PrincipalId, member: &PrincipalId) -> CoreResult<bool> {
+        raw::is_team_owner(&self.conn, team.as_str(), member.as_str())
+    }
+
+    /// The organisations somebody is on, and what they are to each.
+    pub fn memberships_of(
+        &self,
+        member: &PrincipalId,
+    ) -> CoreResult<Vec<(String, crate::types::TeamRole)>> {
+        raw::memberships_of(&self.conn, member.as_str())
     }
 
     /// Own grants plus every team's, which is what authority checks use.

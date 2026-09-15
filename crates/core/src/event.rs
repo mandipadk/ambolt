@@ -14,7 +14,7 @@ use crate::policy::PolicyTrace;
 use crate::types::Scope;
 use crate::types::{
     Anchor, Capability, ClaimKind, Disposition, Mirror, ObjectFormat, Policy, PrincipalKind,
-    Resolution, ReviewDomain, SessionState, TaskState, ThreadKind, Visibility,
+    Resolution, ReviewDomain, SessionState, TaskState, TeamRole, ThreadKind, Visibility,
 };
 use serde::{Deserialize, Serialize};
 
@@ -207,6 +207,14 @@ pub enum Event {
     TeamMemberRemoved {
         team: PrincipalId,
         member: PrincipalId,
+    },
+    /// What somebody is to an organisation from now on: an owner, who
+    /// runs it, or a member, who works in it. Naming the first owner is
+    /// this event too, appended by whoever made the organisation.
+    TeamRoleSet {
+        team: PrincipalId,
+        member: PrincipalId,
+        role: TeamRole,
     },
     /// Somebody who cannot sign in asked for help, on a forge that could
     /// not mail them a link itself. The people who run it are told.
@@ -519,6 +527,7 @@ impl Event {
             Event::RepoTransferDeclined { .. } => "repo_transfer_declined",
             Event::TeamMemberAdded { .. } => "team_member_added",
             Event::TeamMemberRemoved { .. } => "team_member_removed",
+            Event::TeamRoleSet { .. } => "team_role_set",
             Event::PasswordResetRequested { .. } => "password_reset_requested",
             Event::PolicySet { .. } => "policy_set",
             Event::MirrorSet { .. } => "mirror_set",

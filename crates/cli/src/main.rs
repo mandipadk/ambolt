@@ -142,6 +142,9 @@ enum Command {
         /// Live tokens one owner and their agents may hold; `none` for no limit.
         #[arg(long)]
         quota_tokens: Option<String>,
+        /// People one organisation may have; `none` for no limit.
+        #[arg(long)]
+        quota_members: Option<String>,
         /// The Ed25519 key that signs merge receipts; generated there when
         /// absent. Beside the database when unset.
         #[arg(long)]
@@ -316,6 +319,9 @@ enum AdminCommand {
         /// Live tokens they and their agents may hold; `none` for no limit.
         #[arg(long)]
         tokens: Option<String>,
+        /// People an organisation may have; `none` for no limit.
+        #[arg(long)]
+        members: Option<String>,
     },
     /// Reclaim disk that nothing refers to, in one repository or every
     /// one, and measure again. Git prunes on its own only after two
@@ -455,6 +461,7 @@ async fn main() -> anyhow::Result<()> {
             quota_disk_mb,
             quota_open_changes,
             quota_tokens,
+            quota_members,
             signing_key_file,
             operator_listen,
             open_signup,
@@ -502,6 +509,9 @@ async fn main() -> anyhow::Result<()> {
             }
             if let Some(value) = narrow(said(quota_tokens, "quota-tokens")?)? {
                 quota.tokens = value;
+            }
+            if let Some(value) = narrow(said(quota_members, "quota-members")?)? {
+                quota.members = value;
             }
             let store = Store::open(&db)
                 .with_context(|| format!("opening forge database at {}", db.display()))?
@@ -789,6 +799,7 @@ async fn main() -> anyhow::Result<()> {
                 disk_mb,
                 open_changes,
                 tokens,
+                members,
             } => {
                 let mut store = Store::open(&db)
                     .with_context(|| format!("opening forge database at {}", db.display()))?;
@@ -833,6 +844,7 @@ async fn main() -> anyhow::Result<()> {
                         .map(|mb| mb.map(|mb| mb.saturating_mul(1024 * 1024))),
                     open_changes: narrow(said(open_changes.as_ref())?)?,
                     tokens: narrow(said(tokens.as_ref())?)?,
+                    members: narrow(said(members.as_ref())?)?,
                 };
                 if !patch.is_empty() {
                     let actor = PrincipalId::new(r#as.as_deref().unwrap_or(""))
@@ -890,6 +902,13 @@ async fn main() -> anyhow::Result<()> {
                     usage.tokens.to_string(),
                     quota.tokens.map(|n| n.to_string()),
                 );
+                if record.kind == ambolt_core::PrincipalKind::Team {
+                    say(
+                        "members",
+                        usage.members.to_string(),
+                        quota.members.map(|n| n.to_string()),
+                    );
+                }
             }
             AdminCommand::Gc { db, repos, repo } => {
                 let mut store = Store::open(&db)

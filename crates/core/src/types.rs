@@ -267,6 +267,10 @@ pub struct Quota {
     /// Live standing tokens, the owner's own and their agents' together.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tokens: Option<u32>,
+    /// People on an organisation, the invited who have not arrived
+    /// counted too. Meaningless for a person, who has no members.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub members: Option<u32>,
 }
 
 impl Default for Quota {
@@ -281,6 +285,7 @@ impl Default for Quota {
             disk: Some(5 * 1024 * 1024 * 1024),
             open_changes: Some(500),
             tokens: Some(50),
+            members: Some(25),
         }
     }
 }
@@ -295,6 +300,7 @@ impl Quota {
             disk: None,
             open_changes: None,
             tokens: None,
+            members: None,
         }
     }
 
@@ -309,9 +315,19 @@ impl Quota {
             disk: over.disk.unwrap_or(self.disk),
             open_changes: over.open_changes.unwrap_or(self.open_changes),
             tokens: over.tokens.unwrap_or(self.tokens),
+            members: over.members.unwrap_or(self.members),
         }
     }
 }
+
+str_enum!(
+    /// What somebody is to an organisation. Owners run it: they change
+    /// who is on it and what those people hold. Members work in it.
+    TeamRole {
+        Owner => "owner",
+        Member => "member",
+    }
+);
 
 /// What an operator has said about one owner in particular.
 ///
@@ -359,6 +375,12 @@ pub struct QuotaOverride {
         deserialize_with = "said"
     )]
     pub tokens: Option<Option<u32>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "said"
+    )]
+    pub members: Option<Option<u32>>,
 }
 
 /// Tell "the caller wrote null" apart from "the caller wrote nothing",
@@ -381,6 +403,7 @@ impl QuotaOverride {
             disk: newer.disk.or(self.disk),
             open_changes: newer.open_changes.or(self.open_changes),
             tokens: newer.tokens.or(self.tokens),
+            members: newer.members.or(self.members),
         }
     }
 
@@ -396,6 +419,7 @@ impl QuotaOverride {
             Some("disk") => out.disk = None,
             Some("open_changes") => out.open_changes = None,
             Some("tokens") => out.tokens = None,
+            Some("members") => out.members = None,
             Some(other) => return Err(format!("{other:?} is not a limit")),
         }
         Ok(out)
@@ -415,6 +439,7 @@ pub struct Usage {
     pub disk: u64,
     pub open_changes: u32,
     pub tokens: u32,
+    pub members: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

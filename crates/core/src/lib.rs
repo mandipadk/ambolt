@@ -72,7 +72,8 @@ pub use types::{
     Lease, Lesson, LineState, Mirror, Notice, ObjectFormat, PackOrigin, PasskeyRecord, Policy,
     PolicyPack, Preference, Principal, PrincipalKind, Provenance, QueueEntry, Quota, Receipt,
     Replay, Reply, Repo, Resolution, Resolved, ReviewDomain, Revision, Scope, Session,
-    SessionState, Side, Simulated, Simulation, Task, TaskState, Thread, ThreadKind, TokenInfo,
-    Verdict, Verification, Visibility, Waiver, WorkloadBinding, canonical_json, line_state,
+    SessionState, Side, Simulated, Simulation, Task, TaskState, TeamRole, Thread, ThreadKind,
+    TokenInfo, Verdict, Verification, Visibility, Waiver, WorkloadBinding, canonical_json,
+    line_state,
 };
 pub use types::{GraduatedRepo, Graduation};

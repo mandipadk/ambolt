@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Bump whenever a projection table changes shape. The log is never
 /// touched; projections are rebuilt from it.
-const SCHEMA_VERSION: i64 = 31;
+const SCHEMA_VERSION: i64 = 32;
 
 /// The log itself, which outlives every schema.
 const EVENT_SCHEMA: &str = "
@@ -313,6 +313,9 @@ CREATE INDEX IF NOT EXISTS idx_notices_recipient ON notices (recipient, seq);
 CREATE TABLE IF NOT EXISTS team_members (
   team   TEXT NOT NULL,
   member TEXT NOT NULL,
+  -- 'owner' runs the organisation; 'member' works in it. Filled from
+  -- TeamRoleSet; a member added and never named is a member.
+  role   TEXT NOT NULL DEFAULT 'member',
   PRIMARY KEY (team, member)
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_team_members_member ON team_members (member);
@@ -1074,9 +1077,10 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
 
         // That a person exists is not a secret on the forge they are on,
         // and neither is who is on which team: membership is authority.
-        PrincipalRegistered { .. } | TeamMemberAdded { .. } | TeamMemberRemoved { .. } => {
-            (None, None)
-        }
+        PrincipalRegistered { .. }
+        | TeamMemberAdded { .. }
+        | TeamMemberRemoved { .. }
+        | TeamRoleSet { .. } => (None, None),
     };
 
     tx.execute(
@@ -1560,6 +1564,19 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
             None,
             format!("{actor} removed you from {team}"),
         )),
+        TeamRoleSet { team, member, role } => Some((
+            member.as_str().to_owned(),
+            "team",
+            None,
+            None,
+            None,
+            match role {
+                crate::types::TeamRole::Owner => format!("{actor} made you an owner of {team}"),
+                crate::types::TeamRole::Member => {
+                    format!("{actor} made you a member of {team}, no longer an owner")
+                }
+            },
+        )),
 
         MirrorPushed {
             repo,
@@ -1762,6 +1779,7 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 disk: Some(quota.disk),
                 open_changes: None,
                 tokens: None,
+                members: None,
             };
             tx.execute(
                 "INSERT OR REPLACE INTO quotas (owner, quota) VALUES (?, ?)",
@@ -2133,6 +2151,12 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
             tx.execute(
                 "DELETE FROM team_members WHERE team = ? AND member = ?",
                 params![team.as_str(), member.as_str()],
+            )?;
+        }
+        Event::TeamRoleSet { team, member, role } => {
+            tx.execute(
+                "UPDATE team_members SET role = ? WHERE team = ? AND member = ?",
+                params![role.as_str(), team.as_str(), member.as_str()],
             )?;
         }
         Event::MirrorSet { repo, mirror } => {
@@ -3067,7 +3091,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                31,
+                32,
                 r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null}"#
             ),
             "the policy's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
@@ -3115,13 +3139,14 @@ mod projection_shape {
             disk: Some(Some(5368709120)),
             open_changes: None,
             tokens: Some(Some(50)),
+            members: Some(Some(25)),
         })
         .unwrap();
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                31,
-                r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50}"#
+                32,
+                r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25}"#
             ),
             "the quota's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
         );
