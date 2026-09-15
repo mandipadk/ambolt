@@ -38,6 +38,7 @@ mod lease_flow;
 mod limits_flow;
 mod mcp;
 mod mirror_flow;
+mod names_flow;
 mod oidc_flow;
 mod operator_flow;
 mod owners_flow;

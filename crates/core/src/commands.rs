@@ -558,6 +558,9 @@ fn new_repo_is_allowed(tx: &Transaction, name: &str, default_branch: &str) -> Co
     require(crate::id::validate_repo_name(name), || {
         format!("repo name {name:?} is not owner/name, both lowercase slugs")
     })?;
+    if let Some((_, short)) = crate::id::split_repo_name(name) {
+        crate::names::acceptable(short, false)?;
+    }
     require(valid_branch(default_branch), || {
         format!("{default_branch:?} is not a valid branch name")
     })?;
@@ -827,6 +830,18 @@ impl Store {
             )));
         }
         let bootstrap = by_themselves || (raw::principal_count(&tx)? == 0 && actor == id);
+        // Whoever runs the forge may take its own words on purpose; a
+        // word nobody gets to be called is refused to everyone.
+        let by_operator = !bootstrap
+            && authorize(
+                &tx,
+                Acting::of(&self.scope, self.admin_elsewhere),
+                actor,
+                Capability::Admin,
+                None,
+            )
+            .is_ok();
+        crate::names::acceptable(id.as_str(), by_operator)?;
         let owner = owner.unwrap_or(actor);
         if !bootstrap {
             not_under_a_scope(
@@ -2753,6 +2768,7 @@ impl Store {
         require(validate_slug(id.as_str()), || {
             format!("principal id {id:?} is not a valid slug")
         })?;
+        crate::names::acceptable(id.as_str(), false)?;
         require(!display.trim().is_empty(), || {
             "display name must not be empty".into()
         })?;
@@ -2851,6 +2867,7 @@ impl Store {
         require(validate_slug(team), || {
             format!("{team:?} is not a valid name: lowercase letters, digits and hyphens")
         })?;
+        crate::names::acceptable(team, false)?;
         require(!raw::is_org_team(&tx, organisation.as_str(), team)?, || {
             format!("{organisation} already has a team named {team}")
         })?;
@@ -3264,6 +3281,7 @@ impl Store {
         require(validate_slug(to), || {
             format!("{to:?} is not a valid name: lowercase letters, digits and hyphens")
         })?;
+        crate::names::acceptable(to, false)?;
         let to = format!("{}/{to}", record.owner);
         require(to != repo, || "that is already its name".into())?;
         require(raw::repo(&tx, &to)?.is_none(), || {
@@ -3294,6 +3312,7 @@ impl Store {
         require(validate_slug(to), || {
             format!("{to:?} is not a valid name: lowercase letters, digits and hyphens")
         })?;
+        crate::names::acceptable(to, false)?;
         // The owner's name stays in front; a rename changes only what is theirs.
         let to = format!("{}/{to}", record.owner);
         require(to != repo, || "that is already its name".into())?;

@@ -258,6 +258,13 @@ the unscoped admin grant:
   open, the waitlist, open reports, disk as last measured, and the
   log's length. `ambolt admin metrics` prints the same offline. What
   the console's fleet page will draw its numbers from.
+- A name can be refused, wherever one is chosen: the forge's own words
+  (`admin`, `support`, `official`, and the like), shapes that pass for
+  the forge (`ambolt-…`, `…-official`), and a short list of words nobody
+  gets to be called here, however they are spelt. Those refusals say
+  only that the name is not available; a page's name (`login`, `teams`)
+  says why. Whoever runs the forge may take the forge's own words on
+  purpose; nobody takes the rest.
 - The switch for strangers: `ambolt serve --open-signup` lets anyone make
   an account at `/signup` (name, password, an address to confirm), rate
   limited by source like every public form. Off — the default — the page

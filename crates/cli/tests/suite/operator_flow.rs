@@ -9,7 +9,11 @@ use http_body_util::BodyExt;
 use serde_json::json;
 use tower::ServiceExt;
 
-async fn post_public_form(app: &axum::Router, path: &str, body: &str) -> (StatusCode, String) {
+pub(crate) async fn post_public_form(
+    app: &axum::Router,
+    path: &str,
+    body: &str,
+) -> (StatusCode, String) {
     let request = Request::builder()
         .method("POST")
         .uri(path)

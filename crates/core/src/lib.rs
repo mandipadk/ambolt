@@ -37,6 +37,7 @@ mod error;
 mod event;
 mod id;
 mod leases;
+pub mod names;
 mod policy;
 mod queries;
 mod record;
