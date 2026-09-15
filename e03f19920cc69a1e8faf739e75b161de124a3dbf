@@ -1,0 +1,150 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ipkceremony0140",
+      "id": "c-09qd7mdk15awap0nmv594ak2z0",
+      "landed_oid": "e03f19920cc69a1e8faf739e75b161de124a3dbf",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 140,
+      "opened_at": "2026-09-15T05:21:11.221690787Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-4xc76z3pxf3x5k486zvtk79j8b",
+      "title": "Run the whole passkey ceremony in the suite",
+      "updated_at": "2026-09-15T05:22:19.927993017Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-09qd7mdk15awap0nmv594ak2z0",
+        "command": "cargo test --workspace",
+        "covers": [],
+        "id": "cl-0htt5kah1m1mdg4ejhvpj9aacd",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1330,
+        "summary": "cargo test --workspace: the suite with the full passkey ceremony, all green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-09qd7mdk15awap0nmv594ak2z0",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-3d8kt766zcsw78mdwwcqmsr6w4",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1331,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "e03f19920cc69a1e8faf739e75b161de124a3dbf",
+    "landed_at": "2026-09-15T05:22:19.927993017Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-09qd7mdk15awap0nmv594ak2z0",
+      "commit_oid": "e03f19920cc69a1e8faf739e75b161de124a3dbf",
+      "message": "Run the whole passkey ceremony in the suite\n\nA software authenticator registers a passkey from the settings page\nand then signs in with it by discovery, the way a browser does when\nnobody typed a name, through to the page the session opens; the same\nanswer a second time is refused as spent. The forge's sign-in was\nsound; the test is what says so from now on.\n\nChange-Id: Ipkceremony0140\nTask: t-4xc76z3pxf3x5k486zvtk79j8b\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "Cargo.lock",
+        "crates/cli/Cargo.toml",
+        "crates/cli/tests/suite/passkeys_flow.rs"
+      ],
+      "session": null
+    },
+    "seq": 1344,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-0htt5kah1m1mdg4ejhvpj9aacd, cl-3d8kt766zcsw78mdwwcqmsr6w4",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-3d8kt766zcsw78mdwwcqmsr6w4",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 194 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 3 path(s) outside docs/, *.md: Cargo.lock, crates/cli/Cargo.toml, crates/cli/tests/suite/passkeys_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-09qd7mdk15awap0nmv594ak2z0",
+        "claim": "cl-0htt5kah1m1mdg4ejhvpj9aacd",
+        "command": "cargo test --workspace",
+        "id": "vr-3g2kensqv7fz8ea74snm1sd6yw",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1341
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-09qd7mdk15awap0nmv594ak2z0",
+        "claim": "cl-3d8kt766zcsw78mdwwcqmsr6w4",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-3wm22v5gfgkn5hr7d56a3tcet3",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.65s",
+        "revision": 1,
+        "seq": 1342
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "Tr0GiG+tZy+l+ndcWrer1MB1HXluFwO3xXKztzIR/meHSLbhrnMNSKziVRAv31jwm/rpeYe8YtmkoWIdTW3fDQ=="
+  }
+}
