@@ -941,6 +941,20 @@ pub struct GraduatedRepo {
     pub bundle: String,
 }
 
+str_enum!(
+    /// What a report is about.
+    ReportKind {
+        /// Something broke.
+        Bug => "bug",
+        /// Somebody's conduct, or a name; the place names them.
+        Abuse => "abuse",
+    }
+);
+
+fn bug() -> String {
+    "bug".to_owned()
+}
+
 /// Somebody who asked for an account: their address, when, what they
 /// said, and the company they asked for a forge of their own for, if
 /// they did.
@@ -998,6 +1012,10 @@ pub struct Report {
     pub by: Option<String>,
     /// The forge version that was answering.
     pub version: String,
+    /// `bug`: something broke. `abuse`: somebody's conduct or a name,
+    /// with the place naming the repository or the person.
+    #[serde(default = "bug")]
+    pub kind: String,
 }
 
 /// A name a repository gave to a landed commit.

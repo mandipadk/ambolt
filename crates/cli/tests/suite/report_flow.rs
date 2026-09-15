@@ -118,3 +118,110 @@ async fn a_report_needs_words_and_a_real_address_if_any() {
     assert_eq!(reports[0].contact, None);
     assert_eq!(reports[0].version, ambolt_core::VERSION);
 }
+
+/// A repository or a person is reported from their own page, and
+/// whoever runs the forge hides or stops them from the reports page.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_place_is_reported_and_hidden_or_stopped() {
+    let forge = boot().await;
+    let app = &forge.app;
+    let (_, cookie) = sign_in_as(&forge, "ada").await;
+    let (status, _) = api(
+        app,
+        "POST",
+        "/api/repos/ada/demo/visibility",
+        "ada",
+        Some(serde_json::json!({ "visibility": "public" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The public page links to the form about itself; a private one
+    // has nobody to show it to.
+    let (_, page) = page_with_cookie(app, "/ada/demo", "").await;
+    assert!(
+        page.contains("/report?kind=abuse&amp;place=%2Fada%2Fdemo"),
+        "{page}"
+    );
+    let (_, page) = page_with_cookie(app, "/report?kind=abuse&place=%2Fada%2Fdemo", "").await;
+    assert!(page.contains("Report this"), "{page}");
+    assert!(page.contains("value=\"/ada/demo\""), "{page}");
+
+    let (status, location) = post_form(
+        app,
+        "/report",
+        "",
+        "kind=abuse&what=This+repository+is+a+copy+of+mine+with+my+name+filed+off.&place=%2Fada%2Fdemo",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{location}");
+    let reports = forge.state.reports().unwrap();
+    assert_eq!(reports[0].kind, "abuse");
+
+    // The reports page says so and offers to hide it; hidden means private.
+    let (_, page) = page_with_cookie(app, "/reports", &cookie).await;
+    assert!(page.contains("Abuse"), "{page}");
+    assert!(page.contains("value=\"hide\""), "{page}");
+    let (status, location) = post_form(
+        app,
+        "/reports",
+        &cookie,
+        "id=1&action=hide&target=%2Fada%2Fdemo",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{location}");
+    assert_eq!(location, "/reports");
+    let (_, repo) = api(app, "GET", "/api/repos/ada/demo", "ada", None).await;
+    assert_eq!(repo["visibility"], "private", "{repo}");
+    let (_, page) = page_with_cookie(app, "/ada/demo", "").await;
+    assert!(!page.contains("kind=abuse"), "{page}");
+    // The report stays until dismissed.
+    assert_eq!(forge.state.reports().unwrap().len(), 1);
+    post_form(app, "/reports", &cookie, "id=1&action=dismiss").await;
+    assert!(forge.state.reports().unwrap().is_empty());
+
+    // A person is reported from their page and stopped.
+    let (_, page) = page_with_cookie(app, "/scout", &cookie).await;
+    assert!(
+        page.contains("/report?kind=abuse&amp;place=%2Fscout"),
+        "{page}"
+    );
+    let (_, page) = page_with_cookie(app, "/ada", &cookie).await;
+    assert!(
+        !page.contains("kind=abuse"),
+        "nobody reports themselves: {page}"
+    );
+    post_form(
+        app,
+        "/report",
+        &cookie,
+        "kind=abuse&what=scout+keeps+opening+changes+full+of+advertising.&place=%2Fscout",
+    )
+    .await;
+    let (_, page) = page_with_cookie(app, "/reports", &cookie).await;
+    assert!(page.contains("value=\"stop\""), "{page}");
+    let (status, location) =
+        post_form(app, "/reports", &cookie, "id=2&action=stop&target=%2Fscout").await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{location}");
+    assert_eq!(location, "/reports");
+    let (_, scout) = api(app, "GET", "/api/principals/scout", "ada", None).await;
+    assert_eq!(scout["active"], false, "{scout}");
+
+    // A bug report about a place offers nothing but dismissal.
+    post_form(
+        app,
+        "/report",
+        "",
+        "what=The+log+page+is+blank+today.&place=%2Fada%2Fdemo",
+    )
+    .await;
+    let (_, page) = page_with_cookie(app, "/reports", &cookie).await;
+    assert!(page.contains("value=\"dismiss\""), "{page}");
+    assert_eq!(page.matches("value=\"hide\"").count(), 0, "{page}");
+
+    // Nobody but whoever runs the forge acts from here.
+    let (_, location) =
+        post_form(app, "/reports", "", "id=3&action=hide&target=%2Fada%2Fdemo").await;
+    assert_ne!(location, "/reports", "a stranger is sent to sign in");
+    assert_eq!(forge.state.reports().unwrap().len(), 2);
+}

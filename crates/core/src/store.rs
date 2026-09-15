@@ -687,6 +687,9 @@ impl Store {
         // column is added in place, once, and only if it is missing.
         ensure_column(&conn, "browser_sessions", "last_seen", "TEXT")?;
         ensure_column(&conn, "browser_sessions", "agent", "TEXT")?;
+        // A report is about something broken (bug) or somebody's conduct
+        // (abuse); rows from before the column are bugs, which they were.
+        ensure_column(&conn, "reports", "kind", "TEXT NOT NULL DEFAULT 'bug'")?;
         // A database from before verified email has a contact table of
         // three columns; the two it lacks are what every read here asks for.
         ensure_column(&conn, "waitlist", "company", "TEXT")?;

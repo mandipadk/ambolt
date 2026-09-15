@@ -2992,8 +2992,13 @@ pub fn owner(
                         }
                     }
                 }
-                @if may_create {
-                    div class="acts" { a class="btn sm" href={ "/new?owner=" (owner.id.as_str()) } { (ic("plus", "sm")) "New repository" } }
+                div class="acts" {
+                    @if may_create {
+                        a class="btn sm" href={ "/new?owner=" (owner.id.as_str()) } { (ic("plus", "sm")) "New repository" }
+                    }
+                    @if who.viewer().is_none_or(|v| v.0 != owner.id) {
+                        a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (owner.id.as_str()) } title="Report this account to whoever runs the forge" { "Report" }
+                    }
                 }
             }
             @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
@@ -3168,21 +3173,34 @@ pub fn report(
     viewer: Option<&Viewer>,
     filed: Option<i64>,
     error: Option<&str>,
+    // Brought here by the link on a repository or a person's page.
+    abuse: bool,
+    place: &str,
 ) -> Markup {
+    let title = if abuse {
+        "Report this"
+    } else {
+        "Say what broke"
+    };
     let body = html! {
-        p class="hint" { "What you did, what you expected, and what happened instead. The version of this forge is recorded with it. An address is optional; leave one if you want to hear back." }
+        @if abuse {
+            p class="hint" { "Say what is wrong with it, in a sentence or two. Whoever runs this forge reads every report and can hide a repository or stop an account; nothing is done by a machine." }
+        } @else {
+            p class="hint" { "What you did, what you expected, and what happened instead. The version of this forge is recorded with it. An address is optional; leave one if you want to hear back." }
+        }
         @if let Some(id) = filed {
             div class="notice" { (ic("check", "")) span { "Recorded as report " (id) ". Thank you." } }
         }
         @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
         form class="form" method="post" action="/report" {
+            input type="hidden" name="kind" value=(if abuse { "abuse" } else { "bug" });
             div class="field" {
-                label for="what" { "What happened" }
-                textarea id="what" name="what" rows="7" required minlength="10" placeholder="I pushed a change with … and the page said …" {}
+                label for="what" { @if abuse { "What is wrong" } @else { "What happened" } }
+                textarea id="what" name="what" rows="7" required minlength="10" placeholder=(if abuse { "This repository's name is …" } else { "I pushed a change with … and the page said …" }) {}
             }
             div class="field" {
-                label for="place" { "Where" }
-                input id="place" name="place" type="text" maxlength="300" placeholder="A page, a command, a change number";
+                label for="place" { @if abuse { "What it is about" } @else { "Where" } }
+                input id="place" name="place" type="text" maxlength="300" value=(place) placeholder="A page, a command, a change number";
             }
             div class="field" {
                 label for="contact" { "How to reach you" }
@@ -3199,9 +3217,9 @@ pub fn report(
             None,
             None,
             "Report",
-            html! { div class="sec top" { div class="panel narrow" { header { (ic("alert", "")) h2 { "Say what broke" } } div class="pad" { (body) } } } },
+            html! { div class="sec top" { div class="panel narrow" { header { (ic("alert", "")) h2 { (title) } } div class="pad" { (body) } } } },
         ),
-        None => outside(theme, "Say what broke", body),
+        None => outside(theme, title, body),
     }
 }
 
@@ -3230,12 +3248,18 @@ pub fn reports(
                         div class="empty" { b { "Nothing reported." } "The form is at " a href="/report" { "/report" } "." }
                     }
                     @for report in reports {
+                        @let place_path = report.place.as_deref().filter(|p| p.starts_with('/') && p.len() > 1);
+                        @let about_repo = place_path.is_some_and(|p| p.trim_start_matches('/').contains('/'));
                         div class="row ls" {
                             span class="chip" { "#" (report.id) }
+                            @if report.kind == "abuse" { span class="chip bad" { "Abuse" } }
                             span class="tt" {
                                 span class="t" {
                                     (report.filed.get(..16).unwrap_or(&report.filed).replace('T', " ")) " · " (report.version)
-                                    @if let Some(place) = &report.place { " · " (place) }
+                                    @if let Some(place) = &report.place {
+                                        " · "
+                                        @if let Some(path) = place_path { a href=(path) { (place) } } @else { (place) }
+                                    }
                                 }
                                 span class="s wrap" { (report.what) }
                                 span class="s" {
@@ -3250,8 +3274,26 @@ pub fn reports(
                                 }
                             }
                             span class="acts" {
+                                @if let Some(path) = place_path.filter(|_| report.kind == "abuse") {
+                                    @if about_repo {
+                                        form method="post" action="/reports" {
+                                            input type="hidden" name="id" value=(report.id);
+                                            input type="hidden" name="action" value="hide";
+                                            input type="hidden" name="target" value=(path);
+                                            button class="ghost sm" type="submit" title="Set the repository private" { "Hide" }
+                                        }
+                                    } @else {
+                                        form method="post" action="/reports" {
+                                            input type="hidden" name="id" value=(report.id);
+                                            input type="hidden" name="action" value="stop";
+                                            input type="hidden" name="target" value=(path);
+                                            button class="ghost sm danger" type="submit" title="Deactivate the account" { "Stop" }
+                                        }
+                                    }
+                                }
                                 form method="post" action="/reports" {
                                     input type="hidden" name="id" value=(report.id);
+                                    input type="hidden" name="action" value="dismiss";
                                     button class="ghost sm" type="submit" { "Dismiss" }
                                 }
                             }
@@ -3797,6 +3839,9 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
                     }
                 }
                 div class="acts" {
+                    @if repo.visibility == Visibility::Public {
+                        a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (name.replace('/', "%2F")) } title="Report this repository to whoever runs the forge" { "Report" }
+                    }
                     @if let Some(saved) = saved {
                         form method="post" action={ "/" (name) "/save" } {
                             input type="hidden" name="action" value=(if saved { "unsave" } else { "save" });

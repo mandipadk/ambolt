@@ -64,6 +64,7 @@ pub use store::Store;
 pub use types::Anchor;
 pub use types::QuotaOverride;
 pub use types::Report;
+pub use types::ReportKind;
 pub use types::Tag;
 pub use types::Usage;
 pub use types::WaitlistEntry;

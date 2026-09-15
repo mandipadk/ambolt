@@ -16,6 +16,7 @@ use crate::leases::{self, Overlap};
 use crate::policy::{self, PolicyTrace};
 use crate::queries::raw;
 use crate::store::{Store, append};
+use crate::types::ReportKind;
 use crate::types::{
     Anchor, BrowserSession, Capability, Change, ChangeSpec, ChangeState, ClaimSpec, Contact,
     Disposition, Mirror, ObjectFormat, PasskeyRecord, Policy, Principal, PrincipalKind, Quota,
@@ -1193,6 +1194,19 @@ impl Store {
         by: Option<&str>,
         version: &str,
     ) -> CoreResult<i64> {
+        self.file_report_of(ReportKind::Bug, what, place, contact, by, version)
+    }
+
+    /// The same, saying what the report is about.
+    pub fn file_report_of(
+        &mut self,
+        kind: ReportKind,
+        what: &str,
+        place: &str,
+        contact: &str,
+        by: Option<&str>,
+        version: &str,
+    ) -> CoreResult<i64> {
         let what = what.trim();
         require(what.chars().count() >= 10, || {
             "say a little more: what you did, and what happened".into()
@@ -1205,15 +1219,16 @@ impl Store {
             "that does not look like an email address".into()
         })?;
         self.conn.execute(
-            "INSERT INTO reports (filed, what, place, contact, by, version)
-             VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO reports (filed, what, place, contact, by, version, kind)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
             rusqlite::params![
                 jiff::Timestamp::now().to_string(),
                 what,
                 (!place.is_empty()).then_some(place),
                 (!contact.is_empty()).then_some(contact.as_str()),
                 by,
-                version
+                version,
+                kind.as_str()
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
@@ -1224,7 +1239,7 @@ impl Store {
         Ok(self
             .conn
             .prepare(
-                "SELECT id, filed, what, place, contact, by, version FROM reports ORDER BY id DESC",
+                "SELECT id, filed, what, place, contact, by, version, kind FROM reports ORDER BY id DESC",
             )?
             .query_map([], |row| {
                 Ok(crate::types::Report {
@@ -1235,6 +1250,7 @@ impl Store {
                     contact: row.get(4)?,
                     by: row.get(5)?,
                     version: row.get(6)?,
+                    kind: row.get(7)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?)

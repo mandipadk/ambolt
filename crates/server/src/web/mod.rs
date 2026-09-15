@@ -2998,6 +2998,12 @@ struct ReportQuery {
     filed: Option<i64>,
     #[serde(default)]
     error: Option<String>,
+    /// `abuse` when the link on a repository or a person's page brought
+    /// the reporter here; the place comes with it.
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    place: Option<String>,
 }
 
 /// The form for saying what broke. Signed out or in: the person most
@@ -3009,7 +3015,16 @@ async fn report_page(
     Query(query): Query<ReportQuery>,
 ) -> Response {
     let viewer = viewer_from(&headers, &app);
-    views::report(theme, viewer.as_ref(), query.filed, query.error.as_deref()).into_response()
+    let abuse = query.kind.as_deref() == Some("abuse");
+    views::report(
+        theme,
+        viewer.as_ref(),
+        query.filed,
+        query.error.as_deref(),
+        abuse,
+        query.place.as_deref().unwrap_or(""),
+    )
+    .into_response()
 }
 
 #[derive(Deserialize)]
@@ -3019,6 +3034,8 @@ struct ReportForm {
     place: String,
     #[serde(default)]
     contact: String,
+    #[serde(default)]
+    kind: String,
 }
 
 /// Take a report from anyone: rate limited by source and bounded, kept
@@ -3037,8 +3054,10 @@ async fn file_report(
         return crate::guard::too_many_attempts();
     }
     let by = viewer_from(&headers, &app).map(|v| v.0.as_str().to_owned());
+    let kind = ambolt_core::ReportKind::parse(&form.kind).unwrap_or(ambolt_core::ReportKind::Bug);
     let filed = app.with_store(|store| {
-        store.file_report(
+        store.file_report_of(
+            kind,
             &form.what,
             &form.place,
             &form.contact,
@@ -3098,21 +3117,55 @@ async fn reports_page(
 }
 
 #[derive(Deserialize)]
-struct DismissForm {
+struct ReportsForm {
     id: i64,
+    /// `dismiss`, `hide` (the place, a repository, goes private) or
+    /// `stop` (the place, a person or an agent, is deactivated).
+    #[serde(default)]
+    action: String,
+    #[serde(default)]
+    target: String,
 }
 
+/// Whoever runs the forge answers a report: dismiss it, hide the
+/// repository it names, or stop the principal it names. Hiding and
+/// stopping are the forge's ordinary acts, on the record; the report
+/// stays until dismissed, so what was done about it is one row.
 async fn reports_action(
     State(app): State<AppState>,
     viewer: Viewer,
-    Form(form): Form<DismissForm>,
+    Form(form): Form<ReportsForm>,
 ) -> Response {
     if !viewer.1.admin {
         return not_found();
     }
-    match app.with_store(|store| store.dismiss_report(form.id)) {
-        Ok(_) => Redirect::to("/reports").into_response(),
-        Err(err) => oops(err),
+    let back =
+        |error: &str| Redirect::to(&format!("/reports?error={}", urlencode(error))).into_response();
+    match form.action.as_str() {
+        "hide" => {
+            let repo = form.target.trim().trim_start_matches('/').to_owned();
+            match app.with_store(|s| {
+                s.set_visibility(&viewer.0, &repo, ambolt_core::Visibility::Private)
+            }) {
+                Ok(env) => app.publish(&env),
+                Err(err) => return back(&humane(&err)),
+            }
+            Redirect::to("/reports").into_response()
+        }
+        "stop" => {
+            let Some(who) = PrincipalId::new(form.target.trim().trim_start_matches('/')) else {
+                return back("say who");
+            };
+            match app.with_store(|s| s.set_active(&viewer.0, &who, false)) {
+                Ok(env) => app.publish(&env),
+                Err(err) => return back(&humane(&err)),
+            }
+            Redirect::to("/reports").into_response()
+        }
+        _ => match app.with_store(|store| store.dismiss_report(form.id)) {
+            Ok(_) => Redirect::to("/reports").into_response(),
+            Err(err) => oops(err),
+        },
     }
 }
 

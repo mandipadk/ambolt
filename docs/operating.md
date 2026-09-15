@@ -815,6 +815,15 @@ them at `/reports` or with `ambolt admin reports`, and, when the forge can
 send mail, hears of each one at their confirmed address as it arrives.
 The form is rate limited by source like the waitlist.
 
+A public repository's page and a person's or organisation's page carry
+a Report link, which opens the same form about that place. Such a
+report is marked as abuse, and beside it `/reports` offers what the
+forge can do: Hide sets the repository private, Stop deactivates the
+account, and Dismiss drops the report. Hiding and stopping are the
+ordinary acts, recorded in the log like any other, and undone the
+ordinary way; the report stays until dismissed, so what was done about
+it is read from one row. Nothing is decided by a machine.
+
 ## When something is wrong
 
 **The forge is down.** The watcher says so, or `/healthz` does not
