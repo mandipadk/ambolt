@@ -177,6 +177,11 @@ pub fn routes() -> Router<AppState> {
             "/{owner}/{repo}/changes/{number}/enqueue",
             post(submit_enqueue),
         )
+        .route("/{owner}/{repo}/changes/{number}/admit", post(submit_admit))
+        .route(
+            "/{owner}/{repo}/changes/{number}/discard",
+            post(submit_discard),
+        )
         .route(
             "/{owner}/{repo}/changes/{number}/dequeue",
             post(submit_dequeue),
@@ -4022,11 +4027,18 @@ async fn render_tree(
         ),
         Who::Anonymous(_) => None,
     };
+    let proposer = match &who {
+        Who::Signed(viewer) => app.with_store(|s| {
+            !s.may_push(&viewer.0, &record.name) && s.may_propose(&viewer.0, &record.name)
+        }),
+        Who::Anonymous(_) => false,
+    };
     views::repository(views::RepoPage {
         theme,
         who: who.reading(),
         repo: &record,
         saved,
+        proposer,
         tip: tip.as_deref(),
         path: &path,
         entries: &entries,
@@ -4681,6 +4693,33 @@ async fn submit_dequeue(
     }
 }
 
+/// Discard a proposal from its page: abandoned, and its revisions gone.
+async fn submit_discard(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+    Form(form): Form<ReasonForm>,
+) -> Response {
+    let back = format!("/{repo}/changes/{number}");
+    if let Err(response) = readable(&app, &viewer, &repo) {
+        return *response;
+    }
+    let change = match app.with_store(|s| s.change_by_number(&repo, number)) {
+        Ok(Some(change)) => change.id,
+        Ok(None) => return not_found(),
+        Err(err) => return oops(err),
+    };
+    match app.with_store(|s| s.discard_change(&viewer.0, &change, form.reason.trim())) {
+        Ok(env) => {
+            app.publish(&env);
+            crate::git_http::drop_change_refs(&app, &repo, number).await;
+            Redirect::to(&back).into_response()
+        }
+        Err(err) => flash(&back, &humane(&err)),
+    }
+}
+
 async fn submit_abandon(
     State(app): State<AppState>,
     viewer: Viewer,
@@ -4723,6 +4762,31 @@ async fn repo_describe(
         Ok(env) => {
             app.publish(&env);
             Redirect::to(&format!("{back}?done=1")).into_response()
+        }
+        Err(err) => flash(&back, &humane(&err)),
+    }
+}
+
+/// Let runners at a proposal, from its page.
+async fn submit_admit(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+) -> Response {
+    let back = format!("/{repo}/changes/{number}");
+    if let Err(response) = readable(&app, &viewer, &repo) {
+        return *response;
+    }
+    let change = match app.with_store(|s| s.change_by_number(&repo, number)) {
+        Ok(Some(change)) => change.id,
+        Ok(None) => return not_found(),
+        Err(err) => return oops(err),
+    };
+    match app.with_store(|s| s.admit_change(&viewer.0, &change)) {
+        Ok(env) => {
+            app.publish(&env);
+            Redirect::to(&back).into_response()
         }
         Err(err) => flash(&back, &humane(&err)),
     }
@@ -5291,6 +5355,8 @@ struct PolicyForm {
     #[serde(default)]
     agents_act_in_sessions: Option<String>,
     #[serde(default)]
+    proposals: Option<String>,
+    #[serde(default)]
     runner_quorum: String,
     #[serde(default)]
     trust_waives: Vec<String>,
@@ -5326,6 +5392,7 @@ fn parse_policy_form(body: &str) -> Option<PolicyForm> {
         require_runner_verification: None,
         require_concerns_resolved: None,
         agents_act_in_sessions: None,
+        proposals: None,
         runner_quorum: String::new(),
         trust_waives: Vec::new(),
         trust_percent: String::new(),
@@ -5348,6 +5415,7 @@ fn parse_policy_form(body: &str) -> Option<PolicyForm> {
             "require_runner_verification" => form.require_runner_verification = Some(value),
             "require_concerns_resolved" => form.require_concerns_resolved = Some(value),
             "agents_act_in_sessions" => form.agents_act_in_sessions = Some(value),
+            "proposals" => form.proposals = Some(value),
             "runner_quorum" => form.runner_quorum = value,
             "trust_waives" => form.trust_waives.push(value),
             "trust_percent" => form.trust_percent = value,
@@ -5479,6 +5547,7 @@ fn policy_from(form: &PolicyForm) -> Result<ambolt_core::Policy, &'static str> {
         attention_budget,
         agents_act_in_sessions: form.agents_act_in_sessions.is_some(),
         trust,
+        proposals: form.proposals.is_some(),
     })
 }
 

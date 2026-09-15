@@ -47,6 +47,7 @@ mod pages_flow;
 mod pages_more_flow;
 mod passkeys_flow;
 mod password_flow;
+mod propose_flow;
 mod public_flow;
 mod quorum_flow;
 mod quotas_flow;

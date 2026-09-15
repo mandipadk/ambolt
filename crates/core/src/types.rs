@@ -108,6 +108,10 @@ str_enum!(
         Verify => "verify",
         /// Register principals, create repos, manage grants and tokens.
         Admin => "admin",
+        /// Open a change on a repository, and act on the changes you
+        /// opened: revise, claim, abandon. Nothing on anyone else's, and
+        /// nothing that judges or lands.
+        Propose => "propose",
     }
 );
 
@@ -271,6 +275,15 @@ pub struct Quota {
     /// counted too. Meaningless for a person, who has no members.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub members: Option<u32>,
+    /// Proposals one proposer may have open on one repository.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_proposals: Option<u32>,
+    /// Proposals one proposer may open in a day, across the forge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposals_a_day: Option<u32>,
+    /// Bytes one push of a proposal may carry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposal_push: Option<u64>,
 }
 
 impl Default for Quota {
@@ -286,6 +299,9 @@ impl Default for Quota {
             open_changes: Some(500),
             tokens: Some(50),
             members: Some(25),
+            open_proposals: Some(3),
+            proposals_a_day: Some(10),
+            proposal_push: Some(32 * 1024 * 1024),
         }
     }
 }
@@ -301,6 +317,9 @@ impl Quota {
             open_changes: None,
             tokens: None,
             members: None,
+            open_proposals: None,
+            proposals_a_day: None,
+            proposal_push: None,
         }
     }
 
@@ -316,6 +335,9 @@ impl Quota {
             open_changes: over.open_changes.unwrap_or(self.open_changes),
             tokens: over.tokens.unwrap_or(self.tokens),
             members: over.members.unwrap_or(self.members),
+            open_proposals: over.open_proposals.unwrap_or(self.open_proposals),
+            proposals_a_day: over.proposals_a_day.unwrap_or(self.proposals_a_day),
+            proposal_push: over.proposal_push.unwrap_or(self.proposal_push),
         }
     }
 }
@@ -394,6 +416,24 @@ pub struct QuotaOverride {
         deserialize_with = "said"
     )]
     pub members: Option<Option<u32>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "said"
+    )]
+    pub open_proposals: Option<Option<u32>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "said"
+    )]
+    pub proposals_a_day: Option<Option<u32>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "said"
+    )]
+    pub proposal_push: Option<Option<u64>>,
 }
 
 /// Tell "the caller wrote null" apart from "the caller wrote nothing",
@@ -417,6 +457,9 @@ impl QuotaOverride {
             open_changes: newer.open_changes.or(self.open_changes),
             tokens: newer.tokens.or(self.tokens),
             members: newer.members.or(self.members),
+            open_proposals: newer.open_proposals.or(self.open_proposals),
+            proposals_a_day: newer.proposals_a_day.or(self.proposals_a_day),
+            proposal_push: newer.proposal_push.or(self.proposal_push),
         }
     }
 
@@ -592,6 +635,18 @@ pub struct Change {
     /// Revisions by more than one author: alternatives, not history.
     #[serde(default)]
     pub competing: bool,
+    /// Opened by somebody who held only `propose` here at the time. It
+    /// stays so whatever they are granted later, since it says what the
+    /// reviewers were looking at.
+    #[serde(default)]
+    pub proposal: bool,
+    /// Somebody inside let runners at this proposal.
+    #[serde(default)]
+    pub admitted: bool,
+    /// Abandoned and its revisions taken out of git: a proposal that
+    /// should never have arrived. The log keeps the reason.
+    #[serde(default)]
+    pub discarded: bool,
 }
 
 impl Change {
@@ -841,6 +896,10 @@ pub struct Policy {
     /// for here. None spends nothing: every change meets the same bar.
     #[serde(default)]
     pub trust: Option<EarnedTrust>,
+    /// Anyone signed in may propose a change here, when the repository
+    /// is public: open one, and act on their own. Off unless said.
+    #[serde(default)]
+    pub proposals: bool,
 }
 
 /// A bar read off a principal's record, and what clearing it buys. The
@@ -899,6 +958,7 @@ impl Default for Policy {
             attention_budget: None,
             agents_act_in_sessions: false,
             trust: None,
+            proposals: false,
         }
     }
 }

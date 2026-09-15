@@ -321,6 +321,14 @@ fn dispatch(client: &ApiClient, name: &str, args: &Value) -> Result<(u16, Value)
             &format!("/api/changes/{}/enqueue", need(args, "change")?),
             args,
         ),
+        "admit_change" => client.post(
+            &format!("/api/changes/{}/admit", need(args, "change")?),
+            args,
+        ),
+        "discard_change" => client.post(
+            &format!("/api/changes/{}/discard", need(args, "change")?),
+            args,
+        ),
         "dequeue_change" => client.post(
             &format!("/api/changes/{}/dequeue", need(args, "change")?),
             args,
@@ -757,6 +765,22 @@ fn tool_definitions() -> Vec<Value> {
              Use this to learn what to do next instead of attempting blind merges.",
             &["change"],
             json!({ "change": s("Change id") }),
+        ),
+        tool(
+            "admit_change",
+            "Let runners at a proposal: a change opened by someone who holds only propose \
+             here. Its claims name commands they wrote, so runners on a timer leave it \
+             alone until somebody holding merge or verify says so. Requires merge or verify.",
+            &["change"],
+            json!({ "change": s("Change id") }),
+        ),
+        tool(
+            "discard_change",
+            "Discard a proposal: abandon it and take its revisions out of git, for what \
+             should never have arrived. Ordinary abandonment keeps every revision; this \
+             does not. Requires merge, and a reason.",
+            &["change", "reason"],
+            json!({ "change": s("Change id"), "reason": s("Why, for whoever reads the log") }),
         ),
         tool(
             "enqueue_change",

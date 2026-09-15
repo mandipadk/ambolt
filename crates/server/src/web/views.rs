@@ -2035,8 +2035,9 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                 @match change.state {
                                     ChangeState::Open => { span class="chip acc" { (ic("changes", "")) "Open" } }
                                     ChangeState::Merged => { span class="chip good" { (ic("check", "")) "Landed" } }
-                                    ChangeState::Abandoned => { span class="chip" { (ic("x", "")) "Abandoned" } }
+                                    ChangeState::Abandoned => { span class="chip" { (ic("x", "")) @if change.discarded { "Discarded" } @else { "Abandoned" } } }
                                 }
+                                @if change.proposal { span class="chip" { "Proposal" } }
                                 span class="tt" {
                                     span class="t" { (change.title) }
                                     span class="s" { (change.repo) " #" (change.number) }
@@ -2230,6 +2231,11 @@ pub fn repo_settings(
                                         span class="t" { "Agents act only inside sessions" }
                                         span class="d" { "An agent's standing token cannot push, review or land on its own. It opens a session first, so everything it does has one on record." }
                                         input class="sw" type="checkbox" name="agents_act_in_sessions" checked[policy.agents_act_in_sessions];
+                                    }
+                                    label class="opt" {
+                                        span class="t" { "Anyone may propose a change" }
+                                        span class="d" { "While the repository is public, anyone signed in can push a change here as a proposal: theirs to revise and abandon, yours to review and land. It counts against their allowance, not yours." }
+                                        input class="sw" type="checkbox" name="proposals" checked[policy.proposals];
                                     }
                                 }
                             }
@@ -3728,6 +3734,9 @@ pub struct RepoPage<'a> {
     pub repo: &'a Repo,
     /// Whether the signed-in viewer saved it; none for a stranger.
     pub saved: Option<bool>,
+    /// The viewer may propose here and not push: their push opens a
+    /// proposal, and the opener says so.
+    pub proposer: bool,
     pub tip: Option<&'a str>,
     pub path: &'a str,
     pub entries: &'a [Entry],
@@ -3743,6 +3752,7 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
         who,
         repo,
         saved,
+        proposer,
         tip,
         path,
         entries,
@@ -3872,9 +3882,13 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
             @if tip.is_none() {
                 div class="first anvil" {
                     h2 { "Put something on the anvil" }
-                    p class="sec2" { "Push from a clone you already have, import history, or let an agent start. The first push opens a change, and the change is what gets reviewed and landed." }
+                    @if proposer {
+                        p class="sec2" { "You may propose here. Push from a clone and a proposal opens; someone inside reviews it, asks a runner to run it, and lands it." }
+                    } @else {
+                        p class="sec2" { "Push from a clone you already have, import history, or let an agent start. The first push opens a change, and the change is what gets reviewed and landed." }
+                    }
                     div class="seg" data-tabs="first" {
-                        button class="on" type="button" data-pane="first-push" { (ic("terminal", "sm")) "Push a change" }
+                        button class="on" type="button" data-pane="first-push" { (ic("terminal", "sm")) @if proposer { "Propose a change" } @else { "Push a change" } }
                         button type="button" data-pane="first-import" { (ic("download", "sm")) "Import history" }
                         button type="button" data-pane="first-agent" { (ic("agents", "sm")) "Let an agent start" }
                     }
@@ -4193,8 +4207,9 @@ pub fn changes(
                             @match change.state {
                                 ChangeState::Open => { span class="chip acc" { (ic("changes", "")) "Open" } }
                                 ChangeState::Merged => { span class="chip good" { (ic("check", "")) "Landed" } }
-                                ChangeState::Abandoned => { span class="chip" { (ic("x", "")) "Abandoned" } }
+                                ChangeState::Abandoned => { span class="chip" { (ic("x", "")) @if change.discarded { "Discarded" } @else { "Abandoned" } } }
                             }
+                            @if change.proposal { span class="chip" { "Proposal" } }
                             span class="tt" {
                                 span class="t" { "#" (change.number) " " (change.title) }
                                 span class="s" {
@@ -4508,8 +4523,9 @@ pub fn change(page: ChangePage) -> Markup {
                         @match change.state {
                             ChangeState::Open => { span class="chip acc" { (ic("changes", "")) "Open" } }
                             ChangeState::Merged => { span class="chip good" { (ic("check", "")) "Landed" } }
-                            ChangeState::Abandoned => { span class="chip" { (ic("x", "")) "Abandoned" } }
+                            ChangeState::Abandoned => { span class="chip" { (ic("x", "")) @if change.discarded { "Discarded" } @else { "Abandoned" } } }
                         }
+                        @if change.proposal { span class="chip" title="Opened by someone who holds no push here" { "Proposal" } }
                         @if change.competing {
                             @match change.preferred_revision {
                                 Some(preferred) => { span class="chip" { (ic("rerun", "")) "Revision " (preferred) " preferred" } }
@@ -4538,6 +4554,20 @@ pub fn change(page: ChangePage) -> Markup {
                         }
                     }
                 }
+                @if change.proposal && open {
+                    div class="notice" {
+                        (ic("alert", ""))
+                        span {
+                            "A proposal: " b { (people.name(&change.owner).0) } " holds no push here. Its claims are their word until a runner reproduces one"
+                            @if change.admitted { "; runners have been let at it." } @else { ", and runners leave it alone until someone inside lets them at it." }
+                        }
+                        @if signed && !change.admitted {
+                            form method="post" action={ (base) "/admit" } {
+                                button class="btn2 sm" type="submit" title="Runners on a timer will pick it up from here" { "Let the runner at it" }
+                            }
+                        }
+                    }
+                }
                 @if open && signed {
                     div class="acts" {
                         @if !queued {
@@ -4553,7 +4583,15 @@ pub fn change(page: ChangePage) -> Markup {
                                 div class="lab" { "Abandon this change" }
                                 input class="input sm" type="text" name="reason" placeholder="Why, for whoever reads the log" aria-label="Why, for whoever reads the log" required autocomplete="off";
                                 button class="danger" type="submit" { (ic("x", "sm")) "Abandon" }
+                                @if change.proposal {
+                                form class="pop" method="post" action={ (base) "/discard" } {
+                                    div class="lab" { "Discard this proposal" }
+                                    p class="hint" { "Abandoned, and its revisions taken out of git. For what should never have arrived; the reason stays in the log." }
+                                    input class="input sm" type="text" name="reason" placeholder="Why, for whoever reads the log" aria-label="Why, for whoever reads the log" autocomplete="off" required;
+                                    button class="danger" type="submit" { (ic("x", "sm")) "Discard" }
+                                }
                             }
+                        }
                         }
                     }
                 }
@@ -5400,6 +5438,18 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
             "dot idle",
             html! {
                 b { (change_num(numbers, change.as_str())) } " entered the queue"
+            },
+        ),
+        Event::ChangeAdmitted { change } => (
+            "dot idle",
+            html! {
+                b { (actor) } " let runners at " (change_num(numbers, change.as_str()))
+            },
+        ),
+        Event::ChangeDiscarded { change, reason } => (
+            "dot bad",
+            html! {
+                b { (actor) } " discarded " (change_num(numbers, change.as_str())) ": " (reason)
             },
         ),
         Event::RevisionPushed {

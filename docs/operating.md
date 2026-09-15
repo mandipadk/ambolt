@@ -63,7 +63,9 @@ curl -X POST localhost:6160/api/principals \
   -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"id": "scout", "kind": "agent", "display": "Scout", "model": "claude-fable-5"}'
 
-# delegate: agents act only under capability grants
+# delegate: agents act only under capability grants; the verbs are
+# task, push, review, merge, verify, admin, and propose (open a change
+# and act on your own, nothing more)
 curl -X POST localhost:6160/api/grants \
   -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"grantee": "scout", "actions": ["task", "push"]}'
@@ -495,6 +497,23 @@ not count toward a quorum. Then set `runner_quorum` on the repositories
 that want two machines to agree. Each runner asks `awaiting-verification`
 under its own token and is handed only what it still owes.
 
+A proposal is left out of that answer until somebody holding merge or
+verify on the repository lets runners at it, from the change's page or
+with `POST /api/changes/{id}/admit`; its claims name commands a
+stranger wrote, and no machine of yours runs those because they asked.
+Run proposals somewhere you can throw away: a runner given a change
+number by hand runs whatever it is given, and a runner on a timer runs
+whatever was admitted, in its own environment, which is the runner's to
+keep safe.
+
+A proposal that should never have arrived is discarded rather than
+abandoned, from the change's page or with `POST
+/api/changes/{id}/discard {"reason": …}` by somebody holding merge:
+it is abandoned, its `refs/changes/N/*` are removed, and `gc` reclaims
+what nothing names once it is an hour old. Ordinary abandonment keeps
+every revision fetchable; discard is the exception, and the log keeps
+the reason.
+
 ### Merge receipts
 
 Every landing is signed. The key lives in `signing.key` beside the
@@ -553,7 +572,12 @@ and works under the credential until `end_session`. A repository whose
 policy carries `"agents_act_in_sessions": true` refuses agents' standing
 tokens for push, review and merge; `task` and `verify` remain open, so an
 agent can still claim a task and open a session, and a runner is
-unaffected.
+unaffected. A public repository whose policy carries `"proposals": true`
+lets anyone signed in propose a change to it: open one, push revisions
+to it, claim on it, abandon it, and nothing on anyone else's; the change
+is marked a proposal, counted against the proposer's open changes, and
+lands by the same rules as any other. The switch is on the repository's
+settings page under the landing policy.
 
 ### What an owner may take up
 
@@ -570,10 +594,12 @@ to delete something or ask for more, and arrives as `409` with
 
 The forge's own numbers are the defaults: 50 repositories, 25 agents,
 200 open tasks, 500 open changes, 50 tokens, 5 GiB of disk, and 25
-members for an organisation. Change them for the whole forge with
-`--quota-repos`, `--quota-agents`, `--quota-open-tasks`,
-`--quota-open-changes`, `--quota-tokens`, `--quota-disk-mb` and
-`--quota-members`. Each takes a number or the word `none` for no limit
+members for an organisation; and for a proposer, 3 proposals open on
+one repository, 10 opened a day, and 32 MiB in one push. Change them for
+the whole forge with `--quota-repos`, `--quota-agents`,
+`--quota-open-tasks`, `--quota-open-changes`, `--quota-tokens`,
+`--quota-disk-mb`, `--quota-members`, `--quota-open-proposals`,
+`--quota-proposals-a-day` and `--quota-proposal-push-mb`. Each takes a number or the word `none` for no limit
 at all; `0` means zero, because an operator who types 0 means none
 allowed.
 

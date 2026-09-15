@@ -154,19 +154,40 @@ pub(crate) fn evaluate_at(
 
     let mut claims = raw::claims_on(conn, change.id.as_str(), revision)?;
     claims.retain(|c| known(c.seq));
+    let mut verifications = raw::verifications_on(conn, change.id.as_str(), revision)?;
+    verifications.retain(|v| known(v.seq));
+    let standing = standing_positions(&verifications);
+    // On a proposal the owner's own claim is their word, not evidence:
+    // it counts once a runner has reproduced it, or when somebody who
+    // holds push here made it.
+    let reproduced: std::collections::HashSet<&str> = standing
+        .iter()
+        .filter(|v| v.agrees)
+        .map(|v| v.claim.as_str())
+        .collect();
+    let counts = |c: &crate::types::Claim| {
+        !change.proposal || c.by != change.owner || reproduced.contains(c.id.as_str())
+    };
     if policy.require_executed_check {
         let executed: Vec<_> = claims
             .iter()
-            .filter(|c| c.kind != ClaimKind::Reasoning && c.passed)
+            .filter(|c| c.kind != ClaimKind::Reasoning && c.passed && counts(c))
             .collect();
         requirements.push(Requirement {
             description: "latest revision carries a passing test claim".into(),
             satisfied: !executed.is_empty(),
             evidence: if executed.is_empty() {
-                format!(
-                    "{} claim(s) on revision {revision}, none an executed check",
-                    claims.len()
-                )
+                if change.proposal && claims.iter().any(|c| c.kind != ClaimKind::Reasoning && c.passed) {
+                    format!(
+                        "{} claim(s) on revision {revision}; a proposal's own claims are its word until a runner reproduces one",
+                        claims.len()
+                    )
+                } else {
+                    format!(
+                        "{} claim(s) on revision {revision}, none an executed check",
+                        claims.len()
+                    )
+                }
             } else {
                 executed
                     .iter()
@@ -179,8 +200,6 @@ pub(crate) fn evaluate_at(
 
     // A claim someone re-ran and could not reproduce is worse than no
     // claim: it is a contradiction on the record.
-    let mut verifications = raw::verifications_on(conn, change.id.as_str(), revision)?;
-    verifications.retain(|v| known(v.seq));
     // A runner's verdict on a claim is its current position, not a
     // permanent artefact. When the same runner re-runs the same claim it
     // is saying what it now observes, and its earlier attempt becomes
@@ -190,7 +209,6 @@ pub(crate) fn evaluate_at(
     // it was not. Two *different* runners disagreeing is not superseded
     // by either of them: that disagreement is real information, and it
     // is exactly the case a person should look at.
-    let standing = standing_positions(&verifications);
     let disputed: Vec<_> = standing.iter().filter(|v| !v.agrees).collect();
     requirements.push(Requirement {
         description: "no claim on the latest revision is disputed by a runner".into(),
@@ -663,6 +681,7 @@ pub fn packs() -> Vec<crate::PolicyPack> {
                 require_runner_verification: true,
                 independence: Independence::HumanOnly,
                 agents_act_in_sessions: true,
+                proposals: false,
                 attention_budget: Some(2),
                 ..Policy::default()
             },

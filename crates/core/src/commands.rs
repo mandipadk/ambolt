@@ -104,7 +104,7 @@ fn authorize(
         && principal.kind == PrincipalKind::Agent
         && matches!(
             action,
-            Capability::Push | Capability::Review | Capability::Merge
+            Capability::Push | Capability::Review | Capability::Merge | Capability::Propose
         )
         && let Some(name) = repo
         && raw::repo(tx, name)?.is_some_and(|r| r.policy.agents_act_in_sessions)
@@ -471,6 +471,79 @@ pub(crate) fn may_push(
     authorize(tx, acting, actor, Capability::Push, Some(repo)).is_ok()
 }
 
+/// Whether `actor` may propose a change to `repo`: a grant of `propose`
+/// says so; so does being on the organisation that owns it; and on a
+/// public repository whose policy opens proposals, so does being anyone
+/// signed in. A session credential must carry the verb like any other,
+/// and a repository that keeps agents in sessions keeps them there for
+/// proposing too.
+pub(crate) fn may_propose(
+    tx: &Transaction,
+    acting: Acting<'_>,
+    actor: &PrincipalId,
+    repo: &str,
+) -> bool {
+    if authorize(tx, acting, actor, Capability::Propose, Some(repo)).is_ok() {
+        return true;
+    }
+    // Only what authorize refused for want of a grant is reconsidered:
+    // a scope that does not carry the verb, a deactivated actor, an
+    // agent held to sessions, are refusals that stand.
+    if let Some(scope) = acting.scope
+        && !scope.covers(Capability::Propose, Some(repo))
+    {
+        return false;
+    }
+    let Ok(principal) = ensure_actor(tx, actor) else {
+        return false;
+    };
+    let Ok(Some(record)) = raw::repo(tx, repo) else {
+        return false;
+    };
+    if acting.scope.is_none()
+        && principal.kind == PrincipalKind::Agent
+        && record.policy.agents_act_in_sessions
+    {
+        return false;
+    }
+    if raw::is_team_member(tx, record.owner.as_str(), actor.as_str()).unwrap_or(false) {
+        return true;
+    }
+    record.visibility == Visibility::Public && record.policy.proposals
+}
+
+/// How somebody comes to act on a change: with `push` on the repository,
+/// which reaches every change there, or with `propose`, which reaches
+/// the changes they opened and no other. Says which it was, since a
+/// change opened under `propose` alone is recorded as a proposal.
+fn authorize_push_or_own(
+    tx: &Transaction,
+    acting: Acting<'_>,
+    actor: &PrincipalId,
+    repo: &str,
+    change: Option<&Change>,
+) -> CoreResult<(Principal, bool)> {
+    let refused = match authorize(tx, acting, actor, Capability::Push, Some(repo)) {
+        Ok(principal) => return Ok((principal, false)),
+        Err(err) => err,
+    };
+    if !may_propose(tx, acting, actor, repo) {
+        return Err(refused);
+    }
+    if let Some(change) = change
+        && change.owner != *actor
+    {
+        return Err(CoreError::Forbidden(format!(
+            "change #{} in {repo} is {}'s; proposing reaches only the changes you opened. \
+             Start a new Change-Id, or ask for push: POST /api/grants {{\"grantee\": \"{actor}\", \
+             \"repo\": \"{repo}\", \"actions\": [\"push\"]}}",
+            change.number, change.owner
+        )));
+    }
+    let principal = ensure_actor(tx, actor)?;
+    Ok((principal, true))
+}
+
 /// Refuse a standing act to a session credential.
 ///
 /// A scope says what a session may do with the work it was drawn for:
@@ -707,6 +780,20 @@ impl Store {
             return false;
         };
         may_push(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            repo,
+        )
+    }
+
+    /// Whether `actor` may propose a change to `repo` without holding
+    /// push there. See [`may_propose`].
+    pub fn may_propose(&self, actor: &PrincipalId, repo: &str) -> bool {
+        let Ok(tx) = self.conn.unchecked_transaction() else {
+            return false;
+        };
+        may_propose(
             &tx,
             Acting::of(&self.scope, self.admin_elsewhere),
             actor,
@@ -4160,12 +4247,12 @@ impl Store {
         spec: ChangeSpec,
     ) -> CoreResult<(ChangeId, i64, Envelope)> {
         let tx = self.conn.transaction()?;
-        authorize(
+        let (_, proposal) = authorize_push_or_own(
             &tx,
             Acting::of(&self.scope, self.admin_elsewhere),
             actor,
-            Capability::Push,
-            Some(&spec.repo),
+            &spec.repo,
+            None,
         )?;
         let record = raw::repo(&tx, &spec.repo)?
             .ok_or_else(|| CoreError::NotFound(format!("repo {}", spec.repo)))?;
@@ -4175,15 +4262,53 @@ impl Store {
         })?;
         // A change needs no push to open, so it is the cheapest row
         // anybody can make. Counted against the repository's owner, the
-        // way its tasks are.
+        // way its tasks are; a proposal against whoever proposes it,
+        // since the owner did not ask for it.
+        let charged = if proposal { actor } else { &record.owner };
         within_quota(
             &tx,
             &self.default_quota,
-            &record.owner,
+            charged,
             "open changes",
             |q| q.open_changes,
             |u| u.open_changes,
         )?;
+        // A proposer's room is small and their own: so many open on one
+        // repository, so many a day anywhere, whatever their other
+        // allowance says.
+        if proposal {
+            let quota = self
+                .default_quota
+                .under(&raw::quota(&tx, actor.as_str())?.unwrap_or_default());
+            if let Some(limit) = quota.open_proposals {
+                let have = raw::open_proposals_in(&tx, actor.as_str(), &spec.repo)?;
+                if have >= limit {
+                    return Err(CoreError::OverQuota(format!(
+                        "{actor} has {have} open proposals on {}, and this forge allows {limit}",
+                        spec.repo
+                    )));
+                }
+            }
+            if let Some(limit) = quota.proposals_a_day {
+                let since = (jiff::Timestamp::now() - std::time::Duration::from_secs(24 * 60 * 60))
+                    .to_string();
+                let have = raw::proposals_since(&tx, actor.as_str(), &since)?;
+                if have >= limit {
+                    return Err(CoreError::OverQuota(format!(
+                        "{actor} opened {have} proposals in the last day, and this forge allows {limit}"
+                    )));
+                }
+            }
+        }
+        // A task is claimed and attempted by those who may work here; a
+        // proposal is neither, and joining a task's change by naming the
+        // task is exactly what proposing must not reach.
+        if proposal && spec.task.is_some() {
+            return Err(CoreError::Forbidden(format!(
+                "a proposal to {} does not attempt a task; drop the Task: trailer",
+                spec.repo
+            )));
+        }
         require(!spec.title.trim().is_empty(), || {
             "change title must not be empty".into()
         })?;
@@ -4240,6 +4365,7 @@ impl Store {
                 task: spec.task,
                 parent_change: spec.parent_change,
                 external_key: spec.external_key,
+                proposal,
             },
         )?;
         tx.commit()?;
@@ -4284,12 +4410,12 @@ impl Store {
         })?;
         let current = raw::change(&tx, change.as_str())?
             .ok_or_else(|| CoreError::NotFound(format!("change {change}")))?;
-        authorize(
+        authorize_push_or_own(
             &tx,
             Acting::of(&self.scope, self.admin_elsewhere),
             actor,
-            Capability::Push,
-            Some(&current.repo),
+            &current.repo,
+            Some(&current),
         )?;
         ensure_writable(&tx, &current.repo)?;
         if current.state != ChangeState::Open {
@@ -4365,12 +4491,12 @@ impl Store {
         }
         let current = raw::change(&tx, change.as_str())?
             .ok_or_else(|| CoreError::NotFound(format!("change {change}")))?;
-        authorize(
+        authorize_push_or_own(
             &tx,
             Acting::of(&self.scope, self.admin_elsewhere),
             actor,
-            Capability::Push,
-            Some(&current.repo),
+            &current.repo,
+            Some(&current),
         )?;
         require((1..=current.latest_revision).contains(&revision), || {
             format!("change {change} has no revision {revision}")
@@ -5140,6 +5266,99 @@ impl Store {
         Ok(env)
     }
 
+    /// Let runners at a proposal. Its claims name commands a stranger
+    /// wrote, so no runner's loop takes them up until somebody who holds
+    /// merge or verify here says so; from then on it waits like any
+    /// change. A runner given the change number by hand was always free
+    /// to run it, since a person typed it.
+    pub fn admit_change(&mut self, actor: &PrincipalId, change: &ChangeId) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        let current = raw::change(&tx, change.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("change {change}")))?;
+        let acting = Acting::of(&self.scope, self.admin_elsewhere);
+        if authorize(&tx, acting, actor, Capability::Merge, Some(&current.repo)).is_err() {
+            authorize(&tx, acting, actor, Capability::Verify, Some(&current.repo))?;
+        }
+        if !current.proposal {
+            return Err(CoreError::Conflict(format!(
+                "change {change} is not a proposal; runners take it up on their own"
+            )));
+        }
+        if current.state != ChangeState::Open {
+            return Err(CoreError::Conflict(format!(
+                "change {change} is {}, not open",
+                current.state.as_str()
+            )));
+        }
+        if current.admitted {
+            return Err(CoreError::Conflict(format!(
+                "change {change} has already been let through to runners"
+            )));
+        }
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::ChangeAdmitted {
+                change: change.clone(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
+    /// Discard a proposal: abandon it and, on the record, take its
+    /// revisions out of git, so the room it took comes back. Merge on the
+    /// repository says so, and says why. What already landed is history
+    /// and stays.
+    pub fn discard_change(
+        &mut self,
+        actor: &PrincipalId,
+        change: &ChangeId,
+        reason: &str,
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        require(!reason.trim().is_empty(), || {
+            "say why it is discarded, for whoever reads the log".into()
+        })?;
+        bounded("discard reason", reason, MAX_TEXT)?;
+        let current = raw::change(&tx, change.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("change {change}")))?;
+        authorize(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            Capability::Merge,
+            Some(&current.repo),
+        )?;
+        if !current.proposal {
+            return Err(CoreError::Conflict(format!(
+                "change {change} is not a proposal; abandon it instead, and its revisions stay"
+            )));
+        }
+        if current.state == ChangeState::Merged {
+            return Err(CoreError::Conflict(format!(
+                "change {change} landed; what landed is history"
+            )));
+        }
+        if current.discarded {
+            return Err(CoreError::Conflict(format!(
+                "change {change} is already discarded"
+            )));
+        }
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::ChangeDiscarded {
+                change: change.clone(),
+                reason: reason.to_owned(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
     pub fn abandon_change(
         &mut self,
         actor: &PrincipalId,
@@ -5153,12 +5372,12 @@ impl Store {
         bounded("abandon reason", reason, MAX_TEXT)?;
         let current = raw::change(&tx, change.as_str())?
             .ok_or_else(|| CoreError::NotFound(format!("change {change}")))?;
-        authorize(
+        authorize_push_or_own(
             &tx,
             Acting::of(&self.scope, self.admin_elsewhere),
             actor,
-            Capability::Push,
-            Some(&current.repo),
+            &current.repo,
+            Some(&current),
         )?;
         if current.state != ChangeState::Open {
             return Err(CoreError::Conflict(format!(

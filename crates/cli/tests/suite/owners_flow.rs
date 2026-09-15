@@ -419,12 +419,23 @@ async fn owners_shape_access_with_a_setting_and_teams() {
     assert_eq!(body["members_act"], "readers");
     let (status, body) = api(app, "GET", "/api/repos/crew/shared", "cat", None).await;
     assert_eq!(status, StatusCode::OK, "{body}");
+    // A reader may still propose: the change opens, marked as a proposal.
     let (status, body) = api(
         app,
         "POST",
         "/api/changes",
         "cat",
         Some(json!({ "repo": "crew/shared", "target": "main", "title": "Cat's" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["event"]["proposal"], true, "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        &format!("/api/changes/{}/enqueue", body["id"].as_str().unwrap()),
+        "cat",
+        Some(json!({})),
     )
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
@@ -468,6 +479,7 @@ async fn owners_shape_access_with_a_setting_and_teams() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["event"]["proposal"], false, "granted push: {body}");
     // The access list says so; a member cannot grant.
     let (status, body) = api(app, "GET", "/api/repos/crew/shared/access", "cat", None).await;
     assert_eq!(status, StatusCode::OK, "{body}");

@@ -365,8 +365,8 @@ recorded via the event log itself. Authority is explicit for everyone.
 You hold every capability on repositories you own — creating one is how
 you come to own it — and everywhere else you hold precisely what somebody
 granted you: typed verbs (`task`, `push`, `review`, `merge`, `verify`,
-`admin`), optionally repo-scoped and time-boxed, revocable with immediate
-effect. The same rules apply to people and to agents. Running the forge
+`admin`, `propose`), optionally repo-scoped and time-boxed, revocable
+with immediate effect. The same rules apply to people and to agents. Running the forge
 is itself a grant — an unscoped `admin` — held by whoever
 `ambolt admin bootstrap` set up, and grantable onward like any other. A
 refusal names the missing capability and the exact grant that would fix
@@ -417,6 +417,37 @@ organisation's own pages. Ownership is offered rather
 than assigned — the owner offers, the person is told, and nothing moves
 until they accept, because owning carries every capability on the
 repository and whatever is in it.
+
+`propose` is the one verb strictly smaller than `push`: it opens a
+change on the repository and reaches the changes you opened, to revise,
+claim and abandon them, and nothing else. Nobody else's change, no
+verdict, no landing, no task. A repository whose policy opens proposals
+(`proposals`) gives it to everyone signed in while the repository is
+public; being on the organisation that owns a repository carries it
+whatever the members' standing; a grant gives it to one person on any
+repository. A change opened under `propose` alone is recorded as a
+proposal, on the change and in the log, and stays one whatever its
+opener is granted later: it says what the reviewers were looking at. A
+proposal counts against its proposer's open changes, not the owner's,
+and does not attempt a task; a push whose `Change-Id` or `Task:`
+trailer names somebody else's change is refused rather than joined.
+Proposing does not make anyone's word count: a proposal lands by the
+same policy as any change, judged by people who hold `review` and
+`merge` there, and on a proposal the owner's own claim is testimony
+rather than evidence. It meets "a passing test claim" only once a runner
+has reproduced it, or when somebody holding push made the claim. Nor
+does a runner run it unasked: a proposal's claim names a command a
+stranger wrote, so runners' loops leave proposals out until somebody
+holding `merge` or `verify` lets them at it (`POST
+/api/changes/{id}/admit`, or the button on the change), an event like
+the rest. A runner handed the change number by hand always ran what it
+was given. A proposer's room is their own: so many proposals open on
+one repository, so many a day, so much in one push, each a number in
+their quota like the rest; and somebody holding `merge` may discard a
+proposal, which abandons it and takes its revisions out of git, on the
+record and with a reason, so the room it took comes back. Ordinary
+abandonment keeps every revision; discard is the exception, for what
+should never have arrived.
 
 Repositories are private unless someone says otherwise, and that is
 enforced at the transport: a private repository cannot be cloned without

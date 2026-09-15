@@ -188,6 +188,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/forge/metrics", get(routes::metrics))
         .route("/api/changes/{id}/merge", post(routes::merge_change))
         .route("/api/changes/{id}/enqueue", post(routes::enqueue_change))
+        .route("/api/changes/{id}/admit", post(routes::admit_change))
         .route("/api/changes/{id}/dequeue", post(routes::dequeue_change))
         .route("/api/repos/{owner}/{name}/queue", get(routes::list_queue))
         .route(
@@ -226,6 +227,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/sessions/{id}/paths", post(routes::declare_paths))
         .route("/api/changes/{id}/abandon", post(routes::abandon_change))
+        .route("/api/changes/{id}/discard", post(routes::discard_change))
         .route(
             "/api/principals/{id}/tokens",
             post(routes::mint_token).get(routes::list_tokens),

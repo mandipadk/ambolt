@@ -390,6 +390,9 @@ pub enum Event {
         /// letting git pushes address the same change across amends.
         #[serde(default)]
         external_key: Option<String>,
+        /// Opened under `propose` alone: the opener held no push here.
+        #[serde(default)]
+        proposal: bool,
     },
     RevisionPushed {
         change: ChangeId,
@@ -451,6 +454,20 @@ pub enum Event {
         revision: i64,
         over: Vec<i64>,
         rationale: String,
+    },
+    /// Somebody inside the repository let runners at a proposal. Until
+    /// then a runner's loop leaves it alone: a stranger's claim names a
+    /// command, and nobody's machine runs it unasked.
+    ChangeAdmitted {
+        change: ChangeId,
+    },
+    /// A proposal abandoned and its revisions taken out of git, so the
+    /// room it took comes back to the repository's owner. Ordinary
+    /// abandonment keeps every revision fetchable; this is the exception,
+    /// for what should never have arrived, and it says why.
+    ChangeDiscarded {
+        change: ChangeId,
+        reason: String,
     },
 
     /// Somebody started a discussion on a change, anchored to a line, a
@@ -578,6 +595,8 @@ impl Event {
             Event::ClaimVerified { .. } => "claim_verified",
             Event::VerdictGiven { .. } => "verdict_given",
             Event::RevisionPreferred { .. } => "revision_preferred",
+            Event::ChangeAdmitted { .. } => "change_admitted",
+            Event::ChangeDiscarded { .. } => "change_discarded",
             Event::ThreadOpened { .. } => "thread_opened",
             Event::ThreadReplied { .. } => "thread_replied",
             Event::AttentionDrawn { .. } => "attention_drawn",

@@ -406,15 +406,37 @@ pub async fn room(
     // Only somebody who may push there may ask, because the answer
     // names the owner's usage — and a repository that is not theirs to
     // push to is a repository they learn nothing about.
-    let may = app.with_store(|s| {
-        s.acting_as(pusher.scope.as_ref())
-            .may_push(&pusher.principal, &body.repo)
+    let (pushes, proposes) = app.with_store(|s| {
+        let store = s.acting_as(pusher.scope.as_ref());
+        (
+            store.may_push(&pusher.principal, &body.repo),
+            store.may_propose(&pusher.principal, &body.repo),
+        )
     });
-    if !may {
+    if !pushes && !proposes {
         return Err(ApiError::new(
             StatusCode::NOT_FOUND,
             "not_found",
             "repo not found",
+        ));
+    }
+    // A proposer's push is capped on its own, before the owner's disk is
+    // asked: what they may bring is theirs to be allowed, and refusing
+    // here costs the repository nothing.
+    if !pushes
+        && let Some(limit) = app
+            .with_store(|s| s.quota(&pusher.principal))?
+            .proposal_push
+        && body.arriving > limit
+    {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "over_quota",
+            format!(
+                "this proposal carries {}, and this forge allows {} in one push",
+                crate::in_bytes(body.arriving),
+                crate::in_bytes(limit)
+            ),
         ));
     }
     let owner = app
@@ -649,6 +671,34 @@ pub(crate) async fn reconcile_change_refs(app: &AppState, repo: &str) {
             tracing::debug!(%err, %refname, repo, "revision ref not creatable yet");
         }
     }
+}
+
+/// Take a discarded proposal's revisions out of git, and reclaim what
+/// nothing names any more. The graph already says it is discarded, so
+/// reconciliation will not put the refs back; gc prunes only objects
+/// older than an hour, so a push in flight is never deleted, and a
+/// proposal discarded within the hour of arriving goes on the next gc.
+pub(crate) async fn drop_change_refs(app: &AppState, repo: &str, number: i64) {
+    let Some(git) = app.git() else { return };
+    match git
+        .store
+        .delete_refs(repo, &format!("refs/changes/{number}/"))
+        .await
+    {
+        Ok(gone) => tracing::info!(repo, number, gone, "discarded proposal's refs removed"),
+        Err(err) => {
+            tracing::warn!(%err, repo, number, "could not remove a discarded proposal's refs")
+        }
+    }
+    let app = app.clone();
+    let repo = repo.to_owned();
+    tokio::spawn(async move {
+        if let Some(git) = app.git()
+            && let Err(err) = git.store.gc(&repo).await
+        {
+            tracing::warn!(%err, repo, "gc after a discard failed");
+        }
+    });
 }
 
 /// One pushed commit, bottom-up in stack order.

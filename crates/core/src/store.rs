@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Bump whenever a projection table changes shape. The log is never
 /// touched; projections are rebuilt from it.
-const SCHEMA_VERSION: i64 = 33;
+const SCHEMA_VERSION: i64 = 34;
 
 /// The log itself, which outlives every schema.
 const EVENT_SCHEMA: &str = "
@@ -406,6 +406,9 @@ CREATE TABLE IF NOT EXISTS changes (
   updated_at      TEXT NOT NULL DEFAULT '',
   preferred_revision INTEGER,
   landed_revision INTEGER,
+  proposal        INTEGER NOT NULL DEFAULT 0,
+  admitted        INTEGER NOT NULL DEFAULT 0,
+  discarded       INTEGER NOT NULL DEFAULT 0,
   UNIQUE (repo, number)
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_changes_repo_state ON changes (repo, state);
@@ -1039,6 +1042,8 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         | ClaimVerified { change, .. }
         | VerdictGiven { change, .. }
         | RevisionPreferred { change, .. }
+        | ChangeAdmitted { change, .. }
+        | ChangeDiscarded { change, .. }
         | ThreadOpened { change, .. }
         | ThreadReplied { change, .. }
         | ThreadResolved { change, .. }
@@ -1774,6 +1779,8 @@ fn change_named(event: &Event) -> Option<&crate::id::ChangeId> {
         | ThreadReplied { change, .. }
         | ThreadResolved { change, .. }
         | RevisionPreferred { change, .. }
+        | ChangeAdmitted { change, .. }
+        | ChangeDiscarded { change, .. }
         | AttentionDrawn { change, .. }
         | ChangeEnqueued { change }
         | ChangeDequeued { change, .. }
@@ -1844,6 +1851,9 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 open_changes: None,
                 tokens: None,
                 members: None,
+                open_proposals: None,
+                proposals_a_day: None,
+                proposal_push: None,
             };
             tx.execute(
                 "INSERT OR REPLACE INTO quotas (owner, quota) VALUES (?, ?)",
@@ -2395,10 +2405,11 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
             task,
             parent_change,
             external_key,
+            proposal,
         } => {
             tx.execute(
-                "INSERT INTO changes (id, repo, number, target, title, task, parent_change, state, owner, external_key, opened_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'open', ?8, ?9, ?10, ?10)",
+                "INSERT INTO changes (id, repo, number, target, title, task, parent_change, state, owner, external_key, opened_at, updated_at, proposal)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'open', ?8, ?9, ?10, ?10, ?11)",
                 params![
                     change.as_str(),
                     repo,
@@ -2409,7 +2420,8 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                     parent_change.as_ref().map(|c| c.as_str()),
                     actor,
                     external_key,
-                    env.ts
+                    env.ts,
+                    i64::from(*proposal)
                 ],
             )?;
         }
@@ -2646,6 +2658,18 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 params![revision, change.as_str()],
             )?;
         }
+        Event::ChangeAdmitted { change } => {
+            tx.execute(
+                "UPDATE changes SET admitted = 1 WHERE id = ?",
+                params![change.as_str()],
+            )?;
+        }
+        Event::ChangeDiscarded { change, .. } => {
+            tx.execute(
+                "UPDATE changes SET state = 'abandoned', discarded = 1 WHERE id = ?",
+                params![change.as_str()],
+            )?;
+        }
         // A failed rebase changes nothing about the graph's state; it
         // is a fact about an attempt, and lives only in the log.
         Event::RebaseFailed { .. } => {}
@@ -2783,6 +2807,7 @@ mod concurrency_tests {
                     require_concerns_resolved: true,
                     attention_budget: None,
                     agents_act_in_sessions: false,
+                    proposals: false,
                     trust: None,
                 },
             )
@@ -3200,8 +3225,8 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                33,
-                r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null}"#
+                34,
+                r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null,"proposals":false}"#
             ),
             "the policy's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
         );
@@ -3249,13 +3274,16 @@ mod projection_shape {
             open_changes: None,
             tokens: Some(Some(50)),
             members: Some(Some(25)),
+            open_proposals: Some(Some(3)),
+            proposals_a_day: None,
+            proposal_push: Some(Some(33554432)),
         })
         .unwrap();
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                33,
-                r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25}"#
+                34,
+                r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25,"open_proposals":3,"proposal_push":33554432}"#
             ),
             "the quota's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
         );

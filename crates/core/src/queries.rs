@@ -436,7 +436,8 @@ pub(crate) mod raw {
                                owner, latest_revision, external_key, landed_oid, opened_at, \
                                updated_at, preferred_revision, landed_revision, \
                                (SELECT COUNT(DISTINCT by) FROM revisions r \
-                                 WHERE r.change_id = changes.id AND r.by != '')";
+                                 WHERE r.change_id = changes.id AND r.by != ''), \
+                               proposal, admitted, discarded";
 
     fn change_from_row(row: &Row) -> rusqlite::Result<(Change, String)> {
         Ok((
@@ -458,6 +459,9 @@ pub(crate) mod raw {
                 preferred_revision: row.get(14)?,
                 landed_revision: row.get(15)?,
                 competing: row.get::<_, i64>(16)? > 1,
+                proposal: row.get::<_, i64>(17)? != 0,
+                admitted: row.get::<_, i64>(18)? != 0,
+                discarded: row.get::<_, i64>(19)? != 0,
             },
             row.get::<_, String>(7)?,
         ))
@@ -1070,12 +1074,33 @@ pub(crate) mod raw {
 
     /// Every (change number, revision number, commit oid) in a repo —
     /// the git-side `refs/changes/<n>/<rev>` projection wants exactly this.
+    /// Proposals `owner` has open on `repo`.
+    pub fn open_proposals_in(conn: &Connection, owner: &str, repo: &str) -> CoreResult<u32> {
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM changes
+             WHERE repo = ? AND owner = ? AND proposal = 1 AND state = 'open'",
+            params![repo, owner],
+            |row| row.get::<_, i64>(0),
+        )? as u32)
+    }
+
+    /// Proposals `owner` opened anywhere since `since` (RFC 3339, UTC,
+    /// the form every timestamp in the log has).
+    pub fn proposals_since(conn: &Connection, owner: &str, since: &str) -> CoreResult<u32> {
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM changes
+             WHERE owner = ? AND proposal = 1 AND opened_at >= ?",
+            params![owner, since],
+            |row| row.get::<_, i64>(0),
+        )? as u32)
+    }
+
     pub fn revision_refs(conn: &Connection, repo: &str) -> CoreResult<Vec<(i64, i64, String)>> {
         Ok(conn
             .prepare_cached(
                 "SELECT c.number, r.number, r.commit_oid
                  FROM revisions r JOIN changes c ON c.id = r.change_id
-                 WHERE c.repo = ? ORDER BY c.number, r.number",
+                 WHERE c.repo = ? AND c.discarded = 0 ORDER BY c.number, r.number",
             )?
             .query_map(params![repo], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get(2)?))
@@ -2120,6 +2145,11 @@ impl Store {
         let mut waiting = Vec::new();
         for change in raw::changes_in_repo(&self.conn, repo)? {
             if change.state != ChangeState::Open || change.latest_revision == 0 {
+                continue;
+            }
+            // A proposal's claim names a command a stranger wrote. No
+            // runner takes it up until somebody inside says so.
+            if change.proposal && !change.admitted {
                 continue;
             }
             let revision = change.judged_revision();

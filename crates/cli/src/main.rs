@@ -145,6 +145,15 @@ enum Command {
         /// People one organisation may have; `none` for no limit.
         #[arg(long)]
         quota_members: Option<String>,
+        /// Proposals one proposer may have open on one repository; `none` for no limit.
+        #[arg(long)]
+        quota_open_proposals: Option<String>,
+        /// Proposals one proposer may open in a day; `none` for no limit.
+        #[arg(long)]
+        quota_proposals_a_day: Option<String>,
+        /// Megabytes one push of a proposal may carry; `none` for no limit.
+        #[arg(long)]
+        quota_proposal_push_mb: Option<String>,
         /// The Ed25519 key that signs merge receipts; generated there when
         /// absent. Beside the database when unset.
         #[arg(long)]
@@ -322,6 +331,15 @@ enum AdminCommand {
         /// People an organisation may have; `none` for no limit.
         #[arg(long)]
         members: Option<String>,
+        /// Proposals they may have open on one repository; `none` for no limit.
+        #[arg(long)]
+        open_proposals: Option<String>,
+        /// Proposals they may open in a day; `none` for no limit.
+        #[arg(long)]
+        proposals_a_day: Option<String>,
+        /// Megabytes one push of theirs may carry as a proposal; `none` for no limit.
+        #[arg(long)]
+        proposal_push_mb: Option<String>,
     },
     /// Reclaim disk that nothing refers to, in one repository or every
     /// one, and measure again. Git prunes on its own only after two
@@ -462,6 +480,9 @@ async fn main() -> anyhow::Result<()> {
             quota_open_changes,
             quota_tokens,
             quota_members,
+            quota_open_proposals,
+            quota_proposals_a_day,
+            quota_proposal_push_mb,
             signing_key_file,
             operator_listen,
             open_signup,
@@ -512,6 +533,15 @@ async fn main() -> anyhow::Result<()> {
             }
             if let Some(value) = narrow(said(quota_members, "quota-members")?)? {
                 quota.members = value;
+            }
+            if let Some(value) = narrow(said(quota_open_proposals, "quota-open-proposals")?)? {
+                quota.open_proposals = value;
+            }
+            if let Some(value) = narrow(said(quota_proposals_a_day, "quota-proposals-a-day")?)? {
+                quota.proposals_a_day = value;
+            }
+            if let Some(value) = said(quota_proposal_push_mb, "quota-proposal-push-mb")? {
+                quota.proposal_push = value.map(|mb| mb.saturating_mul(1024 * 1024));
             }
             let store = Store::open(&db)
                 .with_context(|| format!("opening forge database at {}", db.display()))?
@@ -800,6 +830,9 @@ async fn main() -> anyhow::Result<()> {
                 open_changes,
                 tokens,
                 members,
+                open_proposals,
+                proposals_a_day,
+                proposal_push_mb,
             } => {
                 let mut store = Store::open(&db)
                     .with_context(|| format!("opening forge database at {}", db.display()))?;
@@ -845,6 +878,10 @@ async fn main() -> anyhow::Result<()> {
                     open_changes: narrow(said(open_changes.as_ref())?)?,
                     tokens: narrow(said(tokens.as_ref())?)?,
                     members: narrow(said(members.as_ref())?)?,
+                    open_proposals: narrow(said(open_proposals.as_ref())?)?,
+                    proposals_a_day: narrow(said(proposals_a_day.as_ref())?)?,
+                    proposal_push: said(proposal_push_mb.as_ref())?
+                        .map(|mb| mb.map(|mb| mb.saturating_mul(1024 * 1024))),
                 };
                 if !patch.is_empty() {
                     let actor = PrincipalId::new(r#as.as_deref().unwrap_or(""))

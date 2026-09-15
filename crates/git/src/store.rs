@@ -903,6 +903,17 @@ impl GitStore {
         })
     }
 
+    /// Delete every ref under a prefix; how many went.
+    pub async fn delete_refs(&self, name: &str, prefix: &str) -> GitResult<usize> {
+        let refs = self.list_refs(name, prefix).await?;
+        let path = self.existing_repo_path(name)?;
+        for (refname, _) in &refs {
+            self.run(Some(&path), &["update-ref", "-d", refname])
+                .await?;
+        }
+        Ok(refs.len())
+    }
+
     /// All refs under a prefix, as (refname, oid).
     pub async fn list_refs(&self, name: &str, prefix: &str) -> GitResult<Vec<(String, String)>> {
         let path = self.existing_repo_path(name)?;

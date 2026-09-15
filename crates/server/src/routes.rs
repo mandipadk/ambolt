@@ -1221,6 +1221,25 @@ pub struct AbandonChange {
     pub reason: String,
 }
 
+/// Discard a proposal: abandon it and take its revisions out of git.
+pub async fn discard_change(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+    Json(body): Json<AbandonChange>,
+) -> ApiResult<Json<Value>> {
+    let change = ChangeId(id);
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref())
+            .discard_change(&actor.0, &change, &body.reason)
+    })?;
+    app.publish(&env);
+    if let Some(found) = app.with_store(|s| s.change(&change))? {
+        crate::git_http::drop_change_refs(&app, &found.repo, found.number).await;
+    }
+    Ok(committed(None, &env))
+}
+
 pub async fn abandon_change(
     State(app): State<AppState>,
     actor: Actor,
@@ -1406,6 +1425,21 @@ pub async fn revoke_grant(
 }
 
 // ---- merge queue ----
+
+/// Let runners at a proposal; merge or verify on the repository says so.
+pub async fn admit_change(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let change = ChangeId(id);
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref())
+            .admit_change(&actor.0, &change)
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
 
 pub async fn enqueue_change(
     State(app): State<AppState>,

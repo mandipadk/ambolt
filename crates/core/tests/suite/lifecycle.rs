@@ -1506,6 +1506,7 @@ fn a_repo_chooses_the_rules_its_work_must_meet() {
         require_concerns_resolved: true,
         attention_budget: None,
         agents_act_in_sessions: false,
+        proposals: false,
         ..ambolt_core::Policy::default()
     };
 
@@ -1614,6 +1615,7 @@ fn a_repo_chooses_the_rules_its_work_must_meet() {
                 require_concerns_resolved: true,
                 attention_budget: None,
                 agents_act_in_sessions: false,
+                proposals: false,
                 trust: None,
             },
         )
@@ -2304,10 +2306,16 @@ fn access_inside_an_organisation_is_a_setting_and_a_teams_grants() {
         .set_members_act(&bee, &crew, MembersAct::Readers)
         .unwrap();
     assert!(store.may_read(&cat, "crew/forge"));
+    // A reader still proposes: the change opens as a proposal, and
+    // landing it is not hers.
+    assert!(!store.may_push(&cat, "crew/forge"));
+    assert!(store.may_propose(&cat, "crew/forge"));
+    let (proposed, _, _) = store
+        .open_change(&cat, ChangeSpec::new("crew/forge", "main", "Cat again"))
+        .unwrap();
+    assert!(store.change(&proposed).unwrap().unwrap().proposal);
     assert!(matches!(
-        store
-            .open_change(&cat, ChangeSpec::new("crew/forge", "main", "Cat again"))
-            .unwrap_err(),
+        store.enqueue_change(&cat, &proposed).unwrap_err(),
         CoreError::Forbidden(_)
     ));
     assert!(!store.owns(&cat, &crew).unwrap());
@@ -2371,15 +2379,16 @@ fn access_inside_an_organisation_is_a_setting_and_a_teams_grants() {
         .unwrap();
     store.remove_org_team(&bee, &crew, "backend").unwrap();
     assert!(store.grants_of(&backend).unwrap().is_empty());
-    assert!(matches!(
-        store
-            .open_change(
-                &cat,
-                ChangeSpec::new("crew/forge", "main", "Cat, ungranted")
-            )
-            .unwrap_err(),
-        CoreError::Forbidden(_)
-    ));
+    // With the team gone, cat is a reader again: what she opens now is a
+    // proposal, not a change of her own to land.
+    assert!(!store.may_push(&cat, "crew/forge"));
+    let (ungranted, _, _) = store
+        .open_change(
+            &cat,
+            ChangeSpec::new("crew/forge", "main", "Cat, ungranted"),
+        )
+        .unwrap();
+    assert!(store.change(&ungranted).unwrap().unwrap().proposal);
     assert!(store.fsck().unwrap().is_empty());
 }
 
