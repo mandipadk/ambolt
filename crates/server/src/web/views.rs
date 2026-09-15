@@ -2878,6 +2878,8 @@ pub fn owner(
     owner: &ambolt_core::Principal,
     repos: &[ambolt_core::Repo],
     members: &[(ambolt_core::PrincipalId, ambolt_core::TeamRole)],
+    // Members invited who have not arrived yet.
+    invited: &[ambolt_core::PrincipalId],
     // What the viewer is to this organisation, if anything.
     viewer_role: Option<ambolt_core::TeamRole>,
     may_create: bool,
@@ -2889,6 +2891,10 @@ pub fn owner(
     // is is their business.
     allowances: Option<(ambolt_core::Usage, ambolt_core::Quota)>,
     error: Option<&str>,
+    // An invitation link the forge could not mail, shown this once; or
+    // where it was mailed.
+    fresh: Option<&str>,
+    mailed: Option<&str>,
     people: &People,
 ) -> Markup {
     let organisation = owner.kind == ambolt_core::PrincipalKind::Team;
@@ -2919,6 +2925,15 @@ pub fn owner(
                 }
             }
             @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            @if let Some(link) = fresh {
+                div class="once" {
+                    p { b { "Hand them this link." } " It signs them in once and is shown only now; this forge could not mail it." }
+                    code class="secret" { (link) }
+                }
+            }
+            @if let Some(to) = mailed {
+                div class="notice" { (ic("inbox", "")) span { "The invitation went to " (to) "." } }
+            }
             div class="sec" {
                 div class="sh" { h2 { "Repositories" } span class="n" { (repos.len()) } }
                 div class="panel" {
@@ -2966,6 +2981,7 @@ pub fn owner(
                                     span class="s" { (member.as_str()) }
                                 }
                                 @if is_owner { span class="chip" { "Owner" } }
+                                @if invited.contains(member) { span class="chip" { "Invited" } }
                                 span class="acts" {
                                     @if may_manage {
                                         form method="post" action={ "/" (owner.id.as_str()) "/members" } {
@@ -2991,9 +3007,17 @@ pub fn owner(
                         @if may_manage {
                             form class="foot" method="post" action={ "/" (owner.id.as_str()) "/members" } {
                                 input type="hidden" name="action" value="add";
-                                input class="input sm" type="text" name="member" placeholder="Who" pattern="[a-z0-9-]{2,64}" required aria-label="Member";
+                                input class="input sm" type="text" name="member" placeholder="Who, already on the forge" pattern="[a-z0-9-]{2,64}" required aria-label="Member";
                                 button class="btn2 sm" type="submit" { "Add member" }
                                 span class="hint" { "Owners run the organisation; members create under it and hold what it holds. An organisation keeps at least one owner." }
+                            }
+                            form class="foot" method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                input type="hidden" name="action" value="invite";
+                                input class="input sm" type="text" name="member" placeholder="Name on the forge" pattern="[a-z0-9-]{2,64}" required aria-label="Name";
+                                input class="input sm" type="text" name="display" placeholder="Display name" aria-label="Display name";
+                                input class="input sm" type="email" name="email" placeholder="Email" required aria-label="Email";
+                                button class="btn2 sm" type="submit" { "Invite" }
+                                span class="hint" { "Somebody new: the account is theirs, the membership comes with it, and a link that signs them in once goes to the address." }
                             }
                         }
                     }

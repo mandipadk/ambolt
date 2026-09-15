@@ -261,3 +261,110 @@ async fn owners_run_the_organisation_and_the_last_owner_stays() {
         assert_eq!(status, StatusCode::OK, "{body}");
     }
 }
+
+/// An owner brings people onto the forge straight into the organisation:
+/// the account, the membership and the link, with nobody at the door.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_owner_invites_people_into_the_organisation() {
+    let forge = boot().await;
+    let app = &forge.app;
+    for (id, display) in [("bee", "Bee"), ("cat", "Cat")] {
+        api(
+            app,
+            "POST",
+            "/api/principals",
+            "ada",
+            Some(json!({ "id": id, "kind": "human", "display": display })),
+        )
+        .await;
+    }
+    api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "crew", "kind": "team", "display": "Crew", "owner": "bee" })),
+    )
+    .await;
+    api(
+        app,
+        "POST",
+        "/api/teams/crew/members",
+        "bee",
+        Some(json!({ "member": "cat" })),
+    )
+    .await;
+    // From the page: the link is parked and shown once, since the test
+    // forge cannot mail; the page says eve is invited.
+    let (_, bee) = sign_in_as(&forge, "bee").await;
+    let (status, location) = post_form(
+        app,
+        "/crew/members",
+        &bee,
+        "action=invite&member=eve&display=Eve&email=eve%40example.org",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert!(location.starts_with("/crew?once="), "{location}");
+    let (_, page) = page_with_cookie(app, &location, &bee).await;
+    let start = page.find("/join?token=").expect("the link is on the page");
+    let token: String = page[start + "/join?token=".len()..]
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+    assert!(
+        page.contains(r#"href="/eve""#) && page.contains("Invited"),
+        "{page}"
+    );
+    // Shown once: the same address again shows no link.
+    let (_, again) = page_with_cookie(app, &location, &bee).await;
+    assert!(!again.contains("/join?token="), "{again}");
+    // Eve follows it and is signed in, a member of crew.
+    let (status, headers_or_body) =
+        page_with_cookie(app, &format!("/join?token={token}"), "").await;
+    assert!(
+        status == StatusCode::SEE_OTHER || status == StatusCode::OK,
+        "{status} {headers_or_body}"
+    );
+    let (status, body) = api(app, "GET", "/api/teams/crew/members", "bee", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(
+        body["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m == "eve"),
+        "{body}"
+    );
+    // A member cannot invite; the API says so on the public listener,
+    // and an owner may, from there too.
+    let (public, _) = split_listeners(&forge);
+    let (status, body) = api(
+        &public,
+        "POST",
+        "/api/teams/crew/invitations",
+        "cat",
+        Some(json!({ "id": "fay", "email": "fay@example.org" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    let (status, body) = api(
+        &public,
+        "POST",
+        "/api/teams/crew/invitations",
+        "bee",
+        Some(json!({ "id": "fay", "display": "Fay", "email": "fay@example.org" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["organisation"], "crew", "{body}");
+    assert!(
+        body["link"]
+            .as_str()
+            .is_some_and(|l| l.contains("/join?token=")),
+        "{body}"
+    );
+    // The invited count against the organisation's members.
+    let (_, body) = api(app, "GET", "/api/principals/crew/quota", "bee", None).await;
+    assert_eq!(body["usage"]["members"], 4, "{body}");
+}

@@ -244,6 +244,7 @@ pub fn router(state: AppState) -> Router {
             "/api/teams/{id}/members",
             get(routes::list_members).post(routes::add_member),
         )
+        .route("/api/teams/{id}/invitations", post(routes::invite_member))
         .route("/api/teams/{id}/owners", post(routes::make_owner))
         .route("/api/teams/{id}/owners/remove", post(routes::unmake_owner))
         .route(

@@ -394,8 +394,9 @@ leaving it is too. A team cannot sign in, cannot join a team, and has
 only people as members — an agent on a team would hold every grant and
 every agent the team holds. A team owns repositories and agents through
 its members, who act for it. Its owners run it: they put people on
-it and take them off, name other owners, and are the ones a member
-cannot remove; a member may leave. The last owner stays until another
+it and take them off, invite people onto the forge straight into it,
+name other owners, and are the ones a member cannot remove; a member
+may leave. The last owner stays until another
 is named, so an organisation with an owner never has none; whoever
 runs the forge can step in either way. Ownership is offered rather
 than assigned — the owner offers, the person is told, and nothing moves

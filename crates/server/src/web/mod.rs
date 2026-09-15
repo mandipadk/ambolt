@@ -1546,7 +1546,7 @@ async fn people_action(
         && let Some(to) = destination
     {
         let link = join_link(&app, &headers, &secret);
-        match mail_invitation(&app, &to, &link, &viewer.0).await {
+        match mail_invitation(&app, &to, &link, &viewer.0, None).await {
             Ok(()) => mailed = Some(to),
             Err(err) => tracing::error!(%err, "invitation mail failed"),
         }
@@ -1569,16 +1569,24 @@ pub(crate) async fn mail_invitation(
     to: &str,
     link: &str,
     by: &PrincipalId,
+    organisation: Option<&PrincipalId>,
 ) -> Result<(), String> {
     let Some(mailer) = app.mailer() else {
         return Err("this forge does not send mail".to_owned());
     };
+    let (subject, where_to) = match organisation {
+        Some(org) => (
+            format!("You are invited to {org} on ambolt"),
+            format!("{org} on ambolt"),
+        ),
+        None => ("You are invited to ambolt".to_owned(), "ambolt".to_owned()),
+    };
     let body = format!(
-        "{by} has invited you to ambolt.\n\nOpen this link to sign in; it works once, and \
+        "{by} has invited you to {where_to}.\n\nOpen this link to sign in; it works once, and \
          you will be asked to set a password:\n\n  {link}\n"
     );
     let to = to.to_owned();
-    tokio::task::spawn_blocking(move || mailer.send(&to, "You are invited to ambolt", &body))
+    tokio::task::spawn_blocking(move || mailer.send(&to, &subject, &body))
         .await
         .unwrap_or_else(|e| Err(e.to_string()))
 }
@@ -2181,6 +2189,9 @@ fn chrome_public(app: &AppState) -> Result<Chrome, ambolt_core::CoreError> {
 struct OwnerQuery {
     #[serde(default)]
     error: Option<String>,
+    /// The id of an invitation link parked to be shown exactly once.
+    #[serde(default)]
+    once: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2188,12 +2199,17 @@ struct MembersForm {
     action: String,
     #[serde(default)]
     member: String,
+    #[serde(default)]
+    display: String,
+    #[serde(default)]
+    email: String,
 }
 
 /// An organisation's members change who is on it, from its page.
 async fn owner_members_action(
     State(app): State<AppState>,
     viewer: Viewer,
+    headers: HeaderMap,
     Path(owner): Path<String>,
     Form(form): Form<MembersForm>,
 ) -> Response {
@@ -2209,6 +2225,39 @@ async fn owner_members_action(
     let Some(member) = PrincipalId::new(form.member.trim()) else {
         return back(Some("say who".into()));
     };
+    // An owner invites: the account and the membership are made, and
+    // the link is parked to be shown once, or mailed and said so.
+    if form.action == "invite" {
+        let display = form.display.trim();
+        let display = if display.is_empty() {
+            member.as_str().to_owned()
+        } else {
+            display.to_owned()
+        };
+        let actor = crate::auth::Actor(viewer.0.clone(), None);
+        let done = match crate::routes::invite_into(
+            &app,
+            &actor,
+            &headers,
+            &member,
+            &display,
+            form.email.trim(),
+            Some(&team),
+        )
+        .await
+        {
+            Ok(done) => done,
+            Err(err) => return back(Some(err.message)),
+        };
+        let once = Once {
+            secret: (!done.mailed).then_some(done.link),
+            mailed: done.mailed.then(|| form.email.trim().to_owned()),
+        };
+        return match park(&app, &viewer.0, &once) {
+            Some(id) => Redirect::to(&format!("/{owner}?once={id}")).into_response(),
+            None => back(Some("Could not show the link".to_owned())),
+        };
+    }
     let result = match form.action.as_str() {
         "add" => app.with_store(|s| s.add_team_member(&viewer.0, &team, &member)),
         "remove" => app.with_store(|s| s.remove_team_member(&viewer.0, &team, &member)),
@@ -2315,17 +2364,34 @@ async fn owner_page(
             Who::Anonymous(_) => false,
         };
     let people = people_named(&app, members.iter().map(|(m, _)| m.as_str()));
+    // Who on it was invited and has not arrived, and a link parked by
+    // the invitation just made, shown this once.
+    let (invited, once) = match &who {
+        Who::Signed(viewer) if may_manage => {
+            let unclaimed = app.with_store(|s| s.unclaimed()).unwrap_or_default();
+            let invited: Vec<PrincipalId> = members
+                .iter()
+                .filter(|(m, _)| unclaimed.iter().any(|u| u.principal == *m))
+                .map(|(m, _)| m.clone())
+                .collect();
+            (invited, take(&app, &viewer.0, query.once.as_deref()))
+        }
+        _ => (Vec::new(), Once::default()),
+    };
     views::owner(
         theme,
         who.reading(),
         &principal,
         &repos,
         &members,
+        &invited,
         viewer_role,
         may_create,
         may_manage,
         allowances,
         query.error.as_deref(),
+        once.secret.as_deref(),
+        once.mailed.as_deref(),
         &people,
     )
     .into_response()

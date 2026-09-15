@@ -219,10 +219,15 @@ the unscoped admin grant:
   mailed invitation proves the address it went to and signs its holder
   in, so it would hand the account over. The address already on the
   account may be sent a fresh link.
+- `POST /api/teams/{org}/invitations` — the same, by one of the
+  organisation's owners, on the public listener: the person is put on
+  the organisation as they are made and counts against its members,
+  and the mail names the organisation. The organisation's page offers
+  it too, and shows the link once when the forge cannot mail.
 - `GET /api/invitations/unclaimed` — who was invited and never came,
   with when their invitation lapses; `POST /api/invitations/purge` lets
-  go those whose invitation has lapsed: each is deactivated and its
-  invitations revoked, on the record (`ambolt admin unclaimed --purge`
+  go those whose invitation has lapsed: each is deactivated, its
+  invitations revoked and its memberships ended, on the record (`ambolt admin unclaimed --purge`
   offline). The name stays on the log; whoever runs the forge can
   reactivate an account that turns up after all.
 - `GET /api/reports` — what people said broke; `POST /api/reports/{id}/dismiss`.

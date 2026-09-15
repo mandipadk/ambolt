@@ -1410,6 +1410,11 @@ impl Store {
                     self.revoke_token(actor, &token.id)?;
                 }
             }
+            // Somebody invited into an organisation who never came leaves
+            // its list too, so the room they took there comes back.
+            for (team, _) in raw::memberships_of(&self.conn, who.principal.as_str())? {
+                self.remove_team_member(actor, &PrincipalId(team), &who.principal)?;
+            }
             self.set_active(actor, &who.principal, false)?;
             gone.push(who.principal);
         }
@@ -2655,6 +2660,87 @@ impl Store {
         )?;
         tx.commit()?;
         Ok(env)
+    }
+
+    /// Whether `actor` runs `team`: one of its owners, or whoever runs
+    /// the forge. What the door and the pages ask before offering the
+    /// acts below.
+    pub fn may_run_team(&mut self, actor: &PrincipalId, team: &PrincipalId) -> CoreResult<bool> {
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            team,
+        )
+    }
+
+    /// Register a person straight onto an organisation: an owner's act,
+    /// which is how a company brings its own people in without whoever
+    /// runs the forge. The account is the person's own, as any is; the
+    /// membership comes with it, and counts against the organisation.
+    pub fn register_member_of(
+        &mut self,
+        actor: &PrincipalId,
+        team: &PrincipalId,
+        id: &PrincipalId,
+        display: &str,
+    ) -> CoreResult<Vec<Envelope>> {
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            team,
+        )?;
+        require(!crate::id::RESERVED_IDS.contains(&id.as_str()), || {
+            format!("{id} is reserved: the pages live at that address")
+        })?;
+        require(validate_slug(id.as_str()), || {
+            format!("principal id {id:?} is not a valid slug")
+        })?;
+        require(!display.trim().is_empty(), || {
+            "display name must not be empty".into()
+        })?;
+        bounded("display name", display, MAX_TITLE)?;
+        if raw::principal(&tx, id.as_str())?.is_some() {
+            return Err(CoreError::Conflict(format!(
+                "principal {id} already exists"
+            )));
+        }
+        within_quota(
+            &tx,
+            &self.default_quota,
+            team,
+            "members",
+            |q| q.members,
+            |u| u.members,
+        )?;
+        let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
+        let registered = append(
+            &tx,
+            actor,
+            via,
+            Event::PrincipalRegistered {
+                principal: id.clone(),
+                principal_kind: PrincipalKind::Human,
+                display: display.to_owned(),
+                model: None,
+                harness: None,
+                owner: None,
+            },
+        )?;
+        let joined = append(
+            &tx,
+            actor,
+            via,
+            Event::TeamMemberAdded {
+                team: team.clone(),
+                member: id.clone(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(vec![registered, joined])
     }
 
     pub fn remove_team_member(
@@ -4913,6 +4999,68 @@ impl Store {
         let (token, secret, env) = append_token(&tx, actor, principal, Some(label), until)?;
         tx.commit()?;
         Ok((token, secret, env))
+    }
+
+    /// An invitation minted by one of the organisation's owners for
+    /// somebody on it: the owner's act, with no admin behind it. Any
+    /// invitation the person already held is revoked in the same
+    /// breath, since one at a time is the rule. Returns the revocations
+    /// first, then the minting.
+    pub fn mint_invitation_into(
+        &mut self,
+        actor: &PrincipalId,
+        team: &PrincipalId,
+        principal: &PrincipalId,
+        mailed: bool,
+        until: Option<&str>,
+    ) -> CoreResult<(TokenId, String, Vec<Envelope>)> {
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            team,
+        )?;
+        human_act(&tx, actor, "invite somebody")?;
+        require(
+            raw::is_team_member(&tx, team.as_str(), principal.as_str())?,
+            || format!("{principal} is not on {team}"),
+        )?;
+        let subject = raw::principal(&tx, principal.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("principal {principal}")))?;
+        require(subject.kind == PrincipalKind::Human, || {
+            format!("{principal} is not a person; only a person is invited to sign in")
+        })?;
+        if !subject.active {
+            return Err(CoreError::Conflict(format!(
+                "{principal} is deactivated; bring them back before inviting them"
+            )));
+        }
+        let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
+        let mut envs = Vec::new();
+        for token in raw::tokens_of(&tx, principal.as_str())? {
+            let invitation = token
+                .label
+                .as_deref()
+                .is_some_and(|l| l.starts_with(INVITATION_LABEL));
+            if !token.revoked && invitation {
+                envs.push(append(
+                    &tx,
+                    actor,
+                    via,
+                    Event::TokenRevoked { token: token.id },
+                )?);
+            }
+        }
+        let label = if mailed {
+            MAILED_INVITATION_LABEL
+        } else {
+            INVITATION_LABEL
+        };
+        let (token, secret, env) = append_token(&tx, actor, principal, Some(label), until)?;
+        envs.push(env);
+        tx.commit()?;
+        Ok((token, secret, envs))
     }
 
     /// Revoke a token, effective immediately. The owner or any human.

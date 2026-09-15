@@ -2446,41 +2446,56 @@ pub struct Invite {
     pub email: String,
 }
 
+/// What an invitation came to: the link when it could not be mailed,
+/// whether it was, and when it lapses.
+pub(crate) struct Invited {
+    pub link: String,
+    pub mailed: bool,
+    pub until: String,
+}
+
 /// Invite somebody: an account under their name if there is none, the
 /// address on it, an invitation that signs them in once, mailed when the
-/// forge can mail. Answers with the link when it could not mail, so
-/// whoever asked can hand it over; when it did mail, the link is in the
-/// mail and nowhere else. Their address leaves the waitlist, since the
-/// asking is answered.
-pub async fn invite(
-    State(app): State<AppState>,
-    actor: Actor,
-    headers: axum::http::HeaderMap,
-    Json(body): Json<Invite>,
-) -> ApiResult<Json<Value>> {
-    operator(&app, &actor)?;
-    let id = principal_id(&body.id)?;
-    let display = body
-        .display
-        .as_deref()
-        .map(str::trim)
-        .filter(|d| !d.is_empty())
-        .unwrap_or(id.as_str())
-        .to_owned();
-    match app.with_store(|s| s.principal(&id))? {
-        None => {
-            let env = app.with_store(|s| {
-                s.register_principal(
-                    &actor.0,
-                    &id,
-                    ambolt_core::PrincipalKind::Human,
-                    &display,
-                    None,
-                    None,
-                )
-            })?;
-            app.publish(&env);
-        }
+/// forge can mail. With an organisation named, the person is put on it
+/// as they are made, which is an owner's act and needs nobody at the
+/// door. The link comes back when it could not be mailed, so whoever
+/// asked can hand it over; when it was mailed, it is in the mail and
+/// nowhere else. Their address leaves the waitlist, since the
+/// invitation is the answer to having asked.
+pub(crate) async fn invite_into(
+    app: &AppState,
+    actor: &Actor,
+    headers: &axum::http::HeaderMap,
+    id: &PrincipalId,
+    display: &str,
+    email: &str,
+    organisation: Option<&PrincipalId>,
+) -> ApiResult<Invited> {
+    match app.with_store(|s| s.principal(id))? {
+        None => match organisation {
+            Some(team) => {
+                let envs = app.with_store(|s| {
+                    s.acting_as(actor.1.as_ref())
+                        .register_member_of(&actor.0, team, id, display)
+                })?;
+                for env in &envs {
+                    app.publish(env);
+                }
+            }
+            None => {
+                let env = app.with_store(|s| {
+                    s.register_principal(
+                        &actor.0,
+                        id,
+                        ambolt_core::PrincipalKind::Human,
+                        display,
+                        None,
+                        None,
+                    )
+                })?;
+                app.publish(&env);
+            }
+        },
         Some(existing) if existing.kind != ambolt_core::PrincipalKind::Human => {
             return Err(ApiError::new(
                 StatusCode::BAD_REQUEST,
@@ -2496,9 +2511,9 @@ pub async fn invite(
             // reads that address: the same link to the address already
             // on it is the one re-invitation there is.
             let (claimed, contact) = app.with_store(|s| {
-                Ok::<_, ambolt_core::CoreError>((s.is_claimed(&id)?, s.contact_of(&id)?))
+                Ok::<_, ambolt_core::CoreError>((s.is_claimed(id)?, s.contact_of(id)?))
             })?;
-            let asked = body.email.trim();
+            let asked = email.trim();
             let same = |known: &str| known.eq_ignore_ascii_case(asked);
             let theirs = contact.email.as_deref().is_some_and(same)
                 || contact.pending.as_deref().is_some_and(same);
@@ -2513,27 +2528,58 @@ pub async fn invite(
                     ),
                 ));
             }
+            // Somebody who exists is put on the organisation the same
+            // way, if they are not on it yet.
+            if let Some(team) = organisation
+                && !app.with_store(|s| s.is_team_member(team, id))?
+            {
+                let env = app.with_store(|s| {
+                    s.acting_as(actor.1.as_ref())
+                        .add_team_member(&actor.0, team, id)
+                })?;
+                app.publish(&env);
+            }
         }
     }
-    app.with_store(|s| s.request_email(&id, &body.email))?;
-    // One invitation at a time: a new one kills the old.
-    let open: Vec<ambolt_core::TokenInfo> = app
-        .with_store(|s| s.tokens_of(&id))?
-        .into_iter()
-        .filter(|t| !t.revoked && crate::web::is_invitation(t))
-        .collect();
-    for token in open {
-        let env = app.with_store(|s| s.revoke_token(&actor.0, &token.id))?;
-        app.publish(&env);
-    }
+    app.with_store(|s| s.request_email(id, email))?;
     let will_mail = app.mailer().is_some();
     let until = ambolt_core::until_in_days(crate::web::INVITATION_DAYS);
-    let (_, secret, env) =
-        app.with_store(|s| s.mint_invitation(&actor.0, &id, will_mail, Some(&until)))?;
-    app.publish(&env);
-    let link = crate::web::join_link(&app, &headers, &secret);
+    // One invitation at a time: a new one kills the old.
+    let secret = match organisation {
+        Some(team) => {
+            let (_, secret, envs) = app.with_store(|s| {
+                s.acting_as(actor.1.as_ref()).mint_invitation_into(
+                    &actor.0,
+                    team,
+                    id,
+                    will_mail,
+                    Some(&until),
+                )
+            })?;
+            for env in &envs {
+                app.publish(env);
+            }
+            secret
+        }
+        None => {
+            let open: Vec<ambolt_core::TokenInfo> = app
+                .with_store(|s| s.tokens_of(id))?
+                .into_iter()
+                .filter(|t| !t.revoked && crate::web::is_invitation(t))
+                .collect();
+            for token in open {
+                let env = app.with_store(|s| s.revoke_token(&actor.0, &token.id))?;
+                app.publish(&env);
+            }
+            let (_, secret, env) =
+                app.with_store(|s| s.mint_invitation(&actor.0, id, will_mail, Some(&until)))?;
+            app.publish(&env);
+            secret
+        }
+    };
+    let link = crate::web::join_link(app, headers, &secret);
     let mailed = if will_mail {
-        match crate::web::mail_invitation(&app, &body.email, &link, &actor.0).await {
+        match crate::web::mail_invitation(app, email, &link, &actor.0, organisation).await {
             Ok(()) => true,
             Err(err) => {
                 tracing::error!(%err, "invitation mail failed");
@@ -2547,14 +2593,74 @@ pub async fn invite(
     // forge could not send leaves them where they were, with the link
     // in this answer for the operator to hand over.
     if mailed || !will_mail {
-        let _ = app.with_store(|s| s.leave_waitlist(&body.email));
+        let _ = app.with_store(|s| s.leave_waitlist(email));
     }
+    Ok(Invited {
+        link,
+        mailed,
+        until,
+    })
+}
+
+fn display_of(body: &Invite, id: &PrincipalId) -> String {
+    body.display
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty())
+        .unwrap_or(id.as_str())
+        .to_owned()
+}
+
+/// The operator's invitation, onto the forge and nothing more.
+pub async fn invite(
+    State(app): State<AppState>,
+    actor: Actor,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<Invite>,
+) -> ApiResult<Json<Value>> {
+    operator(&app, &actor)?;
+    let id = principal_id(&body.id)?;
+    let display = display_of(&body, &id);
+    let done = invite_into(&app, &actor, &headers, &id, &display, &body.email, None).await?;
     Ok(Json(json!({
         "principal": id,
         "email": body.email,
-        "mailed": mailed,
-        "link": (!mailed).then_some(link),
-        "until": until,
+        "mailed": done.mailed,
+        "link": (!done.mailed).then_some(done.link),
+        "until": done.until,
+    })))
+}
+
+/// An owner's invitation into their organisation: the account, the
+/// membership, the link. Refused to a member, with the fix named.
+pub async fn invite_member(
+    State(app): State<AppState>,
+    actor: Actor,
+    headers: axum::http::HeaderMap,
+    Path(team): Path<String>,
+    Json(body): Json<Invite>,
+) -> ApiResult<Json<Value>> {
+    let team = PrincipalId(team);
+    app.with_store(|s| s.acting_as(actor.1.as_ref()).may_run_team(&actor.0, &team))?;
+    let id = principal_id(&body.id)?;
+    let display = display_of(&body, &id);
+    let done = invite_into(
+        &app,
+        &actor,
+        &headers,
+        &id,
+        &display,
+        &body.email,
+        Some(&team),
+    )
+    .await?;
+    Ok(Json(json!({
+        "principal": id,
+        "organisation": team,
+        "email": body.email,
+        "mailed": done.mailed,
+        "link": (!done.mailed).then_some(done.link),
+        "until": done.until,
     })))
 }
 

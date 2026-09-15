@@ -2214,6 +2214,54 @@ fn an_organisation_has_owners_and_keeps_its_last() {
     assert!(store.fsck().unwrap().is_empty());
 }
 
+/// Somebody an owner registered into the organisation who never came
+/// is let go with their membership, so the room comes back.
+#[test]
+fn an_unclaimed_invitation_into_an_organisation_is_purged_with_its_membership() {
+    use ambolt_core::TeamRole;
+    let (mut store, human, _scout, _) = seeded();
+    let crew = principal("crew");
+    let bee = principal("bee");
+    let eve = principal("eve");
+    store
+        .register_principal(&human, &crew, PrincipalKind::Team, "Crew", None, None)
+        .unwrap();
+    store
+        .register_principal(&human, &bee, PrincipalKind::Human, "Bee", None, None)
+        .unwrap();
+    store.add_team_member(&human, &crew, &bee).unwrap();
+    store
+        .set_team_role(&human, &crew, &bee, TeamRole::Owner)
+        .unwrap();
+    // Ada and bee are somebody's: a purge lets go only the unclaimed.
+    for who in [&human, &bee] {
+        store
+            .set_password(&human, who, "a long enough password for the test")
+            .unwrap();
+    }
+    // A member may not; an owner may, and eve is on crew from the start.
+    let envs = store.register_member_of(&bee, &crew, &eve, "Eve").unwrap();
+    assert_eq!(envs.len(), 2);
+    assert!(store.is_team_member(&crew, &eve).unwrap());
+    assert!(matches!(
+        store
+            .register_member_of(&eve, &crew, &principal("fay"), "Fay")
+            .unwrap_err(),
+        CoreError::Forbidden(_)
+    ));
+    assert_eq!(store.usage(&crew).unwrap().members, 2);
+    // An invitation that lapsed: the purge lets eve go, and off crew.
+    let yesterday = (jiff::Timestamp::now() - jiff::Span::new().hours(24)).to_string();
+    store
+        .mint_invitation_into(&bee, &crew, &eve, false, Some(&yesterday))
+        .unwrap();
+    let gone = store.purge_unclaimed(&human).unwrap();
+    assert_eq!(gone, vec![eve.clone()]);
+    assert!(!store.is_team_member(&crew, &eve).unwrap());
+    assert_eq!(store.usage(&crew).unwrap().members, 1);
+    assert!(store.fsck().unwrap().is_empty());
+}
+
 #[test]
 fn an_expired_token_identifies_nobody() {
     let (mut store, human, _, _) = seeded();
