@@ -1,0 +1,139 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Iowners0124",
+      "id": "c-0rxapkf4y14fv9t3kjqe1a51vc",
+      "landed_oid": "ce357376acd0241f9c25d1aab3840ddb3ea0db61",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 141,
+      "opened_at": "2026-09-15T15:28:15.345858441Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": null,
+      "title": "Give an organisation owners",
+      "updated_at": "2026-09-15T15:29:15.525356259Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-0rxapkf4y14fv9t3kjqe1a51vc",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "covers": [],
+        "id": "cl-71vwm18g75y32fx1czejq709ya",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1354,
+        "summary": "fmt, clippy -D warnings, the suite and the first-run walk pass. New: TeamRoleSet event, role on team_members (schema 32), owner-only membership changes, last-owner rule, members quota dimension (default 25), owners API, sidebar Organisations, owner named on creation; core and flow tests cover each.",
+        "unchecked": [
+          "The live organisation's members are named owners after deploy, from the door; that step is not a test."
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "ce357376acd0241f9c25d1aab3840ddb3ea0db61",
+    "landed_at": "2026-09-15T15:29:15.525356259Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-0rxapkf4y14fv9t3kjqe1a51vc",
+      "commit_oid": "ce357376acd0241f9c25d1aab3840ddb3ea0db61",
+      "message": "Give an organisation owners\n\nAn organisation has owners, who run it, and members, who work in it.\nOwners put people on it and take them off, name other owners, and are\nthe ones a member cannot remove; a member may leave. The last owner\nstays until another is named, so an organisation with an owner never\nhas none; whoever runs the forge can step in either way, and names the\nfirst owner when the organisation is made, from the door or the API.\nHow many people an organisation may have is part of its quota, 25\nunless the operator says otherwise, refused with both numbers like\nevery other limit. The sidebar lists the organisations you are on and\nwhat you are to each; the organisation's page shows who owns it and\nlets its owners act. Existing members are unchanged until named, and\nthe log says who named whom.\n\nChange-Id: Iowners0124\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/src/main.rs",
+        "crates/cli/tests/suite/owners_flow.rs",
+        "crates/cli/tests/suite/quotas_flow.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/event.rs",
+        "crates/core/src/lib.rs",
+        "crates/core/src/queries.rs",
+        "crates/core/src/store.rs",
+        "crates/core/src/types.rs",
+        "crates/core/tests/suite/lifecycle.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1357,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-71vwm18g75y32fx1czejq709ya",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-71vwm18g75y32fx1czejq709ya",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 195 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 14 path(s) outside docs/, *.md: crates/cli/src/main.rs, crates/cli/tests/suite/owners_flow.rs, crates/cli/tests/suite/quotas_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-0rxapkf4y14fv9t3kjqe1a51vc",
+        "claim": "cl-71vwm18g75y32fx1czejq709ya",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "id": "vr-0pk2zz32p05h9arj8yeg96cg7k",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1355
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "H7XR0v6+nnYmy5GH0UDJt1Zj/A+6re4OOhM25k9UuNR6dB0+oGz5vM+tVQKKGqBZbO8U9TKc7how5D0Af53BCg=="
+  }
+}
