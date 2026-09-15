@@ -1,0 +1,132 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Iinvite0125",
+      "id": "c-5fgrqshf9bvs27z5ada3v1ntar",
+      "landed_oid": "a82ad2a907b0c604ee1edd4bb35c60bdbdf43d53",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 142,
+      "opened_at": "2026-09-15T16:18:43.965820705Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-226zgq7f7q4atbncs019dcsfj4",
+      "title": "Let an owner invite people into the organisation",
+      "updated_at": "2026-09-15T16:20:25.403616002Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-5fgrqshf9bvs27z5ada3v1ntar",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "covers": [],
+        "id": "cl-1hj8zbq5rv67yzz1f8f42tch8y",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1363,
+        "summary": "fmt, clippy -D warnings, the suite and the first-run walk pass. New: owner-authorised registration into an organisation within the members cap, POST /api/teams/{org}/invitations, the page's invite form and once-shown link, Invited state, purge ending memberships; tested at both levels.",
+        "unchecked": [
+          "The mail's wording with an organisation is read, not sent, in the suite; the test forge has no relay."
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "a82ad2a907b0c604ee1edd4bb35c60bdbdf43d53",
+    "landed_at": "2026-09-15T16:20:25.403616002Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-5fgrqshf9bvs27z5ada3v1ntar",
+      "commit_oid": "a82ad2a907b0c604ee1edd4bb35c60bdbdf43d53",
+      "message": "Let an owner invite people into the organisation\n\nA company brings its own people in without whoever runs the forge.\nAn owner invites by name and address from the organisation's page or\nPOST /api/teams/{org}/invitations: the account is the person's own,\nthe membership comes with it and counts against the organisation, and\na link that signs them in once goes to the address, naming the\norganisation, or is shown once on the page when the forge cannot\nmail. Somebody who already has an account is put on the organisation\nthe same way. Until the link is used the member shows as invited, and\nthe purge that lets the unclaimed go takes their memberships with\nthem, so the room comes back. A member cannot invite; the refusal\nsays who can.\n\nTask: t-226zgq7f7q4atbncs019dcsfj4\nChange-Id: Iinvite0125\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/owners_flow.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/tests/suite/lifecycle.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1366,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-1hj8zbq5rv67yzz1f8f42tch8y",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-1hj8zbq5rv67yzz1f8f42tch8y",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 196 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 7 path(s) outside docs/, *.md: crates/cli/tests/suite/owners_flow.rs, crates/core/src/commands.rs, crates/core/tests/suite/lifecycle.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-5fgrqshf9bvs27z5ada3v1ntar",
+        "claim": "cl-1hj8zbq5rv67yzz1f8f42tch8y",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "id": "vr-5ctbzbgfnyzy477mbvaarnkg4f",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1364
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "aBgJraAIi4NqpeZ5n4UvxbYiGrt9QvA2IoEzPFBkuw4/94ZdaVUNA53XADgHWom/e7DllNQnMxKSb1WhVo7dCQ=="
+  }
+}
