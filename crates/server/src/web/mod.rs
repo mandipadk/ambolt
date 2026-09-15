@@ -208,6 +208,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{owner}/{repo}/settings/transfer", post(repo_transfer))
         .route("/{owner}/{repo}/settings/access", post(repo_access_action))
         .route("/{owner}/{repo}/save", post(repo_save))
+        .route("/{owner}/{repo}/watch", post(repo_watch))
         .route(
             "/{owner}/{repo}/transfer",
             get(transfer_page).post(transfer_answer),
@@ -2339,6 +2340,29 @@ struct SaveForm {
 }
 
 /// Save a repository to reach it from the sidebar, or let it go.
+async fn repo_watch(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Form(form): Form<SaveForm>,
+) -> Response {
+    let result = if form.action == "unwatch" {
+        app.with_store(|s| s.unwatch(&viewer.0, &repo))
+    } else {
+        app.with_store(|s| s.watch(&viewer.0, &repo))
+    };
+    match result {
+        Ok(env) => {
+            if let Some(env) = env {
+                app.publish(&env);
+            }
+            Redirect::to(&format!("/{repo}")).into_response()
+        }
+        Err(ambolt_core::CoreError::NotFound(_)) => not_found(),
+        Err(err) => flash(&format!("/{repo}"), &humane(&err)),
+    }
+}
+
 async fn repo_save(
     State(app): State<AppState>,
     viewer: Viewer,
@@ -4038,6 +4062,13 @@ async fn render_tree(
         ),
         Who::Anonymous(_) => None,
     };
+    let watching = match &who {
+        Who::Signed(viewer) => Some(
+            app.with_store(|s| s.is_watching(&viewer.0, &record.name))
+                .unwrap_or(false),
+        ),
+        Who::Anonymous(_) => None,
+    };
     let proposer = match &who {
         Who::Signed(viewer) => app.with_store(|s| {
             !s.may_push(&viewer.0, &record.name) && s.may_propose(&viewer.0, &record.name)
@@ -4049,6 +4080,7 @@ async fn render_tree(
         who: who.reading(),
         repo: &record,
         saved,
+        watching,
         proposer,
         tip: tip.as_deref(),
         path: &path,

@@ -67,6 +67,11 @@ The resumable stream filters the same way and advances its cursor past
 what it withheld, so nobody learns what they missed from a hole in the
 numbering.
 
+Watching a repository is an event of its own, so what it brings to the
+inbox replays from the log: whoever watches hears when a change lands
+there and when one is drawn for a person's look, after whoever the
+event addressed on its own.
+
 Authority is scoped but never private: a grant is visible to everyone it
 stands alongside, because a forge arguing that authority should be
 auditable cannot hide who may act. Passwords and tokens stay with their

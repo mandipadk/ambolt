@@ -320,6 +320,14 @@ CREATE TABLE IF NOT EXISTS notices (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_notices_recipient ON notices (recipient, seq);
 
+-- Who asked to hear about a repository: a projection of RepoWatched
+-- and RepoUnwatched, so the notices it addresses replay from the log.
+CREATE TABLE IF NOT EXISTS watches (
+  principal TEXT NOT NULL,
+  repo      TEXT NOT NULL,
+  PRIMARY KEY (principal, repo)
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS team_members (
   team   TEXT NOT NULL,
   member TEXT NOT NULL,
@@ -558,6 +566,7 @@ const PROJECTION_TABLES: &[&str] = &[
     "former_names",
     "event_scope",
     "notices",
+    "watches",
     "team_members",
     "team_settings",
     "org_teams",
@@ -1034,6 +1043,8 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         | RepoArchived { repo }
         | RepoDescribed { repo, .. }
         | RepoTopicsSet { repo, .. }
+        | RepoWatched { repo, .. }
+        | RepoUnwatched { repo, .. }
         | RepoUnarchived { repo }
         | RepoDeleted { repo }
         | ChangeOpened { repo, .. } => (Some(repo.clone()), None),
@@ -1756,7 +1767,7 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         }
     }
 
-    if let Some((recipient, kind, repo, change, number, what)) = notice
+    if let Some((recipient, kind, repo, change, number, what)) = &notice
         && recipient != actor
     {
         tx.execute(
@@ -1764,6 +1775,45 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
              VALUES (?, ?, ?, ?, ?, ?, ?)",
             params![env.seq.0, recipient, kind, repo, change, number, what],
         )?;
+    }
+
+    // Whoever watches the repository hears of a landing, and of a change
+    // drawn for a person's look, after whoever the event addressed on
+    // its own: a watcher who is also the owner is told once.
+    // (repo, kind, what, change, number)
+    type Watched = (String, &'static str, String, Option<String>, Option<i64>);
+    let watched: Option<Watched> = match &env.event {
+        ChangeMerged { change, .. } => change_ref(change.as_str())?.map(|c| {
+            (
+                c.repo.clone(),
+                "landed",
+                format!("#{} landed on {} in {}", c.number, c.target, c.repo),
+                Some(change.as_str().to_owned()),
+                Some(c.number),
+            )
+        }),
+        AttentionDrawn { change, repo, .. } => change_ref(change.as_str())?.map(|c| {
+            (
+                repo.clone(),
+                "drawn",
+                format!("#{} in {repo} was drawn for a person's look", c.number),
+                Some(change.as_str().to_owned()),
+                Some(c.number),
+            )
+        }),
+        _ => None,
+    };
+    if let Some((repo, kind, what, change, number)) = watched {
+        for watcher in crate::queries::raw::watchers(tx, &repo)? {
+            if watcher == actor {
+                continue;
+            }
+            tx.execute(
+                "INSERT OR IGNORE INTO notices (seq, recipient, kind, repo, change_id, number, what)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
+                params![env.seq.0, watcher, kind, repo, change, number, what],
+            )?;
+        }
     }
     Ok(())
 }
@@ -2096,6 +2146,10 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
             // Operational tables follow the name too, where they exist:
             // fsck replays the log into projections alone, which have
             // no debt snapshots.
+            tx.execute(
+                "UPDATE watches SET repo = ? WHERE repo = ?",
+                params![to, repo],
+            )?;
             for table in ["debt_snapshots", "repo_sizes", "bookmarks"] {
                 if table_exists(tx, table)? {
                     tx.execute(
@@ -2137,6 +2191,18 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 params![topics.join(" "), repo],
             )?;
         }
+        Event::RepoWatched { repo } => {
+            tx.execute(
+                "INSERT OR IGNORE INTO watches (principal, repo) VALUES (?, ?)",
+                params![actor, repo],
+            )?;
+        }
+        Event::RepoUnwatched { repo } => {
+            tx.execute(
+                "DELETE FROM watches WHERE principal = ? AND repo = ?",
+                params![actor, repo],
+            )?;
+        }
         Event::RepoArchived { repo } => {
             tx.execute(
                 "UPDATE repos SET archived = 1 WHERE name = ?",
@@ -2176,6 +2242,7 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                    (SELECT id FROM threads WHERE change_id IN (SELECT id FROM changes WHERE repo = ?))",
                 "DELETE FROM threads WHERE change_id IN (SELECT id FROM changes WHERE repo = ?)",
                 "DELETE FROM attention_draws WHERE repo = ?",
+                "DELETE FROM watches WHERE repo = ?",
                 "DELETE FROM merge_queue WHERE repo = ?",
                 "DELETE FROM tags WHERE repo = ?",
                 "DELETE FROM former_names WHERE repo = ?",

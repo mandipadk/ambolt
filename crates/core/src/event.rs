@@ -177,6 +177,14 @@ pub enum Event {
         repo: String,
         topics: Vec<String>,
     },
+    /// The actor asked to hear when something lands on the repository,
+    /// or when a change there is drawn for a person's look.
+    RepoWatched {
+        repo: String,
+    },
+    RepoUnwatched {
+        repo: String,
+    },
     RepoArchived {
         repo: String,
     },
@@ -571,6 +579,8 @@ impl Event {
             Event::RepoArchived { .. } => "repo_archived",
             Event::RepoDescribed { .. } => "repo_described",
             Event::RepoTopicsSet { .. } => "repo_topics_set",
+            Event::RepoWatched { .. } => "repo_watched",
+            Event::RepoUnwatched { .. } => "repo_unwatched",
             Event::RepoUnarchived { .. } => "repo_unarchived",
             Event::RepoDeleted { .. } => "repo_deleted",
             Event::RepoTransferOffered { .. } => "repo_transfer_offered",

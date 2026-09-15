@@ -270,6 +270,9 @@ pub fn router(state: AppState) -> Router {
             post(routes::remove_org_team_member),
         )
         .route("/api/repos/{owner}/{name}/access", get(routes::repo_access))
+        .route("/api/repos/{owner}/{name}/watch", post(routes::watch))
+        .route("/api/repos/{owner}/{name}/unwatch", post(routes::unwatch))
+        .route("/api/you/watches", get(routes::my_watches))
         .route("/api/repos/{owner}/{name}/bookmark", post(routes::bookmark))
         .route(
             "/api/repos/{owner}/{name}/unbookmark",

@@ -2421,6 +2421,53 @@ impl Store {
 
     /// Keep a repository in reach. Anyone may save what they may read;
     /// nothing is said to anybody, since it is theirs alone.
+    /// Ask to hear when something lands on a repository, or when a change
+    /// there is drawn for a person's look. Recorded, so the notices it
+    /// brings replay from the log; nothing to do if already watching.
+    pub fn watch(&mut self, who: &PrincipalId, repo: &str) -> CoreResult<Option<Envelope>> {
+        if !self.may_read(who, repo) {
+            return Err(CoreError::NotFound(format!("repo {repo}")));
+        }
+        not_under_a_scope(
+            Acting::of(&self.scope, self.admin_elsewhere),
+            "watch a repository",
+        )?;
+        if self.is_watching(who, repo)? {
+            return Ok(None);
+        }
+        let tx = self.conn.transaction()?;
+        ensure_actor(&tx, who)?;
+        let env = append(
+            &tx,
+            who,
+            None,
+            Event::RepoWatched {
+                repo: repo.to_owned(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(Some(env))
+    }
+
+    /// Stop hearing about a repository. Nothing to do if not watching.
+    pub fn unwatch(&mut self, who: &PrincipalId, repo: &str) -> CoreResult<Option<Envelope>> {
+        if !self.is_watching(who, repo)? {
+            return Ok(None);
+        }
+        let tx = self.conn.transaction()?;
+        ensure_actor(&tx, who)?;
+        let env = append(
+            &tx,
+            who,
+            None,
+            Event::RepoUnwatched {
+                repo: repo.to_owned(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(Some(env))
+    }
+
     pub fn bookmark(&mut self, who: &PrincipalId, repo: &str) -> CoreResult<()> {
         if !self.may_read(who, repo) {
             return Err(CoreError::NotFound(format!("repo {repo}")));

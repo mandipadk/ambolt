@@ -73,5 +73,6 @@ mod transfer_flow;
 mod trust_flow;
 mod verify_flow;
 mod visibility_flow;
+mod watch_flow;
 mod web_flow;
 mod welcome_flow;

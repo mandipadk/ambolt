@@ -2191,6 +2191,33 @@ pub async fn remove_org_team_member(
 }
 
 /// Keep a repository in reach: it joins the caller's Saved list.
+pub async fn watch(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+) -> ApiResult<Json<Value>> {
+    if let Some(env) = app.with_store(|s| s.acting_as(actor.1.as_ref()).watch(&actor.0, &name))? {
+        app.publish(&env);
+    }
+    Ok(Json(json!({ "repo": name, "watching": true })))
+}
+
+pub async fn unwatch(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+) -> ApiResult<Json<Value>> {
+    if let Some(env) = app.with_store(|s| s.unwatch(&actor.0, &name))? {
+        app.publish(&env);
+    }
+    Ok(Json(json!({ "repo": name, "watching": false })))
+}
+
+pub async fn my_watches(State(app): State<AppState>, actor: Actor) -> ApiResult<Json<Value>> {
+    let watches = app.with_store(|s| s.watches_of(&actor.0))?;
+    Ok(Json(json!({ "watches": watches })))
+}
+
 pub async fn bookmark(
     State(app): State<AppState>,
     actor: Actor,

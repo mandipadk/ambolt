@@ -241,6 +241,11 @@ the unscoped admin grant:
   organisation's page offers it under Allowance.
   `GET /api/principals/{id}/organisations` — the organisations a
   principal is on and what they are to each.
+- `POST /api/repos/{owner}/{name}/watch` and `/unwatch`,
+  `GET /api/you/watches` — hear, in your inbox, when a change lands on
+  a repository you may read or is drawn there for a person's look; the
+  Watch button on the repository's page does the same. Recorded in the
+  log, unlike a bookmark, so the notices replay.
 - `POST /api/repos/{owner}/{name}/bookmark` and `/unbookmark`,
   `GET /api/you/bookmarks` — keep a repository you may read in reach;
   the sidebar lists what you saved under Saved, and under Repositories

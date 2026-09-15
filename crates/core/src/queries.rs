@@ -833,6 +833,14 @@ pub(crate) mod raw {
         )? as u32)
     }
 
+    /// Everyone who asked to hear about `repo`.
+    pub fn watchers(conn: &Connection, repo: &str) -> CoreResult<Vec<String>> {
+        Ok(conn
+            .prepare_cached("SELECT principal FROM watches WHERE repo = ? ORDER BY principal")?
+            .query_map(params![repo], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
     fn repo_owner(conn: &Connection, repo: &str) -> CoreResult<Option<String>> {
         Ok(conn
             .prepare_cached("SELECT owner FROM repos WHERE name = ?")?
@@ -1979,6 +1987,24 @@ impl Store {
             .into_iter()
             .filter(|repo| self.may_read(who, repo))
             .collect())
+    }
+
+    /// The repositories `who` watches, by name.
+    pub fn watches_of(&self, who: &PrincipalId) -> CoreResult<Vec<String>> {
+        Ok(self
+            .conn
+            .prepare_cached("SELECT repo FROM watches WHERE principal = ? ORDER BY repo")?
+            .query_map(params![who.as_str()], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn is_watching(&self, who: &PrincipalId, repo: &str) -> CoreResult<bool> {
+        Ok(self
+            .conn
+            .prepare_cached("SELECT 1 FROM watches WHERE principal = ? AND repo = ?")?
+            .query_row(params![who.as_str(), repo], |_| Ok(()))
+            .optional()?
+            .is_some())
     }
 
     pub fn is_bookmarked(&self, who: &PrincipalId, repo: &str) -> CoreResult<bool> {

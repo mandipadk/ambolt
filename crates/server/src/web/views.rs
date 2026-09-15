@@ -3855,6 +3855,8 @@ pub struct RepoPage<'a> {
     pub repo: &'a Repo,
     /// Whether the signed-in viewer saved it; none for a stranger.
     pub saved: Option<bool>,
+    /// Whether the signed-in viewer watches it; none for a stranger.
+    pub watching: Option<bool>,
     /// The viewer may propose here and not push: their push opens a
     /// proposal, and the opener says so.
     pub proposer: bool,
@@ -3873,6 +3875,7 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
         who,
         repo,
         saved,
+        watching,
         proposer,
         tip,
         path,
@@ -3984,6 +3987,14 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
                 div class="acts" {
                     @if repo.visibility == Visibility::Public {
                         a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (name.replace('/', "%2F")) } title="Report this repository to whoever runs the forge" { "Report" }
+                    }
+                    @if let Some(watching) = watching {
+                        form method="post" action={ "/" (name) "/watch" } {
+                            input type="hidden" name="action" value=(if watching { "unwatch" } else { "watch" });
+                            button class={ "btn2 sm" @if watching { " on" } } type="submit" title=(if watching { "You hear when something lands here or needs a person; click to stop" } else { "Hear when something lands here, or needs a person" }) {
+                                (ic("bell", "sm")) @if watching { "Watching" } @else { "Watch" }
+                            }
+                        }
                     }
                     @if let Some(saved) = saved {
                         form method="post" action={ "/" (name) "/save" } {
@@ -5795,6 +5806,14 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::RepoDescribed { repo, description } => (
             "dot idle",
             html! { b { (actor) } " described " (repo) @if description.is_empty() { " as nothing in particular" } @else { ": " (description) } },
+        ),
+        Event::RepoWatched { repo } => (
+            "dot idle",
+            html! { b { (actor) } " started watching " (repo) },
+        ),
+        Event::RepoUnwatched { repo } => (
+            "dot idle",
+            html! { b { (actor) } " stopped watching " (repo) },
         ),
         Event::RepoTopicsSet { repo, topics } => (
             "dot idle",
