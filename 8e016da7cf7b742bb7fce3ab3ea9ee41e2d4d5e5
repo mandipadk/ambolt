@@ -1,0 +1,143 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Ipropose0132",
+      "id": "c-7y3dpt2kr4kn279y3pc103js4r",
+      "landed_oid": "8e016da7cf7b742bb7fce3ab3ea9ee41e2d4d5e5",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 149,
+      "opened_at": "2026-09-15T20:47:17.492044151Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-3rt4dz9pxk66ybjym7mcy909em",
+      "title": "Let a stranger propose a change, and nobody's runner run it unasked",
+      "updated_at": "2026-09-15T20:48:32.135047355Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-7y3dpt2kr4kn279y3pc103js4r",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "covers": [],
+        "id": "cl-4b7gkh5qmkpjjvp26xg3e4vtsj",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1418,
+        "summary": "fmt, clippy -D warnings, the suite and the first-run walk pass. New: Capability::Propose, policy.proposals, change.proposal/admitted/discarded (schema 34), authorize_push_or_own, ChangeAdmitted/Discarded, testimony rule, runner gate, quota caps, ref removal over real git; four flow tests.",
+        "unchecked": [
+          "Caps, quota attribution beyond open changes, and discard are the next landing; a proposer's push over git was exercised through the API path, not a real git push."
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "8e016da7cf7b742bb7fce3ab3ea9ee41e2d4d5e5",
+    "landed_at": "2026-09-15T20:48:32.135047355Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-7y3dpt2kr4kn279y3pc103js4r",
+      "commit_oid": "8e016da7cf7b742bb7fce3ab3ea9ee41e2d4d5e5",
+      "message": "Let a stranger propose a change, and nobody's runner run it unasked\n\nA sixth verb, propose, strictly smaller than push: it opens a change on\na repository and reaches the changes you opened, to revise, claim and\nabandon them, and nothing else. A public repository gives it to\neveryone signed in when its policy says proposals are open; being on\nthe organisation that owns a repository carries it; a grant gives it to\none person on any repository. A change opened under propose alone is\nrecorded as a proposal, in the event and on the change, and stays one:\nit says what the reviewers were looking at. A proposal counts against\nthe proposer's open changes rather than the owner's, does not attempt\na task, and a push whose Change-Id names somebody else's change is\nrefused rather than joined.\n\nNobody's word lands anything by being said. On a proposal the owner's\nown claim is testimony: it meets the passing-test requirement only once\na runner has reproduced it, or when somebody holding push made the\nclaim. And no runner runs a stranger's command unasked: runners' loops\nleave a proposal out of what they owe until somebody holding merge or\nverify lets them at it, an event of its own, from the change's page or\nthe API. Pre-receive admits a proposer's push and caps what it carries; the\nrepository page tells a proposer what their push will open; the\nchanges list and the change page mark proposals; the MCP gains\nadmit_change and discard_change.\n\nA proposer's room is their own: so many proposals open on one\nrepository, so many a day, so much in one push, three numbers in the\nquota like the rest, with the operator's flags and per-principal\noverrides. And somebody holding merge may discard a proposal: it is\nabandoned with a reason, its refs/changes/N/* leave git, and gc\nreclaims what nothing names; reconciliation leaves a discarded\nproposal's refs gone. Ordinary abandonment keeps every revision, as\nit always did.\n\nTask: t-3rt4dz9pxk66ybjym7mcy909em\nChange-Id: Ipropose0132\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/src/main.rs",
+        "crates/cli/tests/suite/main.rs",
+        "crates/cli/tests/suite/owners_flow.rs",
+        "crates/cli/tests/suite/propose_flow.rs",
+        "crates/client/src/mcp.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/event.rs",
+        "crates/core/src/policy.rs",
+        "crates/core/src/queries.rs",
+        "crates/core/src/store.rs",
+        "crates/core/src/types.rs",
+        "crates/core/tests/suite/lifecycle.rs",
+        "crates/git/src/store.rs",
+        "crates/server/src/git_http.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1421,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-4b7gkh5qmkpjjvp26xg3e4vtsj",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-4b7gkh5qmkpjjvp26xg3e4vtsj",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 203 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 18 path(s) outside docs/, *.md: crates/cli/src/main.rs, crates/cli/tests/suite/main.rs, crates/cli/tests/suite/owners_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-7y3dpt2kr4kn279y3pc103js4r",
+        "claim": "cl-4b7gkh5qmkpjjvp26xg3e4vtsj",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "id": "vr-31y3nv8r3kzkp7v8sxm23m4dpa",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1419
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "g4s2dSzaA2Sq6IBKKS3LsdJXMtF61gapBm66mZM1H4MAuum/6p6ZJ/N3i+YK4ip+OdZ+gevtilr1rnqoDlraBw=="
+  }
+}
