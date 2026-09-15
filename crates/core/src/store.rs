@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Bump whenever a projection table changes shape. The log is never
 /// touched; projections are rebuilt from it.
-const SCHEMA_VERSION: i64 = 35;
+const SCHEMA_VERSION: i64 = 36;
 
 /// The log itself, which outlives every schema.
 const EVENT_SCHEMA: &str = "
@@ -3300,10 +3300,28 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                35,
+                36,
                 r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null,"proposals":false}"#
             ),
             "the policy's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
+        );
+    }
+
+    /// A projection table added or changed without a bump leaves a
+    /// running forge with a schema its binary no longer matches: the
+    /// watches table was added this way on 2026-09-15 and the flagship
+    /// could not land anything until the table was made by hand. The
+    /// projection schema's text is pinned to the version here, so the
+    /// bump cannot be forgotten again.
+    #[test]
+    fn the_projection_schema_is_pinned_to_the_schema_version() {
+        use sha2::{Digest, Sha256};
+        let digest = Sha256::digest(super::PROJECTION_SCHEMA.as_bytes());
+        let short: String = digest[..6].iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(
+            (super::SCHEMA_VERSION, short.as_str()),
+            (36, "1c9e491d1451"),
+            "the projection schema changed: bump SCHEMA_VERSION and pin the new digest here"
         );
     }
 
@@ -3357,7 +3375,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                35,
+                36,
                 r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25,"open_proposals":3,"proposal_push":33554432}"#
             ),
             "the quota's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
