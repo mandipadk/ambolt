@@ -1,0 +1,132 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Iasking0127",
+      "id": "c-1dqnxvepdabs6w3y6kzdnecn66",
+      "landed_oid": "6dafd94610be77bd00ebac851e94043777a4e01b",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 144,
+      "opened_at": "2026-09-15T16:58:56.706220791Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-0at5gmv4zcj1kt1js3xca0ckvj",
+      "title": "Let an organisation ask, and an agent read where it belongs",
+      "updated_at": "2026-09-15T17:00:02.103631831Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-1dqnxvepdabs6w3y6kzdnecn66",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "covers": [],
+        "id": "cl-6mhfw53t71ggmfhr64xtz5szg6",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1377,
+        "summary": "fmt, clippy -D warnings, the suite and the first-run walk pass. New: POST /api/teams/{org}/ask and the Allowance form file a report naming the organisation; GET /api/principals/{id}/organisations; MCP tools organisations, members, teams, access; flow and MCP tests cover them.",
+        "unchecked": [
+          "The console shows the ask like any report; that is the console's own test to keep."
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "6dafd94610be77bd00ebac851e94043777a4e01b",
+    "landed_at": "2026-09-15T17:00:02.103631831Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-1dqnxvepdabs6w3y6kzdnecn66",
+      "commit_oid": "6dafd94610be77bd00ebac851e94043777a4e01b",
+      "message": "Let an organisation ask, and an agent read where it belongs\n\nAn owner asks whoever runs the forge for more from the organisation's\nown page: a bigger allowance, or a forge of their own. The ask lands\nas a report, which the door, the console and GET /api/reports show\nwith the organisation named, so nobody has to find the operator's\naddress; POST /api/teams/{org}/ask does the same. Over MCP an agent\nreads the organisations a principal is on and what they are to each,\nwho is on an organisation, the teams inside it, and who holds what on\na repository, which is the whole of the organisation model an agent\nneeds to know and none of what it may change.\n\nTask: t-0at5gmv4zcj1kt1js3xca0ckvj\nChange-Id: Iasking0127\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/mcp.rs",
+        "crates/cli/tests/suite/owners_flow.rs",
+        "crates/client/src/mcp.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/views.rs",
+        "docs/agents.md",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1380,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-6mhfw53t71ggmfhr64xtz5szg6",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-6mhfw53t71ggmfhr64xtz5szg6",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 198 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 7 path(s) outside docs/, *.md: crates/cli/tests/suite/mcp.rs, crates/cli/tests/suite/owners_flow.rs, crates/client/src/mcp.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-1dqnxvepdabs6w3y6kzdnecn66",
+        "claim": "cl-6mhfw53t71ggmfhr64xtz5szg6",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "id": "vr-3spjp3c91g968zfbwtvwsrj4pz",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1378
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "WOGW6w59LhWu+eXey1YW/ulWrGZbqv5l5MlwL6xQe4CsOXqj+LvlqWOHTLPmiorhVE28LD5PkyKma4YJLWWtAA=="
+  }
+}
