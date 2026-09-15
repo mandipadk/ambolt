@@ -232,6 +232,13 @@ the unscoped admin grant:
   inside an organisation and who is on them, an owner's to change; a
   grant names one as `org/team`. `GET /api/repos/{owner}/{name}/access`
   — every live grant on a repository, for those inside it.
+- `POST /api/teams/{org}/ask {"for": "allowance"|"forge", "note": …}` —
+  an owner asks whoever runs the forge for a bigger allowance or a forge
+  of their own; it lands as a report, which `/reports`, the console and
+  `GET /api/reports` show, with the organisation named. The
+  organisation's page offers it under Allowance.
+  `GET /api/principals/{id}/organisations` — the organisations a
+  principal is on and what they are to each.
 - `GET /api/invitations/unclaimed` — who was invited and never came,
   with when their invitation lapses; `POST /api/invitations/purge` lets
   go those whose invitation has lapsed: each is deactivated, its

@@ -167,6 +167,10 @@ async fn full_agent_workflow_over_mcp() {
         "merge_change",
         "list_events",
         // Parity with the HTTP API: everything an agent may read or do.
+        "organisations",
+        "members",
+        "teams",
+        "access",
         "search",
         "inbox",
         "mark_read",

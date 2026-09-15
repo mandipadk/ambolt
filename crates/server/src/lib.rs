@@ -266,6 +266,11 @@ pub fn router(state: AppState) -> Router {
             post(routes::remove_org_team_member),
         )
         .route("/api/repos/{owner}/{name}/access", get(routes::repo_access))
+        .route("/api/teams/{id}/ask", post(routes::ask_for))
+        .route(
+            "/api/principals/{id}/organisations",
+            get(routes::organisations_of),
+        )
         .route("/api/teams/{id}/owners", post(routes::make_owner))
         .route("/api/teams/{id}/owners/remove", post(routes::unmake_owner))
         .route(

@@ -2935,6 +2935,8 @@ pub fn owner(
     // is is their business.
     allowances: Option<(ambolt_core::Usage, ambolt_core::Quota)>,
     error: Option<&str>,
+    // An owner just asked for more; say it was heard.
+    asked: bool,
     // An invitation link the forge could not mail, shown this once; or
     // where it was mailed.
     fresh: Option<&str>,
@@ -2977,6 +2979,9 @@ pub fn owner(
             }
             @if let Some(to) = mailed {
                 div class="notice" { (ic("inbox", "")) span { "The invitation went to " (to) "." } }
+            }
+            @if asked {
+                div class="notice" { (ic("check", "")) span { "Asked. Whoever runs the forge sees it with the reports, and answers from there." } }
             }
             div class="sec" {
                 div class="sh" { h2 { "Repositories" } span class="n" { (repos.len()) } }
@@ -3054,6 +3059,18 @@ pub fn owner(
                         (allowance("Open changes", usage.open_changes.to_string(), quota.open_changes.map(|n| n.to_string())))
                         (allowance("Tokens", usage.tokens.to_string(), quota.tokens.map(|n| n.to_string())))
                         @if organisation { (allowance("Members", usage.members.to_string(), quota.members.map(|n| n.to_string()))) }
+                        @if organisation && may_manage {
+                            form class="foot" method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                input type="hidden" name="action" value="ask";
+                                select class="input sm" name="ask" aria-label="Ask for" {
+                                    option value="allowance" { "More allowance" }
+                                    option value="forge" { "A forge of our own" }
+                                }
+                                input class="input sm" type="text" name="note" placeholder="What, and why" aria-label="Note";
+                                button class="btn2 sm" type="submit" { "Ask" }
+                                span class="hint" { "A bigger allowance is one setting for whoever runs the forge; a forge of your own is a managed instance you leave with everything into." }
+                            }
+                        }
                     }
                 }
             }

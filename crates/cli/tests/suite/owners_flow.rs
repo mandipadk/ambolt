@@ -487,3 +487,99 @@ async fn owners_shape_access_with_a_setting_and_teams() {
     assert_eq!(body["teams"][0]["name"], "backend", "{body}");
     assert_eq!(body["teams"][0]["members"], json!(["cat"]), "{body}");
 }
+
+/// An owner asks for more from the organisation's page, and the ask
+/// lands with the reports whoever runs the forge reads.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_owner_asks_for_more_and_the_operator_sees_it() {
+    let forge = boot().await;
+    let app = &forge.app;
+    for (id, display) in [("bee", "Bee"), ("cat", "Cat")] {
+        api(
+            app,
+            "POST",
+            "/api/principals",
+            "ada",
+            Some(json!({ "id": id, "kind": "human", "display": display })),
+        )
+        .await;
+    }
+    api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "crew", "kind": "team", "display": "Crew", "owner": "bee" })),
+    )
+    .await;
+    api(
+        app,
+        "POST",
+        "/api/teams/crew/members",
+        "bee",
+        Some(json!({ "member": "cat" })),
+    )
+    .await;
+    let (_, bee) = sign_in_as(&forge, "bee").await;
+    let (_, page) = page_with_cookie(app, "/crew", &bee).await;
+    assert!(page.contains("A forge of our own"), "{page}");
+    let (status, location) = post_form(
+        app,
+        "/crew/members",
+        &bee,
+        "action=ask&ask=allowance&note=twenty+more+agents+by+March",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert_eq!(location, "/crew?asked=1", "{location}");
+    let (_, page) = page_with_cookie(app, &location, &bee).await;
+    assert!(page.contains("Asked."), "{page}");
+    // A member cannot ask; the API says the same and names who can.
+    let (_, cat) = sign_in_as(&forge, "cat").await;
+    let (_, location) = post_form(app, "/crew/members", &cat, "action=ask&ask=forge").await;
+    assert!(location.contains("error="), "{location}");
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/teams/crew/ask",
+        "cat",
+        Some(json!({ "for": "forge" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/teams/crew/ask",
+        "bee",
+        Some(json!({ "for": "forge", "note": "we are twelve now" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // Whoever runs the forge reads both with the reports.
+    let (status, body) = api(app, "GET", "/api/reports", "ada", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let whats: Vec<&str> = body["reports"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| r["what"].as_str())
+        .collect();
+    assert!(
+        whats
+            .iter()
+            .any(|w| w.contains("crew asks for more allowance: twenty more agents by March")),
+        "{whats:?}"
+    );
+    assert!(
+        whats
+            .iter()
+            .any(|w| w.contains("crew asks for a forge of its own: we are twelve now")),
+        "{whats:?}"
+    );
+    // And the organisations a person is on are one call away.
+    let (status, body) = api(app, "GET", "/api/principals/cat/organisations", "cat", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["organisations"][0]["organisation"], "crew", "{body}");
+    assert_eq!(body["organisations"][0]["role"], "member", "{body}");
+}

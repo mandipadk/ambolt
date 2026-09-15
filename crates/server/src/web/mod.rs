@@ -2198,6 +2198,9 @@ struct OwnerQuery {
     /// The id of an invitation link parked to be shown exactly once.
     #[serde(default)]
     once: Option<String>,
+    /// Set after an owner asked for more; the page says it was heard.
+    #[serde(default)]
+    asked: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2374,6 +2377,11 @@ struct MembersForm {
     /// For `team-make` and `team-remove`: the team's name.
     #[serde(default)]
     name: String,
+    /// For `ask`: `allowance` or `forge`, and a word about it.
+    #[serde(default)]
+    ask: String,
+    #[serde(default)]
+    note: String,
 }
 
 /// An organisation's members change who is on it, from its page.
@@ -2396,6 +2404,39 @@ async fn owner_members_action(
     // What the organisation is, rather than who is on it: its owners set
     // what membership means, and make and remove the teams inside it.
     let whole = match form.action.as_str() {
+        "ask" => {
+            let may = app.with_store(|s| s.may_run_team(&viewer.0, &team)).is_ok();
+            if !may {
+                return back(Some(format!(
+                    "{} is not an owner of {team}: its owners ask, or whoever runs the forge",
+                    viewer.0
+                )));
+            }
+            let asked = match form.ask.as_str() {
+                "allowance" => format!("{team} asks for more allowance"),
+                "forge" => format!("{team} asks for a forge of its own"),
+                _ => return back(Some("Say what you are asking for".into())),
+            };
+            let note = form.note.trim();
+            let what = if note.is_empty() {
+                format!("{asked}.")
+            } else {
+                format!("{asked}: {note}")
+            };
+            let filed = app.with_store(|s| {
+                s.file_report(
+                    &what,
+                    &format!("/{team}"),
+                    "",
+                    Some(viewer.0.as_str()),
+                    ambolt_core::VERSION,
+                )
+            });
+            return match filed {
+                Ok(_) => Redirect::to(&format!("/{owner}?asked=1")).into_response(),
+                Err(err) => back(Some(humane(&err))),
+            };
+        }
         "access" => {
             let Some(mode) = ambolt_core::MembersAct::parse(form.mode.trim()) else {
                 return back(Some("Say what members act as".into()));
@@ -2611,6 +2652,7 @@ async fn owner_page(
         may_manage,
         allowances,
         query.error.as_deref(),
+        query.asked.is_some(),
         once.secret.as_deref(),
         once.mailed.as_deref(),
         &people,

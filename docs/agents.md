@@ -100,4 +100,6 @@ person, ranked with its evidence; `who_is_working_on` and `list_leases`
 before you start; `debt` and `blame` for how much of a tree rests on
 reproduced claims; `search`, `policy`, `queue`, `awaiting_verification`,
 and `list_events` from any cursor, since the forge remembers so you do
-not have to.
+not have to. `organisations` says where you belong and whether you own
+it, `members` and `teams` who else is there, and `access` who holds
+what on a repository beyond its owner.

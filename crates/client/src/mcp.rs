@@ -226,6 +226,16 @@ fn dispatch(client: &ApiClient, name: &str, args: &Value) -> Result<(u16, Value)
             &format!("/api/principals/{}/record", need(args, "principal")?),
             &[("days", arg_num(args, "days"))],
         )),
+        "organisations" => client.get(&format!(
+            "/api/principals/{}/organisations",
+            need(args, "principal")?
+        )),
+        "members" => client.get(&format!(
+            "/api/teams/{}/members",
+            need(args, "organisation")?
+        )),
+        "teams" => client.get(&format!("/api/teams/{}/teams", need(args, "organisation")?)),
+        "access" => client.get(&format!("/api/repos/{}/access", need(args, "repo")?)),
         "get_session" => client.get(&format!("/api/sessions/{}", need(args, "session")?)),
         "list_revisions" => {
             client.get(&format!("/api/changes/{}/revisions", need(args, "change")?))
@@ -469,6 +479,33 @@ fn tool_definitions() -> Vec<Value> {
                 "principal": s("Principal id"),
                 "days": { "type": "integer", "description": "Window in days (default 90)" },
             }),
+        ),
+        tool(
+            "organisations",
+            "The organisations a principal is on, and whether they own or merely belong to \
+             each. Ask about yourself to know where you may make repositories.",
+            &["principal"],
+            json!({ "principal": s("Principal id") }),
+        ),
+        tool(
+            "members",
+            "Who is on an organisation, and which of them own it.",
+            &["organisation"],
+            json!({ "organisation": s("Organisation id") }),
+        ),
+        tool(
+            "teams",
+            "The teams inside an organisation, who is on each, and what each holds.",
+            &["organisation"],
+            json!({ "organisation": s("Organisation id") }),
+        ),
+        tool(
+            "access",
+            "Who holds what on a repository beyond its owner: every live grant on it, and \
+             whether the organisation's members act as owners or as readers. For those inside \
+             the repository.",
+            &["repo"],
+            json!({ "repo": s("Repository, as owner/name") }),
         ),
         tool(
             "get_repo",

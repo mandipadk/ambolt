@@ -2156,6 +2156,78 @@ pub async fn repo_access(
     })))
 }
 
+#[derive(Deserialize)]
+pub struct Ask {
+    /// `allowance` for more of what the organisation may take up;
+    /// `forge` for a managed instance of its own.
+    #[serde(rename = "for")]
+    pub what: String,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// An organisation's owner asks whoever runs the forge for more: a
+/// bigger allowance, or a forge of their own. It lands as a report, which
+/// the door and the console show; nobody has to find the operator's
+/// address.
+pub async fn ask_for(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path(team): Path<String>,
+    Json(body): Json<Ask>,
+) -> ApiResult<Json<Value>> {
+    let team = PrincipalId(team);
+    app.with_store(|s| s.acting_as(actor.1.as_ref()).may_run_team(&actor.0, &team))?;
+    let asked = match body.what.as_str() {
+        "allowance" => format!("{team} asks for more allowance"),
+        "forge" => format!("{team} asks for a forge of its own"),
+        other => {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "invalid",
+                format!("{other:?} is not something to ask for: allowance or forge"),
+            ));
+        }
+    };
+    let note = body.note.as_deref().map(str::trim).unwrap_or("");
+    let what = if note.is_empty() {
+        format!("{asked}.")
+    } else {
+        format!("{asked}: {note}")
+    };
+    let id = app.with_store(|s| {
+        s.file_report(
+            &what,
+            &format!("/{team}"),
+            "",
+            Some(actor.0.as_str()),
+            ambolt_core::VERSION,
+        )
+    })?;
+    Ok(Json(
+        json!({ "report": id, "organisation": team, "asked": what }),
+    ))
+}
+
+/// The organisations a principal is on, and what they are to each.
+/// Membership is authority, not a secret, on the forge they are on.
+pub async fn organisations_of(
+    State(app): State<AppState>,
+    _actor: Actor,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let id = principal_id(&id)?;
+    found(app.with_store(|s| s.principal(&id))?, "principal")?;
+    let memberships = app.with_store(|s| s.memberships_of(&id))?;
+    let organisations: Vec<Value> = memberships
+        .into_iter()
+        .map(|(organisation, role)| json!({ "organisation": organisation, "role": role }))
+        .collect();
+    Ok(Json(
+        json!({ "principal": id, "organisations": organisations }),
+    ))
+}
+
 /// Make somebody an owner of the organisation: one of its owners may,
 /// and so may whoever runs the forge.
 pub async fn make_owner(
