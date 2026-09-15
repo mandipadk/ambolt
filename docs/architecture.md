@@ -67,7 +67,9 @@ The resumable stream filters the same way and advances its cursor past
 what it withheld, so nobody learns what they missed from a hole in the
 numbering.
 
-Watching a repository is an event of its own, so what it brings to the
+`@name` in a thread or a reply lands in that person's inbox as a
+mention, when they could read the repository anyway; the name links to
+their page. Watching a repository is an event of its own, so what it brings to the
 inbox replays from the log: whoever watches hears when a change lands
 there and when one is drawn for a person's look, after whoever the
 event addressed on its own.

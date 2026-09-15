@@ -38,6 +38,7 @@ mod invite_flow;
 mod lease_flow;
 mod limits_flow;
 mod mcp;
+mod mentions_flow;
 mod mirror_flow;
 mod names_flow;
 mod oidc_flow;

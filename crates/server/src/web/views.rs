@@ -1588,9 +1588,29 @@ pub fn inbox(
     )
 }
 
+/// Prose with each `@name` a link to that person's page. The text is
+/// escaped as ever; only the names become anchors.
+fn with_mentions(text: &str) -> Markup {
+    let names = ambolt_core::mentions::in_text(text);
+    if names.is_empty() {
+        return html! { (text) };
+    }
+    let mut out = Vec::new();
+    let mut rest = text;
+    for name in names {
+        let at = format!("@{name}");
+        let Some(i) = rest.find(&at) else { break };
+        out.push(html! { (rest[..i]) a class="mention" href={ "/" (name) } { (at) } });
+        rest = &rest[i + at.len()..];
+    }
+    out.push(html! { (rest) });
+    html! { @for piece in out { (piece) } }
+}
+
 /// What kind of thing a notice is, as a chip.
 fn notice_kind_words(kind: &str) -> &str {
     match kind {
+        "mentioned" => "Mention",
         "opened" => "Change",
         "landed" => "Landed",
         "dequeued" => "Queue",
@@ -5092,14 +5112,14 @@ fn thread_block(
         span class="when" title=(thread.at) { (ago(&thread.at)) }
     };
     let exchange = html! {
-        p class="body" { (thread.body) }
+        p class="body" { (with_mentions(&thread.body)) }
         @for reply in &thread.replies {
             @let (display, agent) = people.name(&reply.by);
             div class="reply" {
                 (avatar(reply.by.as_str(), display, agent, false))
                 span {
                     b { (display) } span class="when" title=(reply.at) { (ago(&reply.at)) }
-                    p { (reply.body) }
+                    p { (with_mentions(&reply.body)) }
                 }
             }
         }

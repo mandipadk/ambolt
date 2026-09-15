@@ -1296,6 +1296,29 @@ type Addressed = (
     String,
 );
 
+/// Whether `who` could read `repo`, asked inside a projection: public,
+/// theirs, their organisation's, or covered by a live grant of theirs.
+/// The same answer `Store::may_read` gives, without a store.
+fn may_read_raw(tx: &Transaction, who: &str, repo: &str) -> CoreResult<bool> {
+    let Some(record) = crate::queries::raw::repo(tx, repo)? else {
+        return Ok(false);
+    };
+    if record.visibility == crate::types::Visibility::Public
+        || crate::queries::raw::owns(tx, who, record.owner.as_str())?
+        || crate::queries::raw::is_team_member(tx, record.owner.as_str(), who)?
+    {
+        return Ok(true);
+    }
+    let now = jiff::Timestamp::now().to_string();
+    Ok(crate::queries::raw::effective_grants(tx, who)?
+        .iter()
+        .any(|g| {
+            !g.revoked
+                && g.repo.as_deref().is_none_or(|r| r == repo)
+                && g.until.as_deref().is_none_or(|until| until > now.as_str())
+        }))
+}
+
 fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
     use Event::*;
 
@@ -1803,6 +1826,48 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         }),
         _ => None,
     };
+    // @name in a thread lands in that person's inbox, when they could
+    // read the repository anyway: a mention never shows a stranger a
+    // change they could not open.
+    let said: Option<(&str, &crate::id::ChangeId)> = match &env.event {
+        ThreadOpened { body, change, .. } | ThreadReplied { body, change, .. } => {
+            Some((body.as_str(), change))
+        }
+        _ => None,
+    };
+    if let Some((body, change)) = said
+        && let Some(c) = change_ref(change.as_str())?
+    {
+        let mut told: Vec<String> = Vec::new();
+        for name in crate::mentions::in_text(body) {
+            if name == actor || told.iter().any(|t| t == name) {
+                continue;
+            }
+            let Some(principal) = crate::queries::raw::principal(tx, name)? else {
+                continue;
+            };
+            if !principal.active || principal.kind == crate::types::PrincipalKind::Team {
+                continue;
+            }
+            if !may_read_raw(tx, name, &c.repo)? {
+                continue;
+            }
+            let excerpt: String = body.chars().take(80).collect();
+            tx.execute(
+                "INSERT OR IGNORE INTO notices (seq, recipient, kind, repo, change_id, number, what)
+                 VALUES (?, ?, 'mentioned', ?, ?, ?, ?)",
+                params![
+                    env.seq.0,
+                    name,
+                    c.repo,
+                    change.as_str(),
+                    c.number,
+                    format!("{actor} mentioned you on #{}: {excerpt}", c.number)
+                ],
+            )?;
+            told.push(name.to_owned());
+        }
+    }
     if let Some((repo, kind, what, change, number)) = watched {
         for watcher in crate::queries::raw::watchers(tx, &repo)? {
             if watcher == actor {
