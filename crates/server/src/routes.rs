@@ -1029,6 +1029,8 @@ pub async fn set_topics(
 #[derive(Deserialize)]
 pub struct ExploreQuery {
     pub topic: Option<String>,
+    pub q: Option<String>,
+    pub sort: Option<String>,
 }
 
 /// Public repositories, for anyone at all.
@@ -1036,7 +1038,13 @@ pub async fn explore(
     State(app): State<AppState>,
     Query(query): Query<ExploreQuery>,
 ) -> ApiResult<Json<Value>> {
-    let entries = app.with_store(|s| s.explore(query.topic.as_deref()))?;
+    let sort = query
+        .sort
+        .as_deref()
+        .and_then(ambolt_core::ExploreSort::parse)
+        .unwrap_or(ambolt_core::ExploreSort::Busiest);
+    let entries =
+        app.with_store(|s| s.explore(query.topic.as_deref(), query.q.as_deref(), sort))?;
     Ok(Json(json!({ "repositories": entries })))
 }
 

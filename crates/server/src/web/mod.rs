@@ -4842,6 +4842,10 @@ async fn repo_topics(
 struct ExploreQuery {
     #[serde(default)]
     topic: Option<String>,
+    #[serde(default)]
+    q: Option<String>,
+    #[serde(default)]
+    sort: Option<String>,
 }
 
 /// Every public repository, for anyone: where a stranger starts.
@@ -4863,8 +4867,35 @@ async fn explore_page(
         .as_deref()
         .map(str::trim)
         .filter(|t| !t.is_empty());
-    match app.with_store(|s| s.explore(topic)) {
-        Ok(entries) => views::explore(theme, who.reading(), &entries, topic).into_response(),
+    let q = query.q.as_deref().map(str::trim).filter(|t| !t.is_empty());
+    let sort = query
+        .sort
+        .as_deref()
+        .and_then(ambolt_core::ExploreSort::parse)
+        .unwrap_or(ambolt_core::ExploreSort::Busiest);
+    // Every topic on the forge's public repositories, for the filter bar,
+    // whatever the search narrowed the list to.
+    let all = match app.with_store(|s| s.explore(None, None, ambolt_core::ExploreSort::Name)) {
+        Ok(all) => all,
+        Err(err) => return oops(err),
+    };
+    match app.with_store(|s| s.explore(topic, q, sort)) {
+        Ok(entries) => {
+            let people = people_named(&app, all.iter().map(|e| e.owner.as_str()));
+            views::explore(
+                theme,
+                who.reading(),
+                views::ExplorePage {
+                    entries: &entries,
+                    all: &all,
+                    topic,
+                    q,
+                    sort,
+                    people: &people,
+                },
+            )
+            .into_response()
+        }
         Err(err) => oops(err),
     }
 }

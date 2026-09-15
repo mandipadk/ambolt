@@ -119,10 +119,13 @@ async fn the_task_page_reads_the_attempts_and_takes_the_comparison() {
     assert!(page.contains("Attempts"), "{page}");
     assert!(page.contains("claimed by 2 of 2"), "{page}");
     assert!(
-        page.contains("revision 1 aaaaaaa") && page.contains("revision 2 bbbbbbb"),
+        page.contains("rev 1 ")
+            && page.contains("aaaaaaa")
+            && page.contains("rev 2 ")
+            && page.contains("bbbbbbb"),
         "{page}"
     );
-    assert!(page.contains("(2 files)"), "{page}");
+    assert!(page.contains(", 2 files"), "{page}");
     assert!(
         page.contains("cheaper but format-bound"),
         "the outcome is on the page: {page}"

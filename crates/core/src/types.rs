@@ -1019,6 +1019,16 @@ fn bug() -> String {
     "bug".to_owned()
 }
 
+str_enum!(
+    /// How Explore orders what it lists.
+    ExploreSort {
+        Busiest => "busiest",
+        Newest => "newest",
+        Name => "name",
+        Reproduced => "reproduced",
+    }
+);
+
 /// Somebody who asked for an account: their address, when, what they
 /// said, and the company they asked for a forge of their own for, if
 /// they did.
@@ -1026,8 +1036,17 @@ fn bug() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExploreEntry {
     pub name: String,
+    pub owner: PrincipalId,
+    /// Whether the owner is a person, an agent or an organisation.
+    pub owner_kind: PrincipalKind,
+    pub default_branch: String,
     pub description: String,
     pub topics: Vec<String>,
+    /// When anything last happened to a change here; none when nothing has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
+    /// Changes landed altogether.
+    pub landed: u32,
     /// Changes that landed in the last seven days.
     pub landed_week: u32,
     pub open: u32,

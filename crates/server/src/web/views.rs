@@ -472,7 +472,7 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
                             span class="t" {
                                 b { (worker.display) }
                                 @if let Some(repo) = &worker.repo {
-                                    span { (repo) @if let Some(path) = worker.paths.first() { " · " (path) } }
+                                    span { (repo) @if let Some(path) = worker.paths.first() { ", in " code { (path) } } }
                                 }
                             }
                         }
@@ -1140,7 +1140,7 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                         @if data.needs_you.is_empty() { "nothing waits on your judgment" }
                         @else {
                             @if disputed > 0 { (disputed) " disputed" }
-                            @if disputed > 0 && unlooked > 0 { " · " }
+                            @if disputed > 0 && unlooked > 0 { ", " }
                             @if unlooked > 0 { (unlooked) " to look at" }
                         }
                     }
@@ -1187,11 +1187,11 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                             span class=(chip) { (label) }
                             span class="tt" {
                                 span class="t" { (item.change.title) }
-                                span class="s" {
-                                    (entry.repo) " #" (item.change.number)
-                                    @if let Some(draw) = &item.drawn { " · picked " (draw.day) }
+                                span class="s tagline" {
+                                    span class="tag" { (entry.repo) " #" (item.change.number) }
+                                    @if let Some(draw) = &item.drawn { span class="tag" { "picked " (draw.day) } }
                                     @for signal in item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn).take(2) {
-                                        " · " (signal.description)
+                                        span class="tag" { (signal.description) }
                                     }
                                 }
                             }
@@ -1588,6 +1588,19 @@ pub fn inbox(
     )
 }
 
+/// Small facts with their names on them: `Model claude-…`, `Harness laptop`.
+/// One line, wrapping, each pair a unit, so a reader is never guessing
+/// what a bare word means.
+fn kv(pairs: &[(&str, Markup)]) -> Markup {
+    html! {
+        span class="kv" {
+            @for (k, v) in pairs {
+                span class="pair" { span class="k" { (k) } span class="v" { (v) } }
+            }
+        }
+    }
+}
+
 /// Prose with each `@name` a link to that person's page. The text is
 /// escaped as ever; only the names become anchors.
 fn with_mentions(text: &str) -> Markup {
@@ -1773,14 +1786,14 @@ pub fn tasks(
                             (task_chip(task.state))
                             span class="tt" {
                                 span class="t" { (task.title) }
-                                span class="s" {
-                                    @match &task.repo { Some(repo) => { (repo) } None => { "any repository" } }
-                                    @if task.attempts > 1 {
-                                        " · " (task.claimants.len()) " of " (task.attempts) " attempts taken"
-                                    } @else if let Some(who) = &task.claimed_by {
-                                        " · held by " (people.name(who).0)
-                                    }
-                                }
+                                (kv(&[
+                                    ("Repository", html! { @match &task.repo { Some(repo) => { (repo) } None => { span class="none" { "any" } } } }),
+                                    if task.attempts > 1 {
+                                        ("Attempts", html! { (task.claimants.len()) " of " (task.attempts) " taken" })
+                                    } else {
+                                        ("Held by", html! { @match &task.claimed_by { Some(who) => { (people.name(who).0) } None => { span class="none" { "nobody yet" } } } })
+                                    },
+                                ]))
                             }
                             span class="avs" {
                                 @for who in task.claimants.iter().chain(task.claimed_by.iter()).take(3) {
@@ -1971,11 +1984,12 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                                 span class="chip" { "session · " (session.state.as_str()) }
                                             }
                                         }
-                                        div class="cmd" {
-                                            @for (index, revision) in attempt.revisions.iter().enumerate() {
-                                                @if index > 0 { " · " }
-                                                "revision " (revision.number) " " (short(&revision.commit_oid))
-                                                @if !revision.paths.is_empty() { " (" (revision.paths.len()) " files)" }
+                                        div class="tagline" {
+                                            @for revision in &attempt.revisions {
+                                                span class="tag" {
+                                                    "rev " (revision.number) " " code { (short(&revision.commit_oid)) }
+                                                    @if !revision.paths.is_empty() { ", " (revision.paths.len()) " files" }
+                                                }
                                             }
                                         }
                                         @let claims: Vec<&Claim> = f.claims.iter().filter(|c| c.revision == latest.number).collect();
@@ -2879,7 +2893,7 @@ pub fn teams(
                                 (avatar(id, &row.principal.display, false, false))
                                 div class="tt" {
                                     h2 { (row.principal.display) }
-                                    span class="s" { (id) " · " (row.members.len()) @if row.members.len() == 1 { " member" } @else { " members" } }
+                                    span class="s" { code { (id) } }
                                 }
                             }
                             div class="pad ag" {
@@ -3115,7 +3129,7 @@ pub fn owner(
                 div class="sec" {
                     div class="sh" { h2 { "Teams" } span class="n" { (teams.len()) } }
                     div class="panel" {
-                        @if teams.is_empty() { div class="empty" { "None yet. A team holds access on the organisation's repositories; whoever is on it carries that access." } }
+                        @if teams.is_empty() { div class="empty" { "None yet." } }
                         @for (name, count) in teams {
                             div class="row need" {
                                 a class="t" href={ "/" (owner.id.as_str()) "/teams/" (name) } { (owner.id.as_str()) "/" (name) }
@@ -3136,7 +3150,7 @@ pub fn owner(
                                 input type="hidden" name="action" value="team-make";
                                 input class="input sm" type="text" name="name" placeholder="Team name" pattern="[a-z0-9-]{2,64}" required aria-label="Team name";
                                 button class="btn2 sm" type="submit" { "Make a team" }
-                                span class="hint" { "Named under the organisation; grant it access from a repository's settings." }
+                                span class="hint" { "Give it access from a repository's settings." }
                             }
                         }
                     }
@@ -3151,7 +3165,7 @@ pub fn owner(
                                     label { input type="radio" name="mode" value="owners" checked[mode == ambolt_core::MembersAct::Owners] disabled[!may_manage]; span { "Members act as owners" } }
                                     label { input type="radio" name="mode" value="readers" checked[mode == ambolt_core::MembersAct::Readers] disabled[!may_manage]; span { "Members read; access is granted" } }
                                 }
-                                p class="what" { "As owners, every member does everything on every repository. As readers, members read every repository and make repositories in the organisation's name; pushing, reviewing, merging and verifying come from grants the owners issue, to people or to teams." }
+                                p class="what" { "Owners: every member can do everything on every repository. Readers: members read and create; the rest is granted." }
                                 @if may_manage { div class="acts" { button class="btn2 sm" type="submit" { "Save" } } }
                             }
                         }
@@ -3178,7 +3192,7 @@ pub fn owner(
                                 }
                                 input class="input sm" type="text" name="note" placeholder="What, and why" aria-label="Note";
                                 button class="btn2 sm" type="submit" { "Ask" }
-                                span class="hint" { "A bigger allowance is one setting for whoever runs the forge; a forge of your own is a managed instance you leave with everything into." }
+                                span class="hint" { "Whoever runs the forge answers." }
                             }
                         }
                     }
@@ -3198,8 +3212,10 @@ pub fn owner(
                                     a class="t" href={ "/" (member.as_str()) } { (display) }
                                     span class="s" { (member.as_str()) }
                                 }
-                                @if is_owner { span class="chip" { "Owner" } }
-                                @if invited.contains(member) { span class="chip" { "Invited" } }
+                                span class="tags" {
+                                    @if is_owner { span class="chip acc" { "Owner" } } @else { span class="chip" { "Member" } }
+                                    @if invited.contains(member) { span class="chip" { "Invited" } }
+                                }
                                 span class="acts" {
                                     @if may_manage {
                                         form method="post" action={ "/" (owner.id.as_str()) "/members" } {
@@ -3222,20 +3238,39 @@ pub fn owner(
                                 }
                             }
                         }
-                        @if may_manage {
-                            form class="foot" method="post" action={ "/" (owner.id.as_str()) "/members" } {
-                                input type="hidden" name="action" value="add";
-                                input class="input sm" type="text" name="member" placeholder="Who, already on the forge" pattern="[a-z0-9-]{2,64}" required aria-label="Member";
-                                button class="btn2 sm" type="submit" { "Add member" }
-                                span class="hint" { "Owners run the organisation; members create under it and hold what it holds. An organisation keeps at least one owner." }
+                    }
+                    @if may_manage {
+                        div class="grid2 tight" {
+                            div class="panel" {
+                                form class="pref" method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                    input type="hidden" name="action" value="add";
+                                    h3 { "Add a member" }
+                                    div class="field" {
+                                        label for="add-member" { "Username" }
+                                        input id="add-member" class="input" type="text" name="member" placeholder="Already on the forge" pattern="[a-z0-9-]{2,64}" required;
+                                    }
+                                    div class="acts" { button class="btn2" type="submit" { "Add member" } }
+                                }
                             }
-                            form class="foot" method="post" action={ "/" (owner.id.as_str()) "/members" } {
-                                input type="hidden" name="action" value="invite";
-                                input class="input sm" type="text" name="member" placeholder="Name on the forge" pattern="[a-z0-9-]{2,64}" required aria-label="Name";
-                                input class="input sm" type="text" name="display" placeholder="Display name" aria-label="Display name";
-                                input class="input sm" type="email" name="email" placeholder="Email" required aria-label="Email";
-                                button class="btn2 sm" type="submit" { "Invite" }
-                                span class="hint" { "Somebody new: the account is theirs, the membership comes with it, and a link that signs them in once goes to the address." }
+                            div class="panel" {
+                                form class="pref" method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                    input type="hidden" name="action" value="invite";
+                                    h3 { "Invite someone new" }
+                                    div class="field" {
+                                        label for="invite-member" { "Username" }
+                                        input id="invite-member" class="input" type="text" name="member" placeholder="jane" pattern="[a-z0-9-]{2,64}" required;
+                                    }
+                                    div class="field" {
+                                        label for="invite-display" { "Name" }
+                                        input id="invite-display" class="input" type="text" name="display" placeholder="Jane Okoro";
+                                    }
+                                    div class="field" {
+                                        label for="invite-email" { "Email" }
+                                        input id="invite-email" class="input" type="email" name="email" placeholder="jane@example.org" required;
+                                        p class="hint" { "A sign-in link goes there. The account and the membership are theirs." }
+                                    }
+                                    div class="acts" { button class="btn2" type="submit" { "Invite" } }
+                                }
                             }
                         }
                     }
@@ -3302,17 +3337,32 @@ pub fn report(
     }
 }
 
-/// Every public repository: what it is for, what it is filed under, what
-/// landed this week, how much of it a runner has reproduced, and what is
-/// open. Where a stranger starts, and it needs nobody signed in.
-pub fn explore(
-    theme: Theme,
-    who: Reading<'_>,
-    entries: &[ambolt_core::ExploreEntry],
-    topic: Option<&str>,
-) -> Markup {
+/// What the Explore page is given.
+pub struct ExplorePage<'a> {
+    /// What the search and the topic narrowed it to.
+    pub entries: &'a [ambolt_core::ExploreEntry],
+    /// Everything public, for the topic bar.
+    pub all: &'a [ambolt_core::ExploreEntry],
+    pub topic: Option<&'a str>,
+    pub q: Option<&'a str>,
+    pub sort: ambolt_core::ExploreSort,
+    pub people: &'a People,
+}
+
+/// Every public repository, as cards: who owns it, what it is for, what it
+/// is filed under, and three numbers with their names. Where a stranger
+/// starts, and it needs nobody signed in.
+pub fn explore(theme: Theme, who: Reading<'_>, page: ExplorePage<'_>) -> Markup {
+    let ExplorePage {
+        entries,
+        all,
+        topic,
+        q,
+        sort,
+        people,
+    } = page;
     let mut topics: Vec<(&str, usize)> = Vec::new();
-    for entry in entries {
+    for entry in all {
         for t in &entry.topics {
             match topics.iter_mut().find(|(name, _)| *name == t.as_str()) {
                 Some((_, n)) => *n += 1,
@@ -3321,6 +3371,30 @@ pub fn explore(
         }
     }
     topics.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    // A link to this page with one parameter changed and the rest kept.
+    let href = |topic: Option<&str>, sort: ambolt_core::ExploreSort| {
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(q) = q {
+            parts.push(format!("q={}", super::urlencode(q)));
+        }
+        if let Some(topic) = topic {
+            parts.push(format!("topic={}", super::urlencode(topic)));
+        }
+        if sort != ambolt_core::ExploreSort::Busiest {
+            parts.push(format!("sort={}", sort.as_str()));
+        }
+        if parts.is_empty() {
+            "/explore".to_owned()
+        } else {
+            format!("/explore?{}", parts.join("&"))
+        }
+    };
+    let sorts = [
+        (ambolt_core::ExploreSort::Busiest, "Busiest"),
+        (ambolt_core::ExploreSort::Newest, "Newest"),
+        (ambolt_core::ExploreSort::Reproduced, "Most reproduced"),
+        (ambolt_core::ExploreSort::Name, "Name"),
+    ];
     layout_reading(
         theme,
         who,
@@ -3328,48 +3402,65 @@ pub fn explore(
         None,
         "Explore",
         html! {
-            div class="pagehead" {
-                div class="who" {
-                    div {
-                        h1 { "Explore" }
-                        div class="meta" {
-                            @match topic {
-                                Some(topic) => { span { (entries.len()) " public " @if entries.len() == 1 { "repository" } @else { "repositories" } " filed under " b { "#" (topic) } } a href="/explore" { "all" } }
-                                None => { span { (entries.len()) " public " @if entries.len() == 1 { "repository" } @else { "repositories" } ", the busiest this week first" } }
-                            }
-                        }
+            form class="xbar" method="get" action="/explore" {
+                @if let Some(topic) = topic { input type="hidden" name="topic" value=(topic); }
+                @if sort != ambolt_core::ExploreSort::Busiest { input type="hidden" name="sort" value=(sort.as_str()); }
+                label class="xsearch" {
+                    (ic("search", "sm"))
+                    input type="search" name="q" value=[q] placeholder="Search public repositories" aria-label="Search public repositories" autocomplete="off";
+                }
+                div class="seg" role="group" aria-label="Order" {
+                    @for (key, words) in sorts {
+                        a class={ @if sort == key { "on" } } href=(href(topic, key)) { (words) }
                     }
                 }
             }
-            @if !topics.is_empty() && topic.is_none() {
-                div class="chips" {
+            @if !topics.is_empty() {
+                div class="xtopics" {
+                    a class={ "chip" @if topic.is_none() { " on" } } href=(href(None, sort)) { "All" span class="n" { (all.len()) } }
                     @for (name, n) in &topics {
-                        a class="chip" href={ "/explore?topic=" (name) } { "#" (name) " " span class="n" { (n) } }
+                        a class={ "chip" @if topic == Some(*name) { " on" } } href=(href(Some(name), sort)) { "#" (name) span class="n" { (n) } }
                     }
                 }
             }
-            div class="sec" {
+            @if entries.is_empty() {
                 div class="panel" {
-                    @if entries.is_empty() {
-                        div class="empty" {
-                            @if topic.is_some() { "Nothing is filed under that." } @else { "No public repository yet." }
-                        }
+                    div class="empty" {
+                        @if q.is_some() { b { "Nothing matches." } "Try fewer words." }
+                        @else if topic.is_some() { b { "Nothing is filed under that." } "Pick another topic." }
+                        @else { b { "No public repository yet." } "A repository goes public from its settings, and shows up here." }
                     }
+                }
+            } @else {
+                div class="xgrid" {
                     @for entry in entries {
-                        a class="row ls" href={ "/" (entry.name) } {
-                            span class="tt" {
-                                span class="t" {
-                                    (entry.name)
-                                    @if entry.archived { " " span class="chip" { "Archived" } }
-                                }
-                                @if !entry.description.is_empty() { span class="s wrap" { (entry.description) } }
-                                @if !entry.topics.is_empty() {
-                                    span class="s" { @for (i, t) in entry.topics.iter().enumerate() { @if i > 0 { " " } "#" (t) } }
-                                }
+                        @let (owner, short) = entry.name.split_once('/').unwrap_or(("", entry.name.as_str()));
+                        a class="xcard" href={ "/" (entry.name) } {
+                            div class="xhead" {
+                                (avatar_of(entry.owner.as_str(), people.name(&entry.owner).0, entry.owner_kind, false))
+                                span class="xname" { span class="o" { (owner) "/" } (short) }
+                                @if entry.archived { span class="chip" { (ic("archive", "")) "Archived" } }
                             }
-                            span class="age" {
-                                (entry.landed_week) " landed this week · " (entry.open) " open"
-                                @if let Some(percent) = entry.coverage_percent { " · " (percent) "% reproduced" }
+                            @if entry.description.is_empty() {
+                                p class="xdesc none" { "No description yet." }
+                            } @else {
+                                p class="xdesc" { (entry.description) }
+                            }
+                            @if !entry.topics.is_empty() {
+                                div class="xtags" { @for t in &entry.topics { span class="tag" { "#" (t) } } }
+                            }
+                            div class="xstats" {
+                                div class="xs" { b { (entry.landed_week) } span { "landed this week" } }
+                                div class="xs" { b { (entry.open) } span { "open" } }
+                                div class="xs" {
+                                    @match entry.coverage_percent {
+                                        Some(p) => { b { (p) "%" } span { "reproduced" } }
+                                        None => { b class="none" { "–" } span { "not measured" } }
+                                    }
+                                }
+                                @if let Some(at) = &entry.updated_at {
+                                    span class="xage" title=(at) { (ic("clock", "sm")) (ago(at)) }
+                                }
                             }
                         }
                     }
@@ -3410,13 +3501,16 @@ pub fn reports(
                             span class="chip" { "#" (report.id) }
                             @if report.kind == "abuse" { span class="chip bad" { "Abuse" } }
                             span class="tt" {
-                                span class="t" {
-                                    (report.filed.get(..16).unwrap_or(&report.filed).replace('T', " ")) " · " (report.version)
-                                    @if let Some(place) = &report.place {
-                                        " · "
-                                        @if let Some(path) = place_path { a href=(path) { (place) } } @else { (place) }
-                                    }
-                                }
+                                (kv(&[
+                                    ("Filed", html! { (report.filed.get(..16).unwrap_or(&report.filed).replace('T', " ")) }),
+                                    ("Version", html! { (report.version) }),
+                                    ("About", html! {
+                                        @match &report.place {
+                                            Some(place) => { @if let Some(path) = place_path { a href=(path) { (place) } } @else { (place) } }
+                                            None => { span class="none" { "nowhere in particular" } }
+                                        }
+                                    }),
+                                ]))
                                 span class="s wrap" { (report.what) }
                                 span class="s" {
                                     @if let Some(contact) = &report.contact {
@@ -3619,9 +3713,6 @@ pub fn agents(
             ),
         },
         html! {
-            div class="sec top" {
-                p class="lede" { "An agent is somebody's. It can do exactly what it was granted, everywhere or on one repository, and every claim it makes is on its record." }
-            }
             @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
             @if let Some(secret) = fresh {
                 div class="once" {
@@ -3641,31 +3732,33 @@ pub fn agents(
                         header {
                             (avatar(id, &row.principal.display, true, live))
                             div class="tt" {
-                                h2 { (row.principal.display) }
-                                span class="s" {
-                                    (id)
-                                    @if let Some(model) = &row.principal.model { " · " (model) }
-                                    @if let Some(harness) = &row.principal.harness { " · " (harness) }
-                                    @if let Some(owner) = &row.principal.owner { " · " (people.name(owner).0) "'s" }
-                                    @if !row.principal.active { " · retired" }
-                                }
+                                h2 { (row.principal.display) @if !row.principal.active { " " span class="chip" { "Retired" } } }
+                                span class="s" { code { (id) } }
                             }
                             @if row.principal.active && mine {
-                                div class="right" {
-                                    form method="post" action="/agents" {
-                                        input type="hidden" name="action" value="mint";
-                                        input type="hidden" name="grantee" value=(id);
-                                        button class="ghost sm" type="submit" { (ic("key", "sm")) "New token" }
-                                    }
-                                    form method="post" action="/agents" {
-                                        input type="hidden" name="action" value="retire";
-                                        input type="hidden" name="grantee" value=(id);
-                                        button class="ghost sm danger" type="submit" { (ic("archive", "sm")) "Retire" }
+                                details class="more" {
+                                    summary class="ghost sm" aria-label="More" { (ic("more", "sm")) }
+                                    div class="pop" {
+                                        form method="post" action="/agents" {
+                                            input type="hidden" name="action" value="mint";
+                                            input type="hidden" name="grantee" value=(id);
+                                            button type="submit" { (ic("key", "sm")) "New token" }
+                                        }
+                                        form method="post" action="/agents" {
+                                            input type="hidden" name="action" value="retire";
+                                            input type="hidden" name="grantee" value=(id);
+                                            button class="danger" type="submit" { (ic("archive", "sm")) "Retire" }
+                                        }
                                     }
                                 }
                             }
                         }
                         div class="pad ag" {
+                            (kv(&[
+                                ("Model", html! { @match &row.principal.model { Some(m) => { (m) } None => { span class="none" { "not said" } } } }),
+                                ("Harness", html! { @match &row.principal.harness { Some(h) => { (h) } None => { span class="none" { "not said" } } } }),
+                                ("Held by", html! { @match &row.principal.owner { Some(o) => { a href={ "/" (o.as_str()) } { (people.name(o).0) } } None => { span class="none" { "nobody" } } } }),
+                            ]))
                             div {
                                 span class="lbl" { "Can" }
                                 @if row.principal.active && row.grants.iter().all(|g| g.revoked) {
@@ -3708,7 +3801,7 @@ pub fn agents(
                                         Some(work) => {
                                             "Working"
                                             @if let Some(repo) = &work.repo { " on " (repo) }
-                                            @if let Some(path) = work.paths.first() { " · " code { (path) } }
+                                            @if let Some(path) = work.paths.first() { ", in " code { (path) } }
                                         }
                                         None => { @if row.principal.active { "Idle" } @else { "Retired" } }
                                     }
@@ -3746,7 +3839,8 @@ pub fn agents(
                         }
                     }
                 }
-                div class="panel" id="add" {
+                }
+                div class="panel narrow" id="add" {
                     header { (ic("plus", "")) h2 { "Add an agent" } }
                     form class="pad form" method="post" action="/agents" {
                         input type="hidden" name="action" value="register";
@@ -3778,7 +3872,6 @@ pub fn agents(
                         }
                     }
                 }
-            }
         },
     )
 }
@@ -3934,7 +4027,7 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
                     (avatar(change.owner.as_str(), display, agent, false))
                     div {
                         div class="h" { b { "#" (change.number) " " (change.title) } }
-                        div class="sub" { (display) " · revision " (change.latest_revision) }
+                        div class="sub" { (kv(&[("By", html! { (display) }), ("Revision", html! { (change.latest_revision) })])) }
                     }
                 }
             }
@@ -3976,7 +4069,7 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
                 @for tag in sidebar.tags.iter().take(8) {
                     div class="row tag" {
                         span class="chip" { (ic("tag", "")) (tag.name) }
-                        span class="s" { code { (short(&tag.commit_oid)) } " · " (people.name(&tag.by).0) }
+                        (kv(&[("Commit", html! { code { (short(&tag.commit_oid)) } }), ("By", html! { (people.name(&tag.by).0) })]))
                     }
                 }
             }
@@ -4212,11 +4305,11 @@ pub fn file(
                 header {
                     (ic("file", ""))
                     code { (path) }
-                    span class="sec3" {
-                        (lines.len()) " lines"
-                        @if let Some(language) = language { " · " (language) }
-                        @if plain { " · shown plain, over " (super::human_bytes(super::highlight::LIMIT as u64)) }
-                    }
+                    (kv(&[
+                        ("Lines", html! { (lines.len()) }),
+                        ("Language", html! { @match language { Some(l) => { (l) } None => { span class="none" { "plain" } } } }),
+                        if plain { ("Shown", html! { "plain, over " (super::human_bytes(super::highlight::LIMIT as u64)) }) } else { ("", html! {}) },
+                    ]))
                     @if let Some(change) = landed_by {
                         span class="sec3" {
                             "landed by "
@@ -4367,10 +4460,11 @@ pub fn changes(
                             @if change.proposal { span class="chip" { "Proposal" } }
                             span class="tt" {
                                 span class="t" { "#" (change.number) " " (change.title) }
-                                span class="s" {
-                                    (display) " · revision " (change.latest_revision)
-                                    " · opened " span title=(change.opened_at) { (short_day(&change.opened_at)) }
-                                }
+                                (kv(&[
+                                    ("By", html! { (display) }),
+                                    ("Revision", html! { (change.latest_revision) }),
+                                    ("Opened", html! { span title=(change.opened_at) { (short_day(&change.opened_at)) } }),
+                                ]))
                             }
                             span class="avs" { (avatar(change.owner.as_str(), display, agent, false)) }
                             span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
@@ -4650,11 +4744,11 @@ pub fn change(page: ChangePage) -> Markup {
                             }
                         }
                         div class="sub" {
-                            "revision " (thread.revision) " · " (closure_words(thread))
-                            @if !thread.replies.is_empty() {
-                                " · " (thread.replies.len())
-                                @if thread.replies.len() == 1 { " reply" } @else { " replies" }
-                            }
+                            (kv(&[
+                                ("Revision", html! { (thread.revision) }),
+                                ("Status", html! { (closure_words(thread)) }),
+                                ("Replies", html! { (thread.replies.len()) }),
+                            ]))
                         }
                     }
                 }
@@ -4778,7 +4872,7 @@ pub fn change(page: ChangePage) -> Markup {
                             div class={ "try" @if chosen { " chosen" } } {
                                 div class="h" {
                                     (avatar(revision.by.as_str(), people.name(&revision.by).0, people.name(&revision.by).1, false))
-                                    b { "Revision " (revision.number) " · " (people.name(&revision.by).0) }
+                                    b { "Revision " (revision.number) } span class="sec3" { "by " (people.name(&revision.by).0) }
                                     @if chosen { span class="chip acc" { (ic("check", "")) "chosen" } }
                                     @else if revision.number == change.latest_revision { span class="chip" { "latest" } }
                                 }
@@ -5362,7 +5456,7 @@ pub fn landing(
                             Some(id) => { (change_ref(&numbers, id)) }
                             None => { "nothing has landed in this window" }
                         }
-                        " · " a href={ "/" (repo) "/activity?after=" (brief.since) } { "counted from the log" }
+                        " " a class="quiet" href={ "/" (repo) "/activity?after=" (brief.since) } { "(counted from the log)" }
                     }
                 }
                 div class="stat" {
@@ -5397,11 +5491,10 @@ pub fn landing(
                             span class=(chip) { (label) }
                             span class="tt" {
                                 span class="t" { "#" (item.change.number) " " (item.change.title) }
-                                span class="s" {
-                                    @if let Some(draw) = &item.drawn { "picked " (draw.day) " · " }
-                                    @for (index, signal) in item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn).enumerate() {
-                                        @if index > 0 { " · " }
-                                        (signal.description)
+                                span class="s tagline" {
+                                    @if let Some(draw) = &item.drawn { span class="tag" { "picked " (draw.day) } }
+                                    @for signal in item.signals.iter().filter(|s| s.kind != ambolt_core::SignalKind::Drawn) {
+                                        span class="tag" { (signal.description) }
                                     }
                                 }
                             }
@@ -6181,14 +6274,14 @@ pub fn blame(theme: Theme, who: Reading<'_>, repo: &str, path: &str, rows: &[Bla
                 header {
                     (ic("review", ""))
                     code { (path) }
-                    span class="sec3" {
-                        (rows.len()) " lines"
-                        @if reproduced > 0 { " · " (reproduced) " reproduced" }
-                        @if claimed > 0 { " · " (claimed) " claimed, never re-run" }
-                        @if with_gaps > 0 { " · " span class="warn" { (with_gaps) " under a declared gap" } }
-                        @if argued > 0 { " · " (argued) " argued only" }
-                        @if unattributed > 0 { " · " (unattributed) " imported" }
-                    }
+                    (kv(&[
+                        ("Lines", html! { (rows.len()) }),
+                        ("Reproduced", html! { (reproduced) }),
+                        ("Claimed only", html! { (claimed) }),
+                        ("Under a gap", html! { @if with_gaps > 0 { span class="warn" { (with_gaps) } } @else { "0" } }),
+                        ("Argued", html! { (argued) }),
+                        ("Imported", html! { (unattributed) }),
+                    ]))
                     div class="right" {
                         a class="ghost sm" href={ "/" (repo) "/coverage" } { (ic("coverage", "sm")) "Whole repository" }
                         a class="ghost sm" href={ "/" (repo) "/tree/" (path) } { (ic("code", "sm")) "Source" }
@@ -6444,10 +6537,11 @@ pub fn debt(page: CoveragePage<'_>) -> Markup {
                 div class="panel" {
                     header {
                         h2 { "What backs this code" }
-                        span class="n" {
-                            (map.branch) " at " code { (short(&map.tip)) } " · " (thousands(c.total())) " lines in " (map.files.len()) " files"
-                            @if map.skipped > 0 { " · " (map.skipped) " binary or large, not counted" }
-                        }
+                        (kv(&[
+                            ("Branch", html! { (map.branch) " at " code { (short(&map.tip)) } }),
+                            ("Lines", html! { (thousands(c.total())) " in " (map.files.len()) " files" }),
+                            if map.skipped > 0 { ("Not counted", html! { (map.skipped) " binary or large" }) } else { ("", html! {}) },
+                        ]))
                     }
                     div class="pad" {
                         div class="bigbars" { (stack(c)) }

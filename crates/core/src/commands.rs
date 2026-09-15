@@ -17,6 +17,7 @@ use crate::policy::{self, PolicyTrace};
 use crate::queries::raw;
 use crate::store::{Store, append};
 use crate::types::ExploreEntry;
+use crate::types::ExploreSort;
 use crate::types::ReportKind;
 use crate::types::{
     Anchor, BrowserSession, Capability, Change, ChangeSpec, ChangeState, ClaimSpec, Contact,
@@ -3575,9 +3576,19 @@ impl Store {
     /// what it is filed under, what landed this week, its latest
     /// verification coverage, and what is open. Nothing here needs
     /// anyone signed in.
-    pub fn explore(&self, topic: Option<&str>) -> CoreResult<Vec<ExploreEntry>> {
+    pub fn explore(
+        &self,
+        topic: Option<&str>,
+        words: Option<&str>,
+        sort: ExploreSort,
+    ) -> CoreResult<Vec<ExploreEntry>> {
         let since =
             (jiff::Timestamp::now() - std::time::Duration::from_secs(7 * 24 * 60 * 60)).to_string();
+        let words: Vec<String> = words
+            .unwrap_or("")
+            .split_whitespace()
+            .map(str::to_lowercase)
+            .collect();
         let mut out = Vec::new();
         for repo in raw::repos(&self.conn)? {
             if repo.visibility != Visibility::Public {
@@ -3588,27 +3599,64 @@ impl Store {
             {
                 continue;
             }
+            // Every word must be somewhere: the name, the description or a topic.
+            let haystack = format!(
+                "{} {} {}",
+                repo.name,
+                repo.description.to_lowercase(),
+                repo.topics.join(" ")
+            );
+            if !words.iter().all(|w| haystack.contains(w.as_str())) {
+                continue;
+            }
             let landed_week = raw::landed_since(&self.conn, &repo.name, &since)?;
-            let open = raw::changes_in_repo(&self.conn, &repo.name)?
+            let changes = raw::changes_in_repo(&self.conn, &repo.name)?;
+            let open = changes
                 .iter()
                 .filter(|c| c.state == ChangeState::Open)
                 .count() as u32;
+            let landed = changes
+                .iter()
+                .filter(|c| c.state == ChangeState::Merged)
+                .count() as u32;
+            let updated_at = changes.iter().map(|c| c.updated_at.clone()).max();
+            let owner_kind = raw::principal(&self.conn, repo.owner.as_str())?
+                .map(|p| p.kind)
+                .unwrap_or(PrincipalKind::Human);
             let coverage_percent = self.debt_history(&repo.name, 1)?.last().and_then(|p| {
                 let all = p.reproduced + p.claimed + p.gap + p.argued + p.imported;
                 (all > 0).then(|| (p.reproduced * 100 / all) as u8)
             });
             out.push(ExploreEntry {
                 name: repo.name,
+                owner: repo.owner,
+                owner_kind,
+                default_branch: repo.default_branch,
                 description: repo.description,
                 topics: repo.topics,
+                updated_at,
+                landed,
                 landed_week,
                 open,
                 coverage_percent,
                 archived: repo.archived,
             });
         }
-        // The busiest first, then by name, so a fresh forge reads well too.
-        out.sort_by(|a, b| b.landed_week.cmp(&a.landed_week).then(a.name.cmp(&b.name)));
+        match sort {
+            // The busiest first, then by name, so a fresh forge reads well too.
+            ExploreSort::Busiest => {
+                out.sort_by(|a, b| b.landed_week.cmp(&a.landed_week).then(a.name.cmp(&b.name)));
+            }
+            ExploreSort::Newest => {
+                out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at).then(a.name.cmp(&b.name)))
+            }
+            ExploreSort::Name => out.sort_by(|a, b| a.name.cmp(&b.name)),
+            ExploreSort::Reproduced => out.sort_by(|a, b| {
+                b.coverage_percent
+                    .cmp(&a.coverage_percent)
+                    .then(a.name.cmp(&b.name))
+            }),
+        }
         Ok(out)
     }
 

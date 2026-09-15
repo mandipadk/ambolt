@@ -423,7 +423,7 @@ async fn a_retired_agent_is_marked_and_takes_no_token() {
     let (_, cookie) = sign_in_as(&forge, "ada").await;
     let (status, page) = page_with_cookie(app, "/agents", &cookie).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(page.contains("retired"), "the page says so: {page}");
+    assert!(page.contains("Retired"), "the page says so: {page}");
     assert_eq!(
         page.matches("New token").count(),
         1,

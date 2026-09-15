@@ -284,7 +284,10 @@ async fn web_ui_full_journey() {
 
     // The file view numbers its lines and names the change that landed it.
     let (_, body, _) = ada.get("/ada/demo/tree/greeting.txt");
-    assert!(body.contains("1 lines") || body.contains("2 lines"));
+    assert!(
+        body.contains(r#"<span class="k">Lines</span><span class="v">1</span>"#)
+            || body.contains(r#"<span class="k">Lines</span><span class="v">2</span>"#)
+    );
     assert!(
         body.contains("landed by"),
         "a file should link to its change"

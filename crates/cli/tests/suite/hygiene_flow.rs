@@ -110,7 +110,7 @@ async fn changes_say_when_and_the_list_filters_and_pages() {
         list.contains(r#"href="/ada/demo/changes?state=open""#),
         "{list}"
     );
-    assert!(list.contains("opened "), "{list}");
+    assert!(list.contains(r#"<span class="k">Opened</span>"#), "{list}");
     let (_, abandoned) = page_with_cookie(app, "/ada/demo/changes?state=abandoned", &cookie).await;
     assert!(
         abandoned.contains("Change 4") && !abandoned.contains("Change 3"),

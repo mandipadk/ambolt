@@ -64,6 +64,7 @@ pub use search::{HitKind, SearchHit, SearchQuery};
 pub use store::Store;
 pub use types::Anchor;
 pub use types::ExploreEntry;
+pub use types::ExploreSort;
 pub use types::QuotaOverride;
 pub use types::Report;
 pub use types::ReportKind;

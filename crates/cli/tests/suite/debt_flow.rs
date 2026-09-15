@@ -215,10 +215,13 @@ async fn every_line_is_backed_by_what_the_log_knows_and_the_map_rolls_it_up() {
     let (status, blame) = page_with_cookie(app, "/ada/demo/blame/gap.rs", &cookie).await;
     assert_eq!(status, StatusCode::OK);
     assert!(blame.contains(r#"class="cline gap"#), "{blame}");
-    assert!(blame.contains("4 under a declared gap"), "{blame}");
+    assert!(blame.contains(r#"<span class="k">Under a gap</span><span class="v"><span class="warn">4</span></span>"#), "{blame}");
     let (_, blame) = page_with_cookie(app, "/ada/demo/blame/reproduced.rs", &cookie).await;
     assert!(blame.contains(r#"class="cline reproduced"#), "{blame}");
-    assert!(blame.contains("3 reproduced"), "{blame}");
+    assert!(
+        blame.contains(r#"<span class="k">Reproduced</span><span class="v">3</span>"#),
+        "{blame}"
+    );
     // The same tip answers from the cache; a stranger reads it once the repo is public.
     let (_, again) = api(app, "GET", "/api/repos/ada/demo/debt", "ada", None).await;
     assert_eq!(again["tip"], map["tip"]);

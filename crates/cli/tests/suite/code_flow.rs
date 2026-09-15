@@ -40,7 +40,14 @@ async fn a_file_a_diff_and_a_readme_are_highlighted_on_the_server() {
     // with the grammar's names and nothing inline.
     let (_, page) = page_with_cookie(app, "/ada/demo/tree/src/lib.rs", &ada).await;
     assert!(page.contains(r#"class="code""#), "{page}");
-    assert!(page.contains("2 lines · Rust"), "{page}");
+    assert!(
+        page.contains(r#"<span class="k">Lines</span><span class="v">2</span>"#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"<span class="k">Language</span><span class="v">Rust</span>"#),
+        "{page}"
+    );
     assert!(
         page.contains(r#"<span class="hl-storage hl-modifier hl-rust">pub</span>"#),
         "{page}"
