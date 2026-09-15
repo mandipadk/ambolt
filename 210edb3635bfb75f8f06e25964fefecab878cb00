@@ -1,0 +1,133 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "competing": false,
+      "external_key": "Imarks0131",
+      "id": "c-7ej7dqjyd9gxeapsek5e2ctghc",
+      "landed_oid": "210edb3635bfb75f8f06e25964fefecab878cb00",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 148,
+      "opened_at": "2026-09-15T19:29:24.155133403Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-479eymn5e99dqtn2acqe0k8wzk",
+      "title": "Draw a face for a person and a Lens for an agent",
+      "updated_at": "2026-09-15T19:30:31.183236764Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-7ej7dqjyd9gxeapsek5e2ctghc",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "covers": [],
+        "id": "cl-4jrk4sc1dax4g13gmgnac3npgf",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1410,
+        "summary": "fmt, clippy -D warnings, the suite and the first-run walk pass. New: web/avatars.rs (Notionists parts vendored, person and agent marks), /avatars/{gen}/{kind}/{id}.svg served immutable, avatar helper emits images, org tile; unit tests and a flow test; sheet rendered and looked at.",
+        "unchecked": [
+          "Looked at in a rendered sheet, not on every page of the live forge; sizes below 20px were not checked."
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "210edb3635bfb75f8f06e25964fefecab878cb00",
+    "landed_at": "2026-09-15T19:30:31.183236764Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-7ej7dqjyd9gxeapsek5e2ctghc",
+      "commit_oid": "210edb3635bfb75f8f06e25964fefecab878cb00",
+      "message": "Draw a face for a person and a Lens for an agent\n\nThe lettered discs said nothing about anyone. A person's mark is now a\nface composed from Notionists, Zoish's public-domain set, vendored as\nSVG parts and drawn on a tinted disc; an agent's is a Lens, one eye on\nan iron housing whose gaze, iris print and pupil are the agent's own,\nand which blinks while the agent is at work; an organisation keeps a\nlettered tile, being many people. Every mark is drawn from the id\nalone, nothing is stored or uploaded, and the pictures are served as\nimmutable files under the drawing's generation, so a page carries only\ntheir addresses. Sign-up now says the username cannot be changed, and\nSettings no longer says \"yet\": both are chosen once.\n\nTask: t-479eymn5e99dqtn2acqe0k8wzk\nChange-Id: Imarks0131\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "README.md",
+        "crates/cli/tests/suite/avatars_flow.rs",
+        "crates/cli/tests/suite/main.rs",
+        "crates/server/src/web/avatars.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/notionists.LICENSE",
+        "crates/server/src/web/notionists.json",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md"
+      ],
+      "session": null
+    },
+    "seq": 1413,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-4jrk4sc1dax4g13gmgnac3npgf",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-4jrk4sc1dax4g13gmgnac3npgf",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 202 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 8 path(s) outside docs/, *.md: crates/cli/tests/suite/avatars_flow.rs, crates/cli/tests/suite/main.rs, crates/server/src/web/avatars.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-7ej7dqjyd9gxeapsek5e2ctghc",
+        "claim": "cl-4jrk4sc1dax4g13gmgnac3npgf",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "id": "vr-3bv7bs3met6r9nkt6en47zrarq",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1411
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "MEypjD80BNuREeFNPWvmyCyLIqbY3ojyFeCOhSOOBpZnr4Nu1qmPMJFJsP8f075s9DVWwV/XX5b0qyzdTAR+DA=="
+  }
+}
