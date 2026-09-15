@@ -2703,6 +2703,14 @@ async fn owner_page(
     } else {
         (None, Vec::new())
     };
+    // A person's or an agent's record is the reputation the forge can
+    // compute, and it is read off the log by anyone who can see the
+    // page. An organisation has none: its people do.
+    let record = if organisation {
+        None
+    } else {
+        app.with_store(|s| s.record_of(&owner_id, 90)).ok()
+    };
     views::owner(
         theme,
         who.reading(),
@@ -2716,6 +2724,7 @@ async fn owner_page(
         may_create,
         may_manage,
         allowances,
+        record.as_ref(),
         query.error.as_deref(),
         query.asked.is_some(),
         once.secret.as_deref(),

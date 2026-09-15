@@ -24,26 +24,26 @@ async fn fetch(app: &axum::Router, path: &str) -> (StatusCode, String, String) {
 async fn marks_are_drawn_from_the_id_and_cached_for_good() {
     let forge = boot().await;
     let app = &forge.app;
-    let (status, cache, ada) = fetch(app, "/avatars/1/person/ada.svg").await;
+    let (status, cache, ada) = fetch(app, "/avatars/2/person/ada.svg").await;
     assert_eq!(status, StatusCode::OK);
     assert!(cache.contains("immutable"), "{cache}");
     assert!(ada.starts_with("<svg"), "{ada}");
-    let (_, _, again) = fetch(app, "/avatars/1/person/ada.svg").await;
+    let (_, _, again) = fetch(app, "/avatars/2/person/ada.svg").await;
     assert_eq!(ada, again, "the same id draws the same face");
-    let (_, _, bee) = fetch(app, "/avatars/1/person/bee.svg").await;
+    let (_, _, bee) = fetch(app, "/avatars/2/person/bee.svg").await;
     assert_ne!(ada, bee);
 
-    let (status, _, scout) = fetch(app, "/avatars/1/agent/scout.svg").await;
+    let (status, _, scout) = fetch(app, "/avatars/2/agent/scout.svg").await;
     assert_eq!(status, StatusCode::OK);
     assert!(!scout.contains("@keyframes"), "{scout}");
-    let (_, _, live) = fetch(app, "/avatars/1/agent/scout.svg?live").await;
+    let (_, _, live) = fetch(app, "/avatars/2/agent/scout.svg?live").await;
     assert!(live.contains("@keyframes"), "at work, the Lens blinks");
 
     // Nobody is looked up, so a stranger's id draws too; a wrong kind or
     // generation does not.
-    let (status, _, _) = fetch(app, "/avatars/1/person/nobody-at-all.svg").await;
+    let (status, _, _) = fetch(app, "/avatars/2/person/nobody-at-all.svg").await;
     assert_eq!(status, StatusCode::OK);
-    let (status, _, _) = fetch(app, "/avatars/1/team/crew.svg").await;
+    let (status, _, _) = fetch(app, "/avatars/2/team/crew.svg").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, _, _) = fetch(app, "/avatars/9/person/ada.svg").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -52,7 +52,7 @@ async fn marks_are_drawn_from_the_id_and_cached_for_good() {
     let (_, cookie) = sign_in_as(&forge, "ada").await;
     let (status, page) = page_with_cookie(app, "/ada", &cookie).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(page.contains("/avatars/1/person/ada.svg"), "{page}");
+    assert!(page.contains("/avatars/2/person/ada.svg"), "{page}");
     let (_, page) = page_with_cookie(app, "/agents", &cookie).await;
-    assert!(page.contains("/avatars/1/agent/scout.svg"), "{page}");
+    assert!(page.contains("/avatars/2/agent/scout.svg"), "{page}");
 }

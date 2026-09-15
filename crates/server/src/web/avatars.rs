@@ -1,9 +1,9 @@
 //! Marks for people and agents, drawn from the id alone.
 //!
 //! A person is a Notionists face, composed from Zoish's CC0 parts vendored
-//! beside this file, on a tinted disc. An agent is a Lens: an iron housing
-//! with one eye whose iris print and pupil are the agent's own, blinking
-//! while the agent is at work. Nothing is stored and nothing is uploaded;
+//! beside this file, on a tinted disc. An agent is a Lens: a cobalt
+//! housing with one eye that looks where the id says, blinking while the
+//! agent is at work. Nothing is stored and nothing is uploaded;
 //! the same id always draws the same mark, so the pictures are served as
 //! immutable files.
 
@@ -13,7 +13,7 @@ use std::sync::LazyLock;
 
 /// Bumped whenever a drawing changes, so the immutable addresses change
 /// with it.
-pub const GENERATION: u32 = 1;
+pub const GENERATION: u32 = 2;
 
 const NOTIONISTS: &str = include_str!("notionists.json");
 
@@ -138,38 +138,16 @@ pub fn person(id: &str) -> String {
     svg
 }
 
-/// The four pupils: round, tall, wide, a slit.
-const PUPILS: [(f64, f64); 4] = [(4.6, 4.6), (3.4, 5.6), (5.8, 3.6), (1.9, 5.8)];
-
-/// An agent's mark: the Lens. One eye on an iron housing; the gaze, the
-/// iris print and the pupil are the agent's own. At work, it blinks.
+/// An agent's mark: the Lens. One eye on a cobalt housing, looking
+/// where the id says. At work, it blinks. Cobalt is the one colour the
+/// product means something by, and agents are the one thing drawn in it.
 pub fn agent(id: &str, live: bool) -> String {
     let h = hash(id);
     let mut r = Rng(h ^ 0x9e37_79b9);
-    let dx = (r.next() - 0.5) * 12.0;
-    let dy = (r.next() - 0.5) * 8.0;
+    let dx = (r.next() - 0.5) * 14.0;
+    let dy = (r.next() - 0.5) * 10.0;
     let cx = 32.0 + dx;
     let cy = 33.0 + dy * 0.6;
-    let (rx, ry) = PUPILS[(h % 4) as usize];
-    let mut ticks = String::new();
-    for i in 0..20u32 {
-        let bit = (h >> (i % 31)) & 1;
-        let bit2 = (h >> ((i * 7) % 31)) & 1;
-        if bit == 0 && bit2 == 0 {
-            continue;
-        }
-        let a = f64::from(i) / 20.0 * std::f64::consts::TAU;
-        let r1 = 6.2;
-        let r2 = if bit == 1 && bit2 == 1 { 9.4 } else { 8.2 };
-        let _ = write!(
-            ticks,
-            "<line x1=\"{:.1}\" y1=\"{:.1}\" x2=\"{:.1}\" y2=\"{:.1}\"/>",
-            cx + a.cos() * r1,
-            cy + a.sin() * r1,
-            cx + a.cos() * r2,
-            cy + a.sin() * r2
-        );
-    }
     let style = if live {
         concat!(
             "<style>@keyframes blink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}",
@@ -182,21 +160,17 @@ pub fn agent(id: &str, live: bool) -> String {
     format!(
         concat!(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">{style}",
-            "<rect width=\"64\" height=\"64\" rx=\"17\" fill=\"#1E222B\"/>",
-            "<rect x=\"0.5\" y=\"0.5\" width=\"63\" height=\"63\" rx=\"16.5\" fill=\"none\" stroke=\"#363C48\"/>",
-            "<g class=\"eye\"><ellipse cx=\"32\" cy=\"33\" rx=\"17\" ry=\"12\" fill=\"#F1F3F7\"/>",
-            "<g stroke=\"#4F7DFF\" stroke-width=\"1.6\" stroke-linecap=\"round\">{ticks}</g>",
-            "<ellipse cx=\"{cx:.1}\" cy=\"{cy:.1}\" rx=\"{rx}\" ry=\"{ry}\" fill=\"#0B0D12\"/>",
-            "<circle cx=\"{hx:.1}\" cy=\"{hy:.1}\" r=\"1.5\" fill=\"#F1F3F7\"/></g></svg>"
+            "<rect width=\"64\" height=\"64\" rx=\"17\" fill=\"#3B69F0\"/>",
+            "<rect x=\"0.5\" y=\"0.5\" width=\"63\" height=\"63\" rx=\"16.5\" fill=\"none\" stroke=\"#2F55CC\"/>",
+            "<g class=\"eye\"><ellipse cx=\"32\" cy=\"33\" rx=\"17\" ry=\"12\" fill=\"#FFFFFF\"/>",
+            "<circle cx=\"{cx:.1}\" cy=\"{cy:.1}\" r=\"7.5\" fill=\"#0B0D12\"/>",
+            "<circle cx=\"{hx:.1}\" cy=\"{hy:.1}\" r=\"2.2\" fill=\"#FFFFFF\"/></g></svg>"
         ),
         style = style,
-        ticks = ticks,
         cx = cx,
         cy = cy,
-        rx = rx,
-        ry = ry,
-        hx = cx + 1.8,
-        hy = cy - 2.0,
+        hx = cx + 2.5,
+        hy = cy - 2.5,
     )
 }
 

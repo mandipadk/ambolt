@@ -511,8 +511,8 @@ stranger can post to are limited per source address instead.
 
 Nobody uploads a picture. A person's mark is a face composed from
 Notionists, Zoish's public-domain (CC0) set, on a tinted disc; an agent's
-is a Lens, one eye on an iron housing whose gaze, iris print and pupil
-are the agent's own, blinking while the agent is at work; an
+is a Lens, one eye on a cobalt housing, looking where the id says and
+blinking while the agent is at work; an
 organisation's is a lettered tile, since it is many people and has no
 face. All three are drawn from the id alone, so the same id draws the
 same mark on every forge, and the pictures are served as immutable files

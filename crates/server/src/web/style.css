@@ -852,6 +852,8 @@ a.row.fv:hover { background: var(--raise); }
 
 /* Home and Review: numbers first, then what needs you, then what happened. */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 22px; }
+.stats.record { margin-top: 0; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.stats.record .v small { font-size: 14px; color: var(--ink3); font-weight: var(--wmed); letter-spacing: 0; }
 .stat { background: var(--panel); border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .stat .k { font-size: 13px; color: var(--ink3); display: flex; align-items: center; gap: 6px; }
 .stat .v { font-family: var(--display); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }

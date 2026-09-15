@@ -2975,6 +2975,9 @@ pub fn owner(
     // them and to whoever runs the forge: how full somebody's account
     // is is their business.
     allowances: Option<(ambolt_core::Usage, ambolt_core::Quota)>,
+    // The record: what the log says this person or agent did lately.
+    // None for an organisation.
+    record: Option<&ambolt_core::Record>,
     error: Option<&str>,
     // An owner just asked for more; say it was heard.
     asked: bool,
@@ -3028,6 +3031,31 @@ pub fn owner(
             }
             @if asked {
                 div class="notice" { (ic("check", "")) span { "Asked. Whoever runs the forge sees it with the reports, and answers from there." } }
+            }
+            @if let Some(record) = record {
+                div class="sec" {
+                    div class="sh" { h2 { "Record" } span class="n" { "the last " (record.window_days) " days, counted from the log" } }
+                    div class="stats record" {
+                        div class="stat" { div class="v" { (record.landed) } div class="k" { "landed" } }
+                        div class="stat" { div class="v" { (record.abandoned) } div class="k" { "abandoned" } }
+                        div class="stat" {
+                            div class="v" {
+                                @match record.reproduced_percent {
+                                    Some(percent) => { (percent) small { "%" } }
+                                    None => { "–" }
+                                }
+                            }
+                            div class="k" { "of " (record.judged) " re-run claim" @if record.judged != 1 { "s" } " reproduced" }
+                        }
+                        div class="stat" { div class="v" { (record.claims) } div class="k" { "claim" @if record.claims != 1 { "s" } " with a command" } }
+                        div class="stat" {
+                            div class="v" { (record.audits_passed) small { " of " (record.audits) } }
+                            div class="k" { "human looks passed" @if record.blocks > 0 { ", " (record.blocks) " blocked" } }
+                        }
+                        div class="stat" { div class="v" { (record.gaps_declared) } div class="k" { "gap" @if record.gaps_declared != 1 { "s" } " declared on claims" } }
+                    }
+                    p class="hint" { "Nothing here is declared. Claims a runner re-ran, verdicts by other people, and what landed or was abandoned, each with " (owner.display) "'s name on it in the log." }
+                }
             }
             div class="sec" {
                 div class="sh" { h2 { "Repositories" } span class="n" { (repos.len()) } }
@@ -6552,9 +6580,9 @@ mod tests {
     fn a_mark_is_an_image_for_a_person_or_an_agent_and_a_tile_for_an_organisation() {
         let agent = avatar("scout", "Scout", true, true).into_string();
         assert!(agent.contains("av agent live"), "{agent}");
-        assert!(agent.contains("/avatars/1/agent/scout.svg?live"), "{agent}");
+        assert!(agent.contains("/avatars/2/agent/scout.svg?live"), "{agent}");
         let person = avatar("mandip", "Mandip Adhikari", false, false).into_string();
-        assert!(person.contains("/avatars/1/person/mandip.svg"), "{person}");
+        assert!(person.contains("/avatars/2/person/mandip.svg"), "{person}");
         assert!(!person.contains("agent"), "{person}");
         let org = avatar_of("crew", "Crew", ambolt_core::PrincipalKind::Team, false).into_string();
         assert!(org.contains("av org") && org.contains(">CR<"), "{org}");
