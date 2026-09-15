@@ -174,3 +174,110 @@ fn the_script_defines_what_it_uses() {
         assert!(defined < used, "{helper} is used before it is defined");
     }
 }
+
+/// The whole ceremony, with a software authenticator: register a
+/// passkey from the settings page, then sign in with it by discovery,
+/// the way a browser does when nobody typed a name.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_passkey_registers_and_then_signs_in_by_discovery() {
+    use webauthn_authenticator_rs::WebauthnAuthenticator;
+    use webauthn_authenticator_rs::prelude::{
+        CreationChallengeResponse, RequestChallengeResponse, Url,
+    };
+    use webauthn_authenticator_rs::softpasskey::SoftPasskey;
+
+    let forge = boot_with_passkeys().await;
+    let app = &forge.app;
+    let origin = Url::parse("https://forge.example").unwrap();
+    let mut authenticator = WebauthnAuthenticator::new(SoftPasskey::new(true));
+
+    // Register, signed in as ada.
+    let (_, cookie) = sign_in_as(&forge, "ada").await;
+    let (status, begin) = post_json(app, "/passkeys/register/begin", &cookie, json!({})).await;
+    assert_eq!(status, StatusCode::OK, "{begin}");
+    // The software authenticator cannot hold a resident key, and a
+    // browser is free to ignore the preference too; the forge must accept
+    // what comes back either way.
+    let mut options = begin["options"].clone();
+    options["publicKey"]["authenticatorSelection"]["residentKey"] = json!("discouraged");
+    options["publicKey"]["authenticatorSelection"]["requireResidentKey"] = json!(false);
+    let creation: CreationChallengeResponse = serde_json::from_value(options).unwrap();
+    let credential = authenticator
+        .do_registration(origin.clone(), creation)
+        .expect("the authenticator registers");
+    let (status, done) = post_json(
+        app,
+        "/passkeys/register/finish",
+        &cookie,
+        json!({ "id": begin["id"], "label": "the test", "credential": credential }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{done}");
+    let (_, settings) = page_with_cookie(app, "/you/settings", &cookie).await;
+    assert!(
+        settings.contains("the test"),
+        "the passkey is listed: {settings}"
+    );
+
+    // Sign in with nobody's name typed: the forge asks for discovery.
+    let (status, begin) = post_json(app, "/passkeys/login/begin", "", json!({})).await;
+    assert_eq!(status, StatusCode::OK, "{begin}");
+    let mut options = begin["options"].clone();
+    assert!(
+        options["publicKey"]["allowCredentials"]
+            .as_array()
+            .is_none_or(|a| a.is_empty()),
+        "discovery names no credential: {options}"
+    );
+    // A resident credential is one the authenticator finds by itself and
+    // answers with the user handle it stored at registration. The
+    // software one is told which key, and the handle is set the way a
+    // real one would set it: the same bytes the registration carried.
+    options["publicKey"]["allowCredentials"] =
+        json!([{ "type": "public-key", "id": credential.raw_id }]);
+    let request: RequestChallengeResponse = serde_json::from_value(options).unwrap();
+    let mut assertion = authenticator
+        .do_authentication(origin, request)
+        .expect("the authenticator signs");
+    let (_, begin_again) = post_json(app, "/passkeys/register/begin", &cookie, json!({})).await;
+    let handle = begin_again["options"]["publicKey"]["user"]["id"]
+        .as_str()
+        .expect("the user handle the registration carried")
+        .to_owned();
+    assertion.response.user_handle = Some(serde_json::from_value(json!(handle)).unwrap());
+    let request = Request::builder()
+        .method("POST")
+        .uri("/passkeys/login/finish")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "id": begin["id"], "credential": assertion }).to_string(),
+        ))
+        .unwrap();
+    let response = tower::ServiceExt::oneshot(app.clone(), request)
+        .await
+        .unwrap();
+    let status = response.status();
+    let session = response
+        .headers()
+        .get("set-cookie")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.split(';').next().unwrap().to_owned());
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let done: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    assert_eq!(status, StatusCode::OK, "the discoverable sign-in: {done}");
+    let session = session.expect("a session cookie");
+    assert!(session.starts_with("ambolt_session="), "{session}");
+    let (status, home) = page_with_cookie(app, "/", &session).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(home.contains("ada"), "signed in as ada: {home}");
+
+    // The same answer a second time is a spent challenge.
+    let (status, again) = post_json(
+        app,
+        "/passkeys/login/finish",
+        "",
+        json!({ "id": begin["id"], "credential": assertion }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{again}");
+}

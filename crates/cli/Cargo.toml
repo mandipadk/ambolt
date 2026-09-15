@@ -33,3 +33,4 @@ http = "1.5.0"
 http-body-util = "0.1.4"
 tempfile = "3.27.0"
 tower = "0.5.3"
+webauthn-authenticator-rs = { version = "0.5", features = ["softpasskey"] }
