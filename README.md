@@ -203,5 +203,8 @@ The client side — [`ambolt-client`](crates/client), the MCP adapter and
 the claim runner — is [Apache-2.0](crates/client/LICENSE), so any tool can
 embed the protocol without a second thought.
 
+People's marks are composed from [Notionists](https://heyzoish.gumroad.com/l/notionists)
+by Zoish, released under CC0 1.0, vendored as SVG parts in the server.
+
 Copyright © 2026 Mandip Adhikari. Contributions are welcome under the
 terms in [CONTRIBUTING.md](CONTRIBUTING.md).

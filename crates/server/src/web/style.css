@@ -96,12 +96,12 @@ b, strong { font-weight: var(--wbold); }
 .av { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: var(--wbold); color: #fff; flex: none; letter-spacing: 0.02em; }
 .av.sm { width: 20px; height: 20px; font-size: 9.5px; }
 .av.lg { width: 36px; height: 36px; font-size: 14px; }
-.av.agent { border-radius: 8px; background: var(--raise2); color: var(--ink); position: relative; border: 1px solid var(--hair2); font-size: 10px; letter-spacing: 0; }
-.av.agent.sm { border-radius: 6px; }
-.av.agent::after { content: ""; position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
-.av.agent.live::after { background: var(--good); animation: pulse 2s ease-in-out infinite; }
-.av.h1 { background: #6B7EF5; } .av.h2 { background: #E07A5F; } .av.h3 { background: #3D9970; } .av.h4 { background: #B56576; } .av.h5 { background: #4C9FB8; }
-.avs { display: inline-flex; } .avs .av { margin-left: -6px; border: 2px solid var(--bg); } .avs .av:first-child { margin-left: 0; }
+img.av { object-fit: cover; background: var(--raise); border: 0; }
+.av.agent { border-radius: 27%; position: relative; background: none; }
+.av.agent.live { box-shadow: 0 0 0 2px var(--good-soft); }
+.av.org { border-radius: 8px; background: var(--raise2); color: var(--ink); border: 1px solid var(--hair2); font-size: 10px; letter-spacing: 0; }
+.avs { display: inline-flex; } .avs .av { margin-left: -6px; box-shadow: 0 0 0 2px var(--bg); } .avs .av:first-child { margin-left: 0; }
+.pagehead .who .av.lg img.av, .pagehead .who .av.lg .av.org { width: 100%; height: 100%; font-size: inherit; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--idle); flex: none; vertical-align: 1px; }
 .dot.ok, .dot.good { background: var(--good); }
@@ -111,7 +111,7 @@ b, strong { font-weight: var(--wbold); }
 .dot.idle { background: var(--idle); }
 .dot.open { background: none; border: 1.5px solid var(--ink3); }
 .dot.live { background: var(--good); animation: pulse 2s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .dot.live, .av.agent.live::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .dot.live { animation: none; } }
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 6px; font-size: 12.5px; font-weight: var(--wmed); background: var(--raise); color: var(--ink2); border: 1px solid var(--hair); white-space: nowrap; }
 .chip.good { background: var(--good-soft); color: var(--good-ink); border-color: transparent; }
 .chip.bad { background: var(--bad-soft); color: var(--bad-ink); border-color: transparent; }

@@ -71,22 +71,31 @@ pub fn ic(name: &str, size: &str) -> Markup {
 /// squircle with a live dot for an agent. The hue comes from the id so it
 /// is the same on every page and every day.
 pub fn avatar(id: &str, display: &str, agent: bool, live: bool) -> Markup {
-    let hue = avatar_hue(id);
-    html! {
-        span class={ "av" @if agent { " agent" @if live { " live" } } @else { " h" (hue) } }
-             title=(display) {
-            (initials(display))
-        }
-    }
+    let kind = if agent {
+        ambolt_core::PrincipalKind::Agent
+    } else {
+        ambolt_core::PrincipalKind::Human
+    };
+    avatar_of(id, display, kind, live)
 }
 
-/// One of five hues, chosen by the id's bytes.
-fn avatar_hue(id: &str) -> u8 {
-    let sum: u32 = id
-        .bytes()
-        .map(u32::from)
-        .fold(7, |acc, b| acc.wrapping_mul(31).wrapping_add(b));
-    (sum % 5) as u8 + 1
+/// The mark for a principal of a known kind: a face for a person, a Lens
+/// for an agent (blinking while at work), a lettered tile for an
+/// organisation, which is many people and has no face of its own.
+pub fn avatar_of(id: &str, display: &str, kind: ambolt_core::PrincipalKind, live: bool) -> Markup {
+    let drawn = super::avatars::GENERATION;
+    match kind {
+        ambolt_core::PrincipalKind::Agent => html! {
+            img class={ "av agent" @if live { " live" } } alt="" title=(display)
+                src={ "/avatars/" (drawn) "/agent/" (id) ".svg" @if live { "?live" } };
+        },
+        ambolt_core::PrincipalKind::Human => html! {
+            img class="av" alt="" title=(display) src={ "/avatars/" (drawn) "/person/" (id) ".svg" };
+        },
+        ambolt_core::PrincipalKind::Team => html! {
+            span class="av org" title=(display) { (initials(display)) }
+        },
+    }
 }
 
 /// The first letter of the first two words, or the first two letters of
@@ -649,7 +658,7 @@ pub fn signup(theme: Theme, state: super::Signup, error: Option<&str>) -> Markup
                                 label for="name" { "Username" }
                                 input id="name" name="name" type="text" autocomplete="username"
                                     autocapitalize="none" autofocus required pattern="[a-z0-9-]{2,64}";
-                                p class="hint" { "Lowercase letters, digits and hyphens. Your repositories live under it." }
+                                p class="hint" { "Lowercase letters, digits and hyphens. Your repositories live under it, and it cannot be changed later, so choose it with care." }
                             }
                             div class="field" {
                                 label for="display" { "Shown as" }
@@ -2602,7 +2611,7 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
                     div class="panel" id="account" {
                         div class="pref" {
                             h3 { "Account" }
-                            p class="what" { "Your username is how the forge names you everywhere: pages, git, receipts, the log. It is one of a kind on this forge and cannot be changed yet." }
+                            p class="what" { "Your username is how the forge names you everywhere: pages, git, receipts, the log. It is one of a kind on this forge and cannot be changed." }
                             div class="keyrow" {
                                 span class="k" { "Username" }
                                 code { (viewer.0.as_str()) }
@@ -2980,7 +2989,7 @@ pub fn owner(
         html! {
             div class="pagehead" {
                 div class="who" {
-                    span class="av lg" { (avatar(owner.id.as_str(), &owner.display, agent, false)) }
+                    span class="av lg" { (avatar_of(owner.id.as_str(), &owner.display, owner.kind, false)) }
                     div {
                         h1 { (owner.display) }
                         div class="meta" {
@@ -6490,23 +6499,15 @@ mod tests {
     }
 
     #[test]
-    fn a_hue_is_stable_and_one_of_five() {
-        for id in ["mandip", "ada", "scout", "quill", "runner", "x"] {
-            let hue = avatar_hue(id);
-            assert!((1..=5).contains(&hue), "{id}: {hue}");
-            assert_eq!(hue, avatar_hue(id));
-        }
-        assert_ne!(avatar_hue("ada"), avatar_hue("adb"));
-    }
-
-    #[test]
-    fn an_agent_avatar_is_a_squircle_and_a_person_a_circle() {
+    fn a_mark_is_an_image_for_a_person_or_an_agent_and_a_tile_for_an_organisation() {
         let agent = avatar("scout", "Scout", true, true).into_string();
         assert!(agent.contains("av agent live"), "{agent}");
-        assert!(agent.contains(">SC<"), "{agent}");
+        assert!(agent.contains("/avatars/1/agent/scout.svg?live"), "{agent}");
         let person = avatar("mandip", "Mandip Adhikari", false, false).into_string();
-        assert!(person.contains("av h"), "{person}");
+        assert!(person.contains("/avatars/1/person/mandip.svg"), "{person}");
         assert!(!person.contains("agent"), "{person}");
+        let org = avatar_of("crew", "Crew", ambolt_core::PrincipalKind::Team, false).into_string();
+        assert!(org.contains("av org") && org.contains(">CR<"), "{org}");
     }
 
     #[test]

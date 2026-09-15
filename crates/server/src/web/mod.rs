@@ -10,6 +10,7 @@
 //! servers additionally accept a bare principal name at login, same
 //! as the rest of the dev seam.
 
+pub(crate) mod avatars;
 mod diff;
 mod highlight;
 mod views;
@@ -96,6 +97,7 @@ pub fn routes() -> Router<AppState> {
         .route("/report", get(report_page).post(file_report))
         .route("/reports", get(reports_page).post(reports_action))
         .route("/assets/{file}", get(asset))
+        .route("/avatars/{generation}/{kind}/{file}", get(avatar_image))
         .route("/login", get(login_page).post(login_submit))
         .route("/login/link", post(login_link))
         .route("/signin", get(signin_with_link))
@@ -266,6 +268,34 @@ async fn asset(Path(file): Path<String>) -> Response {
         }
     }
     not_found()
+}
+
+#[derive(Deserialize)]
+struct AvatarQuery {
+    /// Present while the agent is at work: the mark blinks.
+    #[serde(default)]
+    live: Option<String>,
+}
+
+/// A mark drawn from the id alone, so it is served as an immutable file
+/// under the drawing's generation; nothing is looked up.
+async fn avatar_image(
+    Path((generation, kind, file)): Path<(u32, String, String)>,
+    Query(query): Query<AvatarQuery>,
+) -> Response {
+    const FOREVER: &str = "public, max-age=31536000, immutable";
+    let Some(id) = file.strip_suffix(".svg") else {
+        return not_found();
+    };
+    if generation != avatars::GENERATION || id.is_empty() || id.len() > 64 {
+        return not_found();
+    }
+    let svg = match kind.as_str() {
+        "person" => avatars::person(id),
+        "agent" => avatars::agent(id, query.live.is_some()),
+        _ => return not_found(),
+    };
+    served(svg, "image/svg+xml", FOREVER)
 }
 
 fn served(body: impl IntoResponse, kind: &'static str, cache: &'static str) -> Response {
