@@ -1,0 +1,138 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Iwatch0135",
+      "id": "c-1ba7qgr0rj6rkzd0jqn480hmca",
+      "landed_oid": "d5b6b50109a02b17018afeb8cd6d0dcc5db57d21",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 152,
+      "opened_at": "2026-09-15T22:03:13.011253821Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-6n83efg0y9hjr9y4zsbbga4adt",
+      "title": "Let a reader watch a repository",
+      "updated_at": "2026-09-15T22:04:31.772040609Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-1ba7qgr0rj6rkzd0jqn480hmca",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "covers": [],
+        "id": "cl-14wq93bns8g6wkqbtsx8bpfz4v",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1442,
+        "summary": "fmt, clippy -D warnings, the suite and the first-run walk pass. New: RepoWatched/RepoUnwatched, the watches projection, watchers addressed on ChangeMerged and AttentionDrawn, watch/unwatch/you-watches API, the Watch button; a flow test covers landing, stopping, a stranger, and the page.",
+        "unchecked": [
+          "Caps, quota attribution beyond open changes, and discard are the next landing; a proposer's push over git was exercised through the API path, not a real git push."
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "d5b6b50109a02b17018afeb8cd6d0dcc5db57d21",
+    "landed_at": "2026-09-15T22:04:31.772040609Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-1ba7qgr0rj6rkzd0jqn480hmca",
+      "commit_oid": "d5b6b50109a02b17018afeb8cd6d0dcc5db57d21",
+      "message": "Let a reader watch a repository\n\nSaving keeps a repository in reach; watching hears about it. Anyone\nwho may read a repository can watch it from its page or the API, and\nfrom then on their inbox says when a change lands there and when one\nis drawn for a person's look, after whoever the event addressed on its\nown, so an owner who also watches is told once. Watching is an event\nrather than a preference, so the notices it brings replay from the log\nwith everything else; a watch follows a rename and ends with the\nrepository. Stopping is the same event in reverse.\n\nTask: t-6n83efg0y9hjr9y4zsbbga4adt\nChange-Id: Iwatch0135\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/main.rs",
+        "crates/cli/tests/suite/watch_flow.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/event.rs",
+        "crates/core/src/queries.rs",
+        "crates/core/src/store.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1445,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-14wq93bns8g6wkqbtsx8bpfz4v",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-14wq93bns8g6wkqbtsx8bpfz4v",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 206 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 10 path(s) outside docs/, *.md: crates/cli/tests/suite/main.rs, crates/cli/tests/suite/watch_flow.rs, crates/core/src/commands.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-1ba7qgr0rj6rkzd0jqn480hmca",
+        "claim": "cl-14wq93bns8g6wkqbtsx8bpfz4v",
+        "command": "cargo test --workspace && scripts/first-run.sh",
+        "id": "vr-3g5ffyv0bgd0xykqpkzszerph9",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1443
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "JsmI3POmXbAWi3AUMNEq1XV38n42kyXrGQFMul7SQz2G+kzt7A7gDbT1NOQRssZQVBViORAeP2QfQzSQqQRUAQ=="
+  }
+}
