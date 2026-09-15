@@ -178,12 +178,19 @@ impl Store {
                 && query.number.is_none()
                 && query.by.is_none()
                 && query.state.is_none()
-                && let Some((score, why)) = matched(&query.words, &repo.name)
+                && let Some((score, why)) = matched(
+                    &query.words,
+                    &format!("{} {}", repo.name, repo.topics.join(" ")),
+                )
             {
                 hits.push(SearchHit {
                     kind: HitKind::Repository,
                     title: repo.name.clone(),
-                    detail: repo.default_branch.clone(),
+                    detail: if repo.topics.is_empty() {
+                        repo.default_branch.clone()
+                    } else {
+                        repo.topics.join(", ")
+                    },
                     repo: Some(repo.name.clone()),
                     number: None,
                     principal: None,

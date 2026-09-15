@@ -68,6 +68,7 @@ mod tags_flow;
 mod teams_flow;
 mod threads_flow;
 mod threads_page_flow;
+mod topics_flow;
 mod transfer_flow;
 mod trust_flow;
 mod verify_flow;

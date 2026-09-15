@@ -196,7 +196,7 @@ pub(crate) mod raw {
         let rows = conn
             .prepare_cached(
                 "SELECT name, default_branch, object_format, policy, mirror, visibility, owner,
-                        pending_owner, archived, description
+                        pending_owner, archived, description, topics
                  FROM repos ORDER BY name",
             )?
             .query_map([], |row| {
@@ -211,6 +211,7 @@ pub(crate) mod raw {
                     row.get::<_, Option<String>>(7)?,
                     row.get::<_, i64>(8)?,
                     row.get::<_, String>(9)?,
+                    row.get::<_, String>(10)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -227,6 +228,7 @@ pub(crate) mod raw {
                     pending,
                     archived,
                     description,
+                    topics,
                 )| {
                     Ok(Repo {
                         owner: PrincipalId(owner),
@@ -244,6 +246,7 @@ pub(crate) mod raw {
                             Visibility::parse,
                         )?,
                         archived: archived != 0,
+                        topics: topics.split_whitespace().map(str::to_owned).collect(),
                         description,
                         name,
                         default_branch,
@@ -273,7 +276,7 @@ pub(crate) mod raw {
     pub fn repo(conn: &Connection, name: &str) -> CoreResult<Option<Repo>> {
         conn.prepare_cached(
             "SELECT name, default_branch, object_format, policy, mirror, visibility, owner,
-                    pending_owner, archived, description
+                    pending_owner, archived, description, topics
              FROM repos WHERE name = ?",
         )?
         .query_row(params![name], |row| {
@@ -288,6 +291,7 @@ pub(crate) mod raw {
                 row.get::<_, Option<String>>(7)?,
                 row.get::<_, i64>(8)?,
                 row.get::<_, String>(9)?,
+                row.get::<_, String>(10)?,
             ))
         })
         .optional()?
@@ -303,6 +307,7 @@ pub(crate) mod raw {
                 pending,
                 archived,
                 description,
+                topics,
             )| {
                 Ok(Repo {
                     owner: PrincipalId(owner),
@@ -312,6 +317,7 @@ pub(crate) mod raw {
                     mirror: read_mirror(&name, mirror.as_deref())?,
                     visibility: parsed(&format!("repo {name}"), &visibility, Visibility::parse)?,
                     archived: archived != 0,
+                    topics: topics.split_whitespace().map(str::to_owned).collect(),
                     description,
                     name,
                     default_branch,
@@ -814,6 +820,17 @@ pub(crate) mod raw {
             }
         }
         Ok(humans)
+    }
+
+    /// Changes that landed on `repo` since `since` (RFC 3339, UTC), by
+    /// their last event, which for a landed change is the landing.
+    pub fn landed_since(conn: &Connection, repo: &str, since: &str) -> CoreResult<u32> {
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM changes
+             WHERE repo = ? AND state = 'merged' AND updated_at >= ?",
+            params![repo, since],
+            |row| row.get::<_, i64>(0),
+        )? as u32)
     }
 
     fn repo_owner(conn: &Connection, repo: &str) -> CoreResult<Option<String>> {

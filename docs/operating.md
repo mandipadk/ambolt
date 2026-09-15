@@ -434,7 +434,10 @@ at `/{owner}` listing what the reader may see of theirs.
 An owner, or whoever runs the forge, can rename, archive and delete a
 repository from its settings page or over the API
 (`POST /api/repos/{owner}/{name}/rename {"to": ..}`, `/archive`,
-`/unarchive`, `/delete {"confirm": "<name>"}`). A rename changes only the
+`/unarchive`, `/delete {"confirm": "<name>"}`, `/topics {"topics":
+["rust", "forge"]}`: a few lowercase words, eight at most, searchable
+and how `/explore` groups public repositories; `GET /api/explore?topic=`
+answers the same list to anyone at all). A rename changes only the
 part after the owner and moves everything, including the git directory.
 Transferring a repository to another owner renames it under that owner's
 name once they accept, and revokes every grant scoped to it: what the

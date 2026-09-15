@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Bump whenever a projection table changes shape. The log is never
 /// touched; projections are rebuilt from it.
-const SCHEMA_VERSION: i64 = 34;
+const SCHEMA_VERSION: i64 = 35;
 
 /// The log itself, which outlives every schema.
 const EVENT_SCHEMA: &str = "
@@ -275,7 +275,8 @@ CREATE TABLE IF NOT EXISTS repos (
   owner          TEXT NOT NULL DEFAULT '',
   pending_owner  TEXT,
   archived       INTEGER NOT NULL DEFAULT 0,
-  description    TEXT NOT NULL DEFAULT ''
+  description    TEXT NOT NULL DEFAULT '',
+  topics         TEXT NOT NULL DEFAULT ''
 ) STRICT;
 
 -- Names a repository used to have, so an old address can say where it
@@ -1032,6 +1033,7 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         | RepoRenamed { repo, .. }
         | RepoArchived { repo }
         | RepoDescribed { repo, .. }
+        | RepoTopicsSet { repo, .. }
         | RepoUnarchived { repo }
         | RepoDeleted { repo }
         | ChangeOpened { repo, .. } => (Some(repo.clone()), None),
@@ -2127,6 +2129,12 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
             tx.execute(
                 "UPDATE repos SET description = ? WHERE name = ?",
                 params![description, repo],
+            )?;
+        }
+        Event::RepoTopicsSet { repo, topics } => {
+            tx.execute(
+                "UPDATE repos SET topics = ? WHERE name = ?",
+                params![topics.join(" "), repo],
             )?;
         }
         Event::RepoArchived { repo } => {
@@ -3225,7 +3233,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                34,
+                35,
                 r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null,"proposals":false}"#
             ),
             "the policy's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
@@ -3282,7 +3290,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                34,
+                35,
                 r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25,"open_proposals":3,"proposal_push":33554432}"#
             ),
             "the quota's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"

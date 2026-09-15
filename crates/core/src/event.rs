@@ -172,6 +172,11 @@ pub enum Event {
         repo: String,
         description: String,
     },
+    /// The words a repository is filed under, replacing what it had.
+    RepoTopicsSet {
+        repo: String,
+        topics: Vec<String>,
+    },
     RepoArchived {
         repo: String,
     },
@@ -565,6 +570,7 @@ impl Event {
             Event::RepoRenamed { .. } => "repo_renamed",
             Event::RepoArchived { .. } => "repo_archived",
             Event::RepoDescribed { .. } => "repo_described",
+            Event::RepoTopicsSet { .. } => "repo_topics_set",
             Event::RepoUnarchived { .. } => "repo_unarchived",
             Event::RepoDeleted { .. } => "repo_deleted",
             Event::RepoTransferOffered { .. } => "repo_transfer_offered",

@@ -449,6 +449,12 @@ record and with a reason, so the room it took comes back. Ordinary
 abandonment keeps every revision; discard is the exception, for what
 should never have arrived.
 
+Explore, at `/explore`, is where a stranger starts: every public
+repository with what it is for, the topics it is filed under, what
+landed this week, how much of its tree a runner has reproduced, and
+what is open, the busiest first and filterable by topic. Topics are a
+few lowercase words an owner sets, searchable like the name.
+
 Repositories are private unless someone says otherwise, and that is
 enforced at the transport: a private repository cannot be cloned without
 a token, and it answers a stranger exactly as a repository that does not

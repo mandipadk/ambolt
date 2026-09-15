@@ -107,6 +107,7 @@ pub fn routes() -> Router<AppState> {
         .route("/logout", post(logout))
         .route("/theme", post(set_theme))
         .route("/search", get(search_page))
+        .route("/explore", get(explore_page))
         .route("/search.json", get(search_json))
         .route("/new", get(new_page).post(create_from_form))
         .route("/inbox", get(inbox_page))
@@ -201,6 +202,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{owner}/{repo}/settings/visibility", post(repo_visibility))
         .route("/{owner}/{repo}/settings/rename", post(repo_rename))
         .route("/{owner}/{repo}/settings/description", post(repo_describe))
+        .route("/{owner}/{repo}/settings/topics", post(repo_topics))
         .route("/{owner}/{repo}/settings/archive", post(repo_archive))
         .route("/{owner}/{repo}/settings/delete", post(repo_delete))
         .route("/{owner}/{repo}/settings/transfer", post(repo_transfer))
@@ -4773,6 +4775,65 @@ async fn repo_describe(
             Redirect::to(&format!("{back}?done=1")).into_response()
         }
         Err(err) => flash(&back, &humane(&err)),
+    }
+}
+
+#[derive(Deserialize)]
+struct TopicsForm {
+    #[serde(default)]
+    topics: String,
+}
+
+async fn repo_topics(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Form(form): Form<TopicsForm>,
+) -> Response {
+    let back = format!("/{repo}/settings");
+    let topics: Vec<String> = form
+        .topics
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|t| !t.is_empty())
+        .map(str::to_owned)
+        .collect();
+    match app.with_store(|s| s.set_topics(&viewer.0, &repo, &topics)) {
+        Ok(env) => {
+            app.publish(&env);
+            Redirect::to(&format!("{back}?done=1")).into_response()
+        }
+        Err(err) => flash(&back, &humane(&err)),
+    }
+}
+
+#[derive(Deserialize)]
+struct ExploreQuery {
+    #[serde(default)]
+    topic: Option<String>,
+}
+
+/// Every public repository, for anyone: where a stranger starts.
+async fn explore_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    reader: Reader,
+    Query(query): Query<ExploreQuery>,
+) -> Response {
+    let who = match reader.0 {
+        Some(viewer) => Who::Signed(viewer),
+        None => match chrome_public(&app) {
+            Ok(chrome) => Who::Anonymous(chrome),
+            Err(err) => return oops(err),
+        },
+    };
+    let topic = query
+        .topic
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty());
+    match app.with_store(|s| s.explore(topic)) {
+        Ok(entries) => views::explore(theme, who.reading(), &entries, topic).into_response(),
+        Err(err) => oops(err),
     }
 }
 

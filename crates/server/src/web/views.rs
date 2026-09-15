@@ -397,6 +397,11 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
                     }
                     a class={ "item" (on("tasks")) } aria-current=[here("tasks")] href="/tasks" { (ic("tasks", "")) span { "Tasks" } }
                     a class={ "item" (on("agents")) } aria-current=[here("agents")] href="/agents" { (ic("agents", "")) span { "Agents" } }
+                    a class={ "item" (on("explore")) } aria-current=[here("explore")] href="/explore" { (ic("globe", "")) span { "Explore" } }
+                }
+            } @else {
+                div class="nav" {
+                    a class={ "item" (on("explore")) } aria-current=[here("explore")] href="/explore" { (ic("globe", "")) span { "Explore" } }
                 }
             }
             h4 {
@@ -2409,6 +2414,17 @@ pub fn repo_settings(
                             div class="acts" { button class="btn2" type="submit" { "Save" } }
                         }
                     }
+                    div class="panel" id="topics" {
+                        form class="pref" method="post" action={ (base) "/topics" } {
+                            h3 { "Topics" }
+                            div class="field" {
+                                label for="topics" { "A few words it is filed under" }
+                                input id="topics" name="topics" type="text" autocomplete="off" maxlength="300" value=(repo.topics.join(" ")) placeholder="rust forge agents";
+                                p class="hint" { "Lowercase, hyphens, eight at most. Searchable, and how Explore groups public repositories." }
+                            }
+                            div class="acts" { button class="btn2" type="submit" { "Save" } }
+                        }
+                    }
                     div class="panel" id="name" {
                         form class="pref" method="post" action={ (base) "/rename" } {
                             h3 { "Name" span class="n" { (repo.name) } }
@@ -3266,6 +3282,83 @@ pub fn report(
     }
 }
 
+/// Every public repository: what it is for, what it is filed under, what
+/// landed this week, how much of it a runner has reproduced, and what is
+/// open. Where a stranger starts, and it needs nobody signed in.
+pub fn explore(
+    theme: Theme,
+    who: Reading<'_>,
+    entries: &[ambolt_core::ExploreEntry],
+    topic: Option<&str>,
+) -> Markup {
+    let mut topics: Vec<(&str, usize)> = Vec::new();
+    for entry in entries {
+        for t in &entry.topics {
+            match topics.iter_mut().find(|(name, _)| *name == t.as_str()) {
+                Some((_, n)) => *n += 1,
+                None => topics.push((t.as_str(), 1)),
+            }
+        }
+    }
+    topics.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    layout_reading(
+        theme,
+        who,
+        None,
+        None,
+        "Explore",
+        html! {
+            div class="pagehead" {
+                div class="who" {
+                    div {
+                        h1 { "Explore" }
+                        div class="meta" {
+                            @match topic {
+                                Some(topic) => { span { (entries.len()) " public " @if entries.len() == 1 { "repository" } @else { "repositories" } " filed under " b { "#" (topic) } } a href="/explore" { "all" } }
+                                None => { span { (entries.len()) " public " @if entries.len() == 1 { "repository" } @else { "repositories" } ", the busiest this week first" } }
+                            }
+                        }
+                    }
+                }
+            }
+            @if !topics.is_empty() && topic.is_none() {
+                div class="chips" {
+                    @for (name, n) in &topics {
+                        a class="chip" href={ "/explore?topic=" (name) } { "#" (name) " " span class="n" { (n) } }
+                    }
+                }
+            }
+            div class="sec" {
+                div class="panel" {
+                    @if entries.is_empty() {
+                        div class="empty" {
+                            @if topic.is_some() { "Nothing is filed under that." } @else { "No public repository yet." }
+                        }
+                    }
+                    @for entry in entries {
+                        a class="row ls" href={ "/" (entry.name) } {
+                            span class="tt" {
+                                span class="t" {
+                                    (entry.name)
+                                    @if entry.archived { " " span class="chip" { "Archived" } }
+                                }
+                                @if !entry.description.is_empty() { span class="s wrap" { (entry.description) } }
+                                @if !entry.topics.is_empty() {
+                                    span class="s" { @for (i, t) in entry.topics.iter().enumerate() { @if i > 0 { " " } "#" (t) } }
+                                }
+                            }
+                            span class="age" {
+                                (entry.landed_week) " landed this week · " (entry.open) " open"
+                                @if let Some(percent) = entry.coverage_percent { " · " (percent) "% reproduced" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
 /// What was reported and not yet dealt with, newest first, for whoever
 /// runs the forge.
 pub fn reports(
@@ -3880,6 +3973,9 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
                     div class="chips" {
                         @if repo.visibility == Visibility::Public { span class="chip" { (ic("globe", "")) "Public" } } @else { span class="chip" { (ic("lock", "")) "Private" } }
                         span class="chip" { (ic("branch", "")) (branch) }
+                        @for topic in &repo.topics {
+                            a class="chip" href={ "/explore?topic=" (topic) } { "#" (topic) }
+                        }
                         @if let Some(tag) = sidebar.tags.first() { span class="chip" { (ic("tag", "")) (tag.name) } }
                         @if let Some(tip) = tip { span class="chip" { code { (short(tip)) } } }
                         @if repo.archived { span class="chip bad" { (ic("archive", "")) "Archived" } }
@@ -5699,6 +5795,10 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::RepoDescribed { repo, description } => (
             "dot idle",
             html! { b { (actor) } " described " (repo) @if description.is_empty() { " as nothing in particular" } @else { ": " (description) } },
+        ),
+        Event::RepoTopicsSet { repo, topics } => (
+            "dot idle",
+            html! { b { (actor) } " filed " (repo) @if topics.is_empty() { " under nothing" } @else { " under " (topics.join(", ")) } },
         ),
         Event::RepoArchived { repo } => ("dot idle", html! { b { (actor) } " archived " (repo) }),
         Event::RepoUnarchived { repo } => {

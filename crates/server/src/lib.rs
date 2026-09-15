@@ -105,6 +105,8 @@ pub fn router(state: AppState) -> Router {
             "/api/repos/{owner}/{name}/description",
             post(routes::describe_repo),
         )
+        .route("/api/repos/{owner}/{name}/topics", post(routes::set_topics))
+        .route("/api/explore", get(routes::explore))
         .route(
             "/api/repos/{owner}/{name}/archive",
             post(routes::archive_repo),

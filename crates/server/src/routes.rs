@@ -1008,6 +1008,39 @@ pub async fn describe_repo(
 }
 
 #[derive(Deserialize)]
+pub struct TopicsBody {
+    pub topics: Vec<String>,
+}
+
+pub async fn set_topics(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+    Json(body): Json<TopicsBody>,
+) -> ApiResult<Json<Value>> {
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref())
+            .set_topics(&actor.0, &name, &body.topics)
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+#[derive(Deserialize)]
+pub struct ExploreQuery {
+    pub topic: Option<String>,
+}
+
+/// Public repositories, for anyone at all.
+pub async fn explore(
+    State(app): State<AppState>,
+    Query(query): Query<ExploreQuery>,
+) -> ApiResult<Json<Value>> {
+    let entries = app.with_store(|s| s.explore(query.topic.as_deref()))?;
+    Ok(Json(json!({ "repositories": entries })))
+}
+
+#[derive(Deserialize)]
 pub struct PushRevision {
     pub commit_oid: String,
     pub session: Option<SessionId>,

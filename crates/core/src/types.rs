@@ -521,6 +521,10 @@ pub struct Repo {
     /// everything stays readable until somebody unarchives it.
     #[serde(default)]
     pub archived: bool,
+    /// A few words the repository is filed under: lowercase, hyphens,
+    /// at most eight. Searchable, and how Explore groups things.
+    #[serde(default)]
+    pub topics: Vec<String>,
     /// A line about what the repository is for.
     #[serde(default)]
     pub description: String,
@@ -1018,6 +1022,22 @@ fn bug() -> String {
 /// Somebody who asked for an account: their address, when, what they
 /// said, and the company they asked for a forge of their own for, if
 /// they did.
+/// One public repository as Explore lists it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExploreEntry {
+    pub name: String,
+    pub description: String,
+    pub topics: Vec<String>,
+    /// Changes that landed in the last seven days.
+    pub landed_week: u32,
+    pub open: u32,
+    /// Share of the tree's lines a runner reproduced, from the latest
+    /// coverage measurement; none before any was taken.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage_percent: Option<u8>,
+    pub archived: bool,
+}
+
 /// Somebody invited who never arrived.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Unclaimed {

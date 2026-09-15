@@ -16,6 +16,7 @@ use crate::leases::{self, Overlap};
 use crate::policy::{self, PolicyTrace};
 use crate::queries::raw;
 use crate::store::{Store, append};
+use crate::types::ExploreEntry;
 use crate::types::ReportKind;
 use crate::types::{
     Anchor, BrowserSession, Capability, Change, ChangeSpec, ChangeState, ClaimSpec, Contact,
@@ -3464,6 +3465,104 @@ impl Store {
         )?;
         tx.commit()?;
         Ok(env)
+    }
+
+    /// File a repository under a few words. Each is lowercase letters,
+    /// digits and hyphens, one to thirty long; eight at most; said in
+    /// any case and order, kept lowercase, first come first kept. Owner
+    /// or admin.
+    pub fn set_topics(
+        &mut self,
+        actor: &PrincipalId,
+        repo: &str,
+        topics: &[String],
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        authorize(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            Capability::Admin,
+            Some(repo),
+        )?;
+        raw::repo(&tx, repo)?.ok_or_else(|| CoreError::NotFound(format!("repo {repo}")))?;
+        let mut kept: Vec<String> = Vec::new();
+        for topic in topics {
+            let topic = topic.trim().to_lowercase();
+            if topic.is_empty() {
+                continue;
+            }
+            require(
+                (1..=30).contains(&topic.len())
+                    && topic
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+                    && !topic.starts_with('-')
+                    && !topic.ends_with('-'),
+                || format!("{topic:?} is not a topic: one to thirty of a-z, 0-9 and hyphens"),
+            )?;
+            if !kept.contains(&topic) {
+                kept.push(topic);
+            }
+        }
+        require(kept.len() <= 8, || {
+            format!(
+                "{} topics; a repository is filed under eight at most",
+                kept.len()
+            )
+        })?;
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::RepoTopicsSet {
+                repo: repo.to_owned(),
+                topics: kept,
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
+    /// What Explore shows: every public repository with what it is for,
+    /// what it is filed under, what landed this week, its latest
+    /// verification coverage, and what is open. Nothing here needs
+    /// anyone signed in.
+    pub fn explore(&self, topic: Option<&str>) -> CoreResult<Vec<ExploreEntry>> {
+        let since =
+            (jiff::Timestamp::now() - std::time::Duration::from_secs(7 * 24 * 60 * 60)).to_string();
+        let mut out = Vec::new();
+        for repo in raw::repos(&self.conn)? {
+            if repo.visibility != Visibility::Public {
+                continue;
+            }
+            if let Some(topic) = topic
+                && !repo.topics.iter().any(|t| t == topic)
+            {
+                continue;
+            }
+            let landed_week = raw::landed_since(&self.conn, &repo.name, &since)?;
+            let open = raw::changes_in_repo(&self.conn, &repo.name)?
+                .iter()
+                .filter(|c| c.state == ChangeState::Open)
+                .count() as u32;
+            let coverage_percent = self.debt_history(&repo.name, 1)?.last().and_then(|p| {
+                let all = p.reproduced + p.claimed + p.gap + p.argued + p.imported;
+                (all > 0).then(|| (p.reproduced * 100 / all) as u8)
+            });
+            out.push(ExploreEntry {
+                name: repo.name,
+                description: repo.description,
+                topics: repo.topics,
+                landed_week,
+                open,
+                coverage_percent,
+                archived: repo.archived,
+            });
+        }
+        // The busiest first, then by name, so a fresh forge reads well too.
+        out.sort_by(|a, b| b.landed_week.cmp(&a.landed_week).then(a.name.cmp(&b.name)));
+        Ok(out)
     }
 
     /// Archive or unarchive: read-only, or not. Owner or admin.
