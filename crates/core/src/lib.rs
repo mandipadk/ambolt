@@ -69,9 +69,9 @@ pub use types::WaitlistEntry;
 pub use types::{
     BrowserSession, Capability, Change, ChangeSpec, ChangeState, Claim, ClaimKind, ClaimSpec,
     Contact, Cover, DebtSnapshot, Disposition, EarnedTrust, Grant, IdentityLink, Independence,
-    Lease, Lesson, LineState, Mirror, Notice, ObjectFormat, PackOrigin, PasskeyRecord, Policy,
-    PolicyPack, Preference, Principal, PrincipalKind, Provenance, QueueEntry, Quota, Receipt,
-    Replay, Reply, Repo, Resolution, Resolved, ReviewDomain, Revision, Scope, Session,
+    Lease, Lesson, LineState, MembersAct, Mirror, Notice, ObjectFormat, PackOrigin, PasskeyRecord,
+    Policy, PolicyPack, Preference, Principal, PrincipalKind, Provenance, QueueEntry, Quota,
+    Receipt, Replay, Reply, Repo, Resolution, Resolved, ReviewDomain, Revision, Scope, Session,
     SessionState, Side, Simulated, Simulation, Task, TaskState, TeamRole, Thread, ThreadKind,
     TokenInfo, Verdict, Verification, Visibility, Waiver, WorkloadBinding, canonical_json,
     line_state,

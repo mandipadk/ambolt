@@ -2262,6 +2262,127 @@ fn an_unclaimed_invitation_into_an_organisation_is_purged_with_its_membership() 
     assert!(store.fsck().unwrap().is_empty());
 }
 
+/// Inside an organisation, what membership means is a setting; a team
+/// inside it holds grants its members carry, and only while they are on
+/// the organisation. Its owners grant; its members do not.
+#[test]
+fn access_inside_an_organisation_is_a_setting_and_a_teams_grants() {
+    use ambolt_core::{MembersAct, TeamRole};
+    let (mut store, human, _scout, _) = seeded();
+    let crew = principal("crew");
+    let bee = principal("bee");
+    let cat = principal("cat");
+    store
+        .register_principal(&human, &crew, PrincipalKind::Team, "Crew", None, None)
+        .unwrap();
+    for (id, name) in [(&bee, "Bee"), (&cat, "Cat")] {
+        store
+            .register_principal(&human, id, PrincipalKind::Human, name, None, None)
+            .unwrap();
+    }
+    store.add_team_member(&human, &crew, &bee).unwrap();
+    store
+        .set_team_role(&human, &crew, &bee, TeamRole::Owner)
+        .unwrap();
+    store.add_team_member(&bee, &crew, &cat).unwrap();
+    store.offer_transfer(&human, "ada/forge", &crew).unwrap();
+    store.accept_transfer(&bee, "ada/forge").unwrap();
+    // Members act as owners until the owners say otherwise: cat pushes.
+    let (change, _, _) = store
+        .open_change(&cat, ChangeSpec::new("crew/forge", "main", "Cat's work"))
+        .unwrap();
+    store.abandon_change(&cat, &change, "done with it").unwrap();
+    // A member cannot flip the setting; an owner can. Then cat reads and
+    // makes repositories, and nothing else.
+    assert!(matches!(
+        store
+            .set_members_act(&cat, &crew, MembersAct::Readers)
+            .unwrap_err(),
+        CoreError::Forbidden(_)
+    ));
+    store
+        .set_members_act(&bee, &crew, MembersAct::Readers)
+        .unwrap();
+    assert!(store.may_read(&cat, "crew/forge"));
+    assert!(matches!(
+        store
+            .open_change(&cat, ChangeSpec::new("crew/forge", "main", "Cat again"))
+            .unwrap_err(),
+        CoreError::Forbidden(_)
+    ));
+    assert!(!store.owns(&cat, &crew).unwrap());
+    assert!(store.owns(&bee, &crew).unwrap());
+    // A team inside crew: named under it, only crew's people on it, a
+    // grant to it by an owner; cat carries the grant through it.
+    store.make_org_team(&bee, &crew, "backend").unwrap();
+    assert!(matches!(
+        store.make_org_team(&bee, &crew, "forge").unwrap_err(),
+        CoreError::Invalid(_)
+    ));
+    assert!(matches!(
+        store
+            .add_org_team_member(&cat, &crew, "backend", &cat)
+            .unwrap_err(),
+        CoreError::Forbidden(_)
+    ));
+    assert!(matches!(
+        store
+            .add_org_team_member(&bee, &crew, "backend", &human)
+            .unwrap_err(),
+        CoreError::Invalid(_)
+    ));
+    store
+        .add_org_team_member(&bee, &crew, "backend", &cat)
+        .unwrap();
+    let backend = PrincipalId("crew/backend".to_owned());
+    assert!(matches!(
+        store
+            .issue_grant(
+                &cat,
+                &backend,
+                Some("crew/forge"),
+                vec![Capability::Push],
+                None
+            )
+            .unwrap_err(),
+        CoreError::Forbidden(_)
+    ));
+    store
+        .issue_grant(
+            &bee,
+            &backend,
+            Some("crew/forge"),
+            vec![Capability::Push],
+            None,
+        )
+        .unwrap();
+    let (change, _, _) = store
+        .open_change(&cat, ChangeSpec::new("crew/forge", "main", "Cat, granted"))
+        .unwrap();
+    store.abandon_change(&cat, &change, "done with it").unwrap();
+    // Off the organisation is off its teams, and the grant goes with it.
+    store.remove_team_member(&cat, &crew, &cat).unwrap();
+    assert!(store.org_team_members(&crew, "backend").unwrap().is_empty());
+    assert!(!store.may_read(&cat, "crew/forge"));
+    // Removing the team revokes what it held.
+    store.add_team_member(&bee, &crew, &cat).unwrap();
+    store
+        .add_org_team_member(&bee, &crew, "backend", &cat)
+        .unwrap();
+    store.remove_org_team(&bee, &crew, "backend").unwrap();
+    assert!(store.grants_of(&backend).unwrap().is_empty());
+    assert!(matches!(
+        store
+            .open_change(
+                &cat,
+                ChangeSpec::new("crew/forge", "main", "Cat, ungranted")
+            )
+            .unwrap_err(),
+        CoreError::Forbidden(_)
+    ));
+    assert!(store.fsck().unwrap().is_empty());
+}
+
 #[test]
 fn an_expired_token_identifies_nobody() {
     let (mut store, human, _, _) = seeded();

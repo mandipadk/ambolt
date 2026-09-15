@@ -140,6 +140,11 @@ pub fn routes() -> Router<AppState> {
         .route("/join", get(join))
         .route("/{owner}", get(owner_page))
         .route("/{owner}/members", post(owner_members_action))
+        .route("/{owner}/teams/{team}", get(org_team_page))
+        .route(
+            "/{owner}/teams/{team}/members",
+            post(org_team_members_action),
+        )
         .route("/{owner}/{repo}", get(repo_page))
         .route("/{owner}/{repo}/tree/{*path}", get(tree_page))
         .route("/{owner}/{repo}/blame/{*path}", get(blame_page))
@@ -192,6 +197,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{owner}/{repo}/settings/archive", post(repo_archive))
         .route("/{owner}/{repo}/settings/delete", post(repo_delete))
         .route("/{owner}/{repo}/settings/transfer", post(repo_transfer))
+        .route("/{owner}/{repo}/settings/access", post(repo_access_action))
         .route(
             "/{owner}/{repo}/transfer",
             get(transfer_page).post(transfer_answer),
@@ -2195,6 +2201,165 @@ struct OwnerQuery {
 }
 
 #[derive(Deserialize)]
+struct OrgTeamQuery {
+    #[serde(default)]
+    error: Option<String>,
+}
+
+/// A team inside an organisation: who is on it and what it holds. For
+/// the organisation's members; its owners change it from here.
+async fn org_team_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    viewer: Viewer,
+    Path((owner, team)): Path<(String, String)>,
+    Query(query): Query<OrgTeamQuery>,
+) -> Response {
+    let Some(org) = PrincipalId::new(&owner) else {
+        return not_found();
+    };
+    let is_team = app
+        .with_store(|s| s.is_org_team(&org, &team))
+        .unwrap_or(false);
+    let inside = viewer.1.admin
+        || app
+            .with_store(|s| s.is_team_member(&org, &viewer.0))
+            .unwrap_or(false);
+    if !is_team || !inside {
+        return not_found();
+    }
+    let may_manage = viewer.1.admin
+        || app
+            .with_store(|s| s.is_team_owner(&org, &viewer.0))
+            .unwrap_or(false);
+    let (members, holds) = match app.with_store(|s| {
+        Ok::<_, ambolt_core::CoreError>((
+            s.org_team_members(&org, &team)?,
+            s.grants_of(&PrincipalId(format!("{org}/{team}")))?,
+        ))
+    }) {
+        Ok(found) => found,
+        Err(err) => return oops(err),
+    };
+    let people = people_named(&app, members.iter().map(|m| m.as_str()));
+    views::org_team(
+        theme,
+        &viewer,
+        &org,
+        &team,
+        &members,
+        &holds,
+        may_manage,
+        query.error.as_deref(),
+        &people,
+    )
+    .into_response()
+}
+
+async fn org_team_members_action(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    Path((owner, team)): Path<(String, String)>,
+    Form(form): Form<MembersForm>,
+) -> Response {
+    let Some(org) = PrincipalId::new(&owner) else {
+        return not_found();
+    };
+    let page = format!("/{owner}/teams/{team}");
+    let back = |error: Option<String>| match error {
+        Some(error) => Redirect::to(&format!("{page}?error={}", urlencode(&error))).into_response(),
+        None => Redirect::to(&page).into_response(),
+    };
+    let Some(member) = PrincipalId::new(form.member.trim()) else {
+        return back(Some("say who".into()));
+    };
+    let result = match form.action.as_str() {
+        "add" => app.with_store(|s| s.add_org_team_member(&viewer.0, &org, &team, &member)),
+        "remove" => app.with_store(|s| s.remove_org_team_member(&viewer.0, &org, &team, &member)),
+        other => return back(Some(format!("unknown action {other}"))),
+    };
+    match result {
+        Ok(env) => {
+            app.publish(&env);
+            back(None)
+        }
+        Err(err) => back(Some(humane(&err))),
+    }
+}
+
+#[derive(Deserialize)]
+struct AccessForm {
+    #[serde(default)]
+    action: String,
+    #[serde(default)]
+    grantee: String,
+    #[serde(default)]
+    grant: String,
+    task: Option<String>,
+    push: Option<String>,
+    review: Option<String>,
+    merge: Option<String>,
+    verify: Option<String>,
+}
+
+/// Who holds what on the repository, changed from its settings by
+/// whoever runs it: the owner, or an organisation's owners.
+async fn repo_access_action(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Form(form): Form<AccessForm>,
+) -> Response {
+    let back = format!("/{repo}/settings");
+    let result = match form.action.as_str() {
+        "grant" => {
+            let grantee = form.grantee.trim();
+            if grantee.is_empty() {
+                return flash(&back, "Say who");
+            }
+            let actions: Vec<ambolt_core::Capability> = [
+                (form.task.is_some(), ambolt_core::Capability::Task),
+                (form.push.is_some(), ambolt_core::Capability::Push),
+                (form.review.is_some(), ambolt_core::Capability::Review),
+                (form.merge.is_some(), ambolt_core::Capability::Merge),
+                (form.verify.is_some(), ambolt_core::Capability::Verify),
+            ]
+            .into_iter()
+            .filter_map(|(ticked, capability)| ticked.then_some(capability))
+            .collect();
+            if actions.is_empty() {
+                return flash(&back, "Tick at least one capability");
+            }
+            app.with_store(|s| {
+                s.issue_grant(
+                    &viewer.0,
+                    &PrincipalId(grantee.to_owned()),
+                    Some(&repo),
+                    actions,
+                    None,
+                )
+            })
+            .map(|(_, env)| env)
+        }
+        "revoke" => {
+            let grant = ambolt_core::GrantId(form.grant.trim().to_owned());
+            app.with_store(|s| {
+                s.revoke_grant(&viewer.0, &grant, "revoked from the repository's settings")
+            })
+        }
+        other => return flash(&back, &format!("unknown action {other}")),
+    };
+    match result {
+        Ok(env) => {
+            app.publish(&env);
+            Redirect::to(&format!("{back}?done=1")).into_response()
+        }
+        Err(ambolt_core::CoreError::NotFound(_)) => not_found(),
+        Err(err) => flash(&back, &humane(&err)),
+    }
+}
+
+#[derive(Deserialize)]
 struct MembersForm {
     action: String,
     #[serde(default)]
@@ -2203,6 +2368,12 @@ struct MembersForm {
     display: String,
     #[serde(default)]
     email: String,
+    /// For `access`: what the organisation's members act as.
+    #[serde(default)]
+    mode: String,
+    /// For `team-make` and `team-remove`: the team's name.
+    #[serde(default)]
+    name: String,
 }
 
 /// An organisation's members change who is on it, from its page.
@@ -2222,6 +2393,40 @@ async fn owner_members_action(
         }
         None => Redirect::to(&format!("/{owner}")).into_response(),
     };
+    // What the organisation is, rather than who is on it: its owners set
+    // what membership means, and make and remove the teams inside it.
+    let whole = match form.action.as_str() {
+        "access" => {
+            let Some(mode) = ambolt_core::MembersAct::parse(form.mode.trim()) else {
+                return back(Some("Say what members act as".into()));
+            };
+            Some(app.with_store(|s| s.set_members_act(&viewer.0, &team, mode)))
+        }
+        "team-make" => {
+            Some(app.with_store(|s| s.make_org_team(&viewer.0, &team, form.name.trim())))
+        }
+        "team-remove" => Some(
+            app.with_store(|s| s.remove_org_team(&viewer.0, &team, form.name.trim()))
+                .map(|envs| {
+                    for env in &envs {
+                        app.publish(env);
+                    }
+                    envs.into_iter()
+                        .last()
+                        .expect("a removal is at least one event")
+                }),
+        ),
+        _ => None,
+    };
+    if let Some(result) = whole {
+        return match result {
+            Ok(env) => {
+                app.publish(&env);
+                back(None)
+            }
+            Err(err) => back(Some(humane(&err))),
+        };
+    }
     let Some(member) = PrincipalId::new(form.member.trim()) else {
         return back(Some("say who".into()));
     };
@@ -2378,6 +2583,20 @@ async fn owner_page(
         }
         _ => (Vec::new(), Once::default()),
     };
+    let (members_act, teams) = if organisation {
+        app.with_store(|s| {
+            let mode = s.members_act(&owner_id)?;
+            let mut teams = Vec::new();
+            for name in s.org_teams(&owner_id)? {
+                let count = s.org_team_members(&owner_id, &name)?.len();
+                teams.push((name, count));
+            }
+            Ok::<_, ambolt_core::CoreError>((Some(mode), teams))
+        })
+        .unwrap_or((None, Vec::new()))
+    } else {
+        (None, Vec::new())
+    };
     views::owner(
         theme,
         who.reading(),
@@ -2385,6 +2604,8 @@ async fn owner_page(
         &repos,
         &members,
         &invited,
+        members_act,
+        &teams,
         viewer_role,
         may_create,
         may_manage,
@@ -4658,10 +4879,19 @@ async fn repo_settings_page(
     {
         return not_found();
     }
+    let access = app
+        .with_store(|s| s.grants_on(&record.name))
+        .unwrap_or_default();
+    let may_grant = viewer.1.admin
+        || app
+            .with_store(|s| s.runs(&viewer.0, &record.owner))
+            .unwrap_or(false);
     views::repo_settings(
         theme,
         &viewer,
         &record,
+        &access,
+        may_grant,
         flash.error.as_deref(),
         flash.done.is_some(),
         None,
@@ -5118,10 +5348,18 @@ async fn repo_policy(
     };
     if form.action == "preview" {
         return match app.with_store(|s| s.policy_preview(&repo, &policy)) {
-            Ok(previewed) => {
-                views::repo_settings(theme, &viewer, &record, None, false, Some(&previewed), None)
-                    .into_response()
-            }
+            Ok(previewed) => views::repo_settings(
+                theme,
+                &viewer,
+                &record,
+                &[],
+                true,
+                None,
+                false,
+                Some(&previewed),
+                None,
+            )
+            .into_response(),
             Err(err) => flash(&back, &humane(&err)),
         };
     }
@@ -5135,6 +5373,8 @@ async fn repo_policy(
                 theme,
                 &viewer,
                 &record,
+                &[],
+                true,
                 None,
                 false,
                 None,

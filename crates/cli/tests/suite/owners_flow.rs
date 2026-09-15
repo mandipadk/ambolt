@@ -368,3 +368,122 @@ async fn an_owner_invites_people_into_the_organisation() {
     let (_, body) = api(app, "GET", "/api/principals/crew/quota", "bee", None).await;
     assert_eq!(body["usage"]["members"], 4, "{body}");
 }
+
+/// From the pages and the API: the organisation's access setting, a
+/// team inside it, and a grant to that team from a repository's settings.
+#[tokio::test(flavor = "multi_thread")]
+async fn owners_shape_access_with_a_setting_and_teams() {
+    let forge = boot().await;
+    let app = &forge.app;
+    for (id, display) in [("bee", "Bee"), ("cat", "Cat")] {
+        api(
+            app,
+            "POST",
+            "/api/principals",
+            "ada",
+            Some(json!({ "id": id, "kind": "human", "display": display })),
+        )
+        .await;
+    }
+    api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "crew", "kind": "team", "display": "Crew", "owner": "bee" })),
+    )
+    .await;
+    api(
+        app,
+        "POST",
+        "/api/teams/crew/members",
+        "bee",
+        Some(json!({ "member": "cat" })),
+    )
+    .await;
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/repos",
+        "bee",
+        Some(json!({ "name": "shared", "owner": "crew" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // Readers: cat still reads, no longer pushes.
+    let (_, bee) = sign_in_as(&forge, "bee").await;
+    let (_, location) = post_form(app, "/crew/members", &bee, "action=access&mode=readers").await;
+    assert_eq!(location, "/crew", "{location}");
+    let (status, body) = api(app, "GET", "/api/teams/crew/settings", "cat", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["members_act"], "readers");
+    let (status, body) = api(app, "GET", "/api/repos/crew/shared", "cat", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/changes",
+        "cat",
+        Some(json!({ "repo": "crew/shared", "target": "main", "title": "Cat's" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    // A team, from the page; cat on it, from the team's page; a grant to
+    // it from the repository's settings; then cat pushes.
+    let (_, location) =
+        post_form(app, "/crew/members", &bee, "action=team-make&name=backend").await;
+    assert_eq!(location, "/crew", "{location}");
+    let (_, page) = page_with_cookie(app, "/crew", &bee).await;
+    assert!(page.contains("crew/backend"), "{page}");
+    let (_, location) = post_form(
+        app,
+        "/crew/teams/backend/members",
+        &bee,
+        "action=add&member=cat",
+    )
+    .await;
+    assert_eq!(location, "/crew/teams/backend", "{location}");
+    let (status, page) = page_with_cookie(app, "/crew/teams/backend", &bee).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains(r#"href="/cat""#), "{page}");
+    let (_, page) = page_with_cookie(app, "/crew/shared/settings", &bee).await;
+    assert!(
+        page.contains(r#"id="access""#) && page.contains("Grant"),
+        "{page}"
+    );
+    let (_, location) = post_form(
+        app,
+        "/crew/shared/settings/access",
+        &bee,
+        "action=grant&grantee=crew%2Fbackend&push=1&task=1",
+    )
+    .await;
+    assert!(location.ends_with("?done=1"), "{location}");
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/changes",
+        "cat",
+        Some(json!({ "repo": "crew/shared", "target": "main", "title": "Cat's, granted" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // The access list says so; a member cannot grant.
+    let (status, body) = api(app, "GET", "/api/repos/crew/shared/access", "cat", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["grants"][0]["grantee"], "crew/backend", "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/grants",
+        "cat",
+        Some(json!({ "grantee": "cat", "repo": "crew/shared", "actions": ["merge"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    // The teams API lists it with what it holds.
+    let (status, body) = api(app, "GET", "/api/teams/crew/teams", "cat", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["teams"][0]["name"], "backend", "{body}");
+    assert_eq!(body["teams"][0]["members"], json!(["cat"]), "{body}");
+}

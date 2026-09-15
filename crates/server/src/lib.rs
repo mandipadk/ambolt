@@ -245,6 +245,27 @@ pub fn router(state: AppState) -> Router {
             get(routes::list_members).post(routes::add_member),
         )
         .route("/api/teams/{id}/invitations", post(routes::invite_member))
+        .route(
+            "/api/teams/{id}/settings",
+            get(routes::get_team_settings).post(routes::set_team_settings),
+        )
+        .route(
+            "/api/teams/{id}/teams",
+            get(routes::list_org_teams).post(routes::make_org_team),
+        )
+        .route(
+            "/api/teams/{id}/teams/{team}/remove",
+            post(routes::remove_org_team),
+        )
+        .route(
+            "/api/teams/{id}/teams/{team}/members",
+            post(routes::add_org_team_member),
+        )
+        .route(
+            "/api/teams/{id}/teams/{team}/members/remove",
+            post(routes::remove_org_team_member),
+        )
+        .route("/api/repos/{owner}/{name}/access", get(routes::repo_access))
         .route("/api/teams/{id}/owners", post(routes::make_owner))
         .route("/api/teams/{id}/owners/remove", post(routes::unmake_owner))
         .route(

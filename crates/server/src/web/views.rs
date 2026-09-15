@@ -2072,10 +2072,15 @@ pub fn forge_log(
 /// A repository's settings: one panel per thing an owner decides, a
 /// sub-navigation beside them, the landing policy with its preview and
 /// its simulation as panels of their own.
+#[allow(clippy::too_many_arguments)] // one page, one set of facts about the repository
 pub fn repo_settings(
     theme: Theme,
     viewer: &Viewer,
     repo: &Repo,
+    // Every live grant on this repository, and whether the viewer may
+    // change them: the owner, or an organisation's owners.
+    access: &[ambolt_core::Grant],
+    may_grant: bool,
     error: Option<&str>,
     done: bool,
     preview: Option<&[(Change, PolicyTrace)]>,
@@ -2099,6 +2104,7 @@ pub fn repo_settings(
                 nav class="subnav" {
                     a href="#visibility" { "Visibility" }
                     a href="#ownership" { "Ownership" }
+                    a href="#access" { "Access" }
                     a href="#policy" { "Landing policy" }
                     a class="sub" href="#approval" { "Approval" }
                     a class="sub" href="#looks" { "Human looks" }
@@ -2137,6 +2143,39 @@ pub fn repo_settings(
                                     input type="hidden" name="action" value="offer";
                                     input class="input" id="to" name="to" type="text" autocomplete="off" placeholder="Their username" required aria-label="Offer to";
                                     button class="btn2" type="submit" { "Offer ownership" }
+                                }
+                            }
+                        }
+                    }
+                    div class="panel" id="access" {
+                        div class="pref" {
+                            h3 { "Access" span class="n" { (access.len()) } }
+                            p class="what" { "Who holds what on this repository, beyond its owner. A grant to a person or an agent, or to a team inside the organisation, named " code { "org/team" } "." }
+                            @if access.is_empty() { p class="s" { "Nobody holds anything here yet." } }
+                            @for grant in access {
+                                div class="line" {
+                                    b { (grant.grantee.as_str()) }
+                                    @for action in &grant.actions { span class="chip" { (action.as_str()) } }
+                                    span class="s" { "from " (grant.grantor.as_str()) @if let Some(until) = &grant.until { " until " (until) } }
+                                    @if may_grant {
+                                        form method="post" action={ (base) "/access" } {
+                                            input type="hidden" name="action" value="revoke";
+                                            input type="hidden" name="grant" value=(grant.id.as_str());
+                                            button class="ghost sm danger" type="submit" { "Revoke" }
+                                        }
+                                    }
+                                }
+                            }
+                            @if may_grant {
+                                form class="line" method="post" action={ (base) "/access" } {
+                                    input type="hidden" name="action" value="grant";
+                                    input class="input" name="grantee" type="text" autocomplete="off" placeholder="Person, agent, or org/team" required aria-label="Grantee";
+                                    label class="chk" { input type="checkbox" name="task" value="1"; "task" }
+                                    label class="chk" { input type="checkbox" name="push" value="1"; "push" }
+                                    label class="chk" { input type="checkbox" name="review" value="1"; "review" }
+                                    label class="chk" { input type="checkbox" name="merge" value="1"; "merge" }
+                                    label class="chk" { input type="checkbox" name="verify" value="1"; "verify" }
+                                    button class="btn2" type="submit" { "Grant" }
                                 }
                             }
                         }
@@ -2880,6 +2919,11 @@ pub fn owner(
     members: &[(ambolt_core::PrincipalId, ambolt_core::TeamRole)],
     // Members invited who have not arrived yet.
     invited: &[ambolt_core::PrincipalId],
+    // What being on the organisation means on its repositories; none
+    // for a person.
+    members_act: Option<ambolt_core::MembersAct>,
+    // The teams inside the organisation, with how many are on each.
+    teams: &[(String, usize)],
     // What the viewer is to this organisation, if anything.
     viewer_role: Option<ambolt_core::TeamRole>,
     may_create: bool,
@@ -2948,6 +2992,53 @@ pub fn owner(
                             }
                             span class="avs" {}
                             span class="age" { @if repo.archived { "archived" } }
+                        }
+                    }
+                }
+            }
+            @if organisation && viewer_role.is_some() || (organisation && who.viewer().is_some_and(|v| v.1.admin)) {
+                div class="sec" {
+                    div class="sh" { h2 { "Teams" } span class="n" { (teams.len()) } }
+                    div class="panel" {
+                        @if teams.is_empty() { div class="empty" { "None yet. A team holds access on the organisation's repositories; whoever is on it carries that access." } }
+                        @for (name, count) in teams {
+                            div class="row need" {
+                                a class="t" href={ "/" (owner.id.as_str()) "/teams/" (name) } { (owner.id.as_str()) "/" (name) }
+                                span class="s" { (count) @if *count == 1 { " member" } @else { " members" } }
+                                span class="acts" {
+                                    @if may_manage {
+                                        form method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                            input type="hidden" name="action" value="team-remove";
+                                            input type="hidden" name="name" value=(name);
+                                            button class="ghost sm danger" type="submit" { "Remove" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        @if may_manage {
+                            form class="foot" method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                input type="hidden" name="action" value="team-make";
+                                input class="input sm" type="text" name="name" placeholder="Team name" pattern="[a-z0-9-]{2,64}" required aria-label="Team name";
+                                button class="btn2 sm" type="submit" { "Make a team" }
+                                span class="hint" { "Named under the organisation; grant it access from a repository's settings." }
+                            }
+                        }
+                    }
+                }
+                @if let Some(mode) = members_act {
+                    div class="sec" {
+                        div class="sh" { h2 { "Access" } span class="n" { "what being a member means" } }
+                        div class="panel" {
+                            form class="pref" method="post" action={ "/" (owner.id.as_str()) "/members" } {
+                                input type="hidden" name="action" value="access";
+                                div class="seg radio" {
+                                    label { input type="radio" name="mode" value="owners" checked[mode == ambolt_core::MembersAct::Owners] disabled[!may_manage]; span { "Members act as owners" } }
+                                    label { input type="radio" name="mode" value="readers" checked[mode == ambolt_core::MembersAct::Readers] disabled[!may_manage]; span { "Members read; access is granted" } }
+                                }
+                                p class="what" { "As owners, every member does everything on every repository. As readers, members read every repository and make repositories in the organisation's name; pushing, reviewing, merging and verifying come from grants the owners issue, to people or to teams." }
+                                @if may_manage { div class="acts" { button class="btn2 sm" type="submit" { "Save" } } }
+                            }
                         }
                     }
                 }
@@ -5461,6 +5552,40 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
                 (team.as_str())
             },
         ),
+        Event::TeamSettingsSet { team, members_act } => (
+            "dot idle",
+            html! {
+                b { (actor) } " set " (team.as_str()) "'s members to act as " (members_act.as_str())
+            },
+        ),
+        Event::OrgTeamMade { organisation, team } => (
+            "dot idle",
+            html! { b { (actor) } " made the team " (organisation.as_str()) "/" (team) },
+        ),
+        Event::OrgTeamRemoved { organisation, team } => (
+            "dot idle",
+            html! { b { (actor) } " removed the team " (organisation.as_str()) "/" (team) },
+        ),
+        Event::OrgTeamMemberAdded {
+            organisation,
+            team,
+            member,
+        } => (
+            "dot idle",
+            html! {
+                b { (actor) } " put " (people.name(member).0) " on " (organisation.as_str()) "/" (team)
+            },
+        ),
+        Event::OrgTeamMemberRemoved {
+            organisation,
+            team,
+            member,
+        } => (
+            "dot idle",
+            html! {
+                b { (actor) } " took " (people.name(member).0) " off " (organisation.as_str()) "/" (team)
+            },
+        ),
         Event::PolicySet { repo, .. } => (
             "dot idle",
             html! {
@@ -5569,7 +5694,9 @@ pub fn named_in(envelope: &Envelope) -> Vec<&str> {
         Event::RepoTransferOffered { to, .. } => ids.push(to.as_str()),
         Event::TeamMemberAdded { member, .. }
         | Event::TeamMemberRemoved { member, .. }
-        | Event::TeamRoleSet { member, .. } => ids.push(member.as_str()),
+        | Event::TeamRoleSet { member, .. }
+        | Event::OrgTeamMemberAdded { member, .. }
+        | Event::OrgTeamMemberRemoved { member, .. } => ids.push(member.as_str()),
         Event::QuotaSet { owner, .. } => ids.push(owner.as_str()),
         Event::AttentionDrawn { reviewers, .. } => ids.extend(reviewers.iter().map(|r| r.as_str())),
         _ => {}
@@ -6166,6 +6293,89 @@ pub fn record_words(record: &ambolt_core::Record) -> String {
         ));
     }
     words
+}
+
+/// A team inside an organisation: who is on it, and what it holds on
+/// the organisation's repositories. Its owners change it from here.
+#[allow(clippy::too_many_arguments)] // one page, one set of facts about the team
+pub fn org_team(
+    theme: Theme,
+    viewer: &Viewer,
+    organisation: &ambolt_core::PrincipalId,
+    team: &str,
+    members: &[ambolt_core::PrincipalId],
+    holds: &[ambolt_core::Grant],
+    may_manage: bool,
+    error: Option<&str>,
+    people: &People,
+) -> Markup {
+    let named = format!("{organisation}/{team}");
+    layout(
+        theme,
+        Some(viewer),
+        None,
+        None,
+        &named,
+        html! {
+            div class="pagehead" {
+                div class="who" {
+                    div {
+                        h1 { (named) }
+                        div class="meta" {
+                            a href={ "/" (organisation.as_str()) } { (organisation.as_str()) }
+                            span class="chip" { (ic("agents", "")) "Team" }
+                        }
+                    }
+                }
+            }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            div class="sec" {
+                div class="sh" { h2 { "Members" } span class="n" { (members.len()) } }
+                div class="panel" {
+                    @if members.is_empty() { div class="empty" { "Nobody yet. Only the organisation's members can be on its teams." } }
+                    @for member in members {
+                        @let (display, agent) = people.name(member);
+                        div class="row member" {
+                            (avatar(member.as_str(), display, agent, false))
+                            span class="tt" {
+                                a class="t" href={ "/" (member.as_str()) } { (display) }
+                                span class="s" { (member.as_str()) }
+                            }
+                            span class="acts" {
+                                @if may_manage {
+                                    form method="post" action={ "/" (organisation.as_str()) "/teams/" (team) "/members" } {
+                                        input type="hidden" name="action" value="remove";
+                                        input type="hidden" name="member" value=(member.as_str());
+                                        button class="ghost sm danger" type="submit" { "Remove" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    @if may_manage {
+                        form class="foot" method="post" action={ "/" (organisation.as_str()) "/teams/" (team) "/members" } {
+                            input type="hidden" name="action" value="add";
+                            input class="input sm" type="text" name="member" placeholder="Who, on the organisation" pattern="[a-z0-9-]{2,64}" required aria-label="Member";
+                            button class="btn2 sm" type="submit" { "Add" }
+                        }
+                    }
+                }
+            }
+            div class="sec" {
+                div class="sh" { h2 { "Holds" } span class="n" { (holds.len()) } }
+                div class="panel" {
+                    @if holds.is_empty() { div class="empty" { "Nothing yet. Grant it access from a repository's settings, as " code { (named) } "." } }
+                    @for grant in holds {
+                        div class="line" {
+                            a href={ "/" (grant.repo.as_deref().unwrap_or("")) "/settings" } { (grant.repo.as_deref().unwrap_or("everything")) }
+                            @for action in &grant.actions { span class="chip" { (action.as_str()) } }
+                            span class="s" { "from " (grant.grantor.as_str()) }
+                        }
+                    }
+                }
+            }
+        },
+    )
 }
 
 #[cfg(test)]

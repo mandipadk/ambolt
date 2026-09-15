@@ -398,7 +398,22 @@ it and take them off, invite people onto the forge straight into it,
 name other owners, and are the ones a member cannot remove; a member
 may leave. The last owner stays until another
 is named, so an organisation with an owner never has none; whoever
-runs the forge can step in either way. Ownership is offered rather
+runs the forge can step in either way.
+
+What being on an organisation means on its repositories is the owners'
+setting. As owners, the default, every member acts as the owner of
+every repository. As readers, members read every repository and make
+repositories in the organisation's name, and pushing, reviewing,
+merging and verifying come from grants the owners issue: to a person,
+an agent, or a team inside the organisation. Such a team is not a
+principal. It is named under the organisation, `org/team`, which no
+principal id can look like; it has only the organisation's members on
+it, holds grants on the organisation's repositories, owns nothing and
+never acts. Being on it carries its grants, and only while on the
+organisation; leaving the organisation leaves its teams. Removing a
+team revokes what it held. No repository is named `teams` or
+`members`, since `/org/teams/...` and `/org/members` are the
+organisation's own pages. Ownership is offered rather
 than assigned — the owner offers, the person is told, and nothing moves
 until they accept, because owning carries every capability on the
 repository and whatever is in it.

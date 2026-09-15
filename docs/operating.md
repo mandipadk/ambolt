@@ -224,6 +224,14 @@ the unscoped admin grant:
   the organisation as they are made and counts against its members,
   and the mail names the organisation. The organisation's page offers
   it too, and shows the link once when the forge cannot mail.
+- `GET` and `POST /api/teams/{org}/settings {"members_act": "owners"|"readers"}`
+  — what being on the organisation means on its repositories; an
+  owner's to set. `GET` and `POST /api/teams/{org}/teams {"name": …}`,
+  `POST /api/teams/{org}/teams/{team}/remove`, and
+  `POST /api/teams/{org}/teams/{team}/members` (`/remove`) — the teams
+  inside an organisation and who is on them, an owner's to change; a
+  grant names one as `org/team`. `GET /api/repos/{owner}/{name}/access`
+  — every live grant on a repository, for those inside it.
 - `GET /api/invitations/unclaimed` — who was invited and never came,
   with when their invitation lapses; `POST /api/invitations/purge` lets
   go those whose invitation has lapsed: each is deactivated, its

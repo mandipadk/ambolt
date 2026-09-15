@@ -13,8 +13,9 @@ use crate::id::{
 use crate::policy::PolicyTrace;
 use crate::types::Scope;
 use crate::types::{
-    Anchor, Capability, ClaimKind, Disposition, Mirror, ObjectFormat, Policy, PrincipalKind,
-    Resolution, ReviewDomain, SessionState, TaskState, TeamRole, ThreadKind, Visibility,
+    Anchor, Capability, ClaimKind, Disposition, MembersAct, Mirror, ObjectFormat, Policy,
+    PrincipalKind, Resolution, ReviewDomain, SessionState, TaskState, TeamRole, ThreadKind,
+    Visibility,
 };
 use serde::{Deserialize, Serialize};
 
@@ -215,6 +216,33 @@ pub enum Event {
         team: PrincipalId,
         member: PrincipalId,
         role: TeamRole,
+    },
+    /// What being on the organisation means on its repositories from
+    /// now on. Absent from the log means owners.
+    TeamSettingsSet {
+        team: PrincipalId,
+        members_act: MembersAct,
+    },
+    /// A team inside an organisation: named under it, holding grants
+    /// on its repositories, with only its members on it. Not a
+    /// principal; it owns nothing and never acts.
+    OrgTeamMade {
+        organisation: PrincipalId,
+        team: String,
+    },
+    OrgTeamRemoved {
+        organisation: PrincipalId,
+        team: String,
+    },
+    OrgTeamMemberAdded {
+        organisation: PrincipalId,
+        team: String,
+        member: PrincipalId,
+    },
+    OrgTeamMemberRemoved {
+        organisation: PrincipalId,
+        team: String,
+        member: PrincipalId,
     },
     /// Somebody who cannot sign in asked for help, on a forge that could
     /// not mail them a link itself. The people who run it are told.
@@ -528,6 +556,11 @@ impl Event {
             Event::TeamMemberAdded { .. } => "team_member_added",
             Event::TeamMemberRemoved { .. } => "team_member_removed",
             Event::TeamRoleSet { .. } => "team_role_set",
+            Event::TeamSettingsSet { .. } => "team_settings_set",
+            Event::OrgTeamMade { .. } => "org_team_made",
+            Event::OrgTeamRemoved { .. } => "org_team_removed",
+            Event::OrgTeamMemberAdded { .. } => "org_team_member_added",
+            Event::OrgTeamMemberRemoved { .. } => "org_team_member_removed",
             Event::PasswordResetRequested { .. } => "password_reset_requested",
             Event::PolicySet { .. } => "policy_set",
             Event::MirrorSet { .. } => "mirror_set",

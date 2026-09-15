@@ -1984,6 +1984,178 @@ pub async fn list_members(
     ))
 }
 
+#[derive(Deserialize)]
+pub struct TeamSettings {
+    pub members_act: ambolt_core::MembersAct,
+}
+
+/// What being on the organisation means on its repositories.
+pub async fn get_team_settings(
+    State(app): State<AppState>,
+    _actor: Actor,
+    Path(team): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let team = PrincipalId(team);
+    let record = found(app.with_store(|s| s.principal(&team))?, "team")?;
+    if record.kind != PrincipalKind::Team {
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "team not found",
+        ));
+    }
+    let members_act = app.with_store(|s| s.members_act(&team))?;
+    Ok(Json(json!({ "team": team, "members_act": members_act })))
+}
+
+pub async fn set_team_settings(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path(team): Path<String>,
+    Json(body): Json<TeamSettings>,
+) -> ApiResult<Json<Value>> {
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref()).set_members_act(
+            &actor.0,
+            &PrincipalId(team),
+            body.members_act,
+        )
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+#[derive(Deserialize)]
+pub struct NewOrgTeam {
+    pub name: String,
+}
+
+/// The teams inside an organisation, with who is on each.
+pub async fn list_org_teams(
+    State(app): State<AppState>,
+    _actor: Actor,
+    Path(org): Path<String>,
+) -> ApiResult<Json<Value>> {
+    let org = PrincipalId(org);
+    let record = found(app.with_store(|s| s.principal(&org))?, "team")?;
+    if record.kind != PrincipalKind::Team {
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "team not found",
+        ));
+    }
+    let teams = app.with_store(|s| {
+        let mut out = Vec::new();
+        for name in s.org_teams(&org)? {
+            let members = s.org_team_members(&org, &name)?;
+            let holds = s.grants_of(&PrincipalId(format!("{org}/{name}")))?;
+            out.push(json!({ "name": name, "members": members, "holds": holds }));
+        }
+        Ok::<_, ambolt_core::CoreError>(out)
+    })?;
+    Ok(Json(json!({ "organisation": org, "teams": teams })))
+}
+
+pub async fn make_org_team(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path(org): Path<String>,
+    Json(body): Json<NewOrgTeam>,
+) -> ApiResult<Json<Value>> {
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref())
+            .make_org_team(&actor.0, &PrincipalId(org), body.name.trim())
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+pub async fn remove_org_team(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path((org, team)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let envs = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref())
+            .remove_org_team(&actor.0, &PrincipalId(org), &team)
+    })?;
+    for env in &envs {
+        app.publish(env);
+    }
+    let last = envs.last().expect("a removal is at least one event");
+    Ok(committed(None, last))
+}
+
+pub async fn add_org_team_member(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path((org, team)): Path<(String, String)>,
+    Json(body): Json<Membership>,
+) -> ApiResult<Json<Value>> {
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref()).add_org_team_member(
+            &actor.0,
+            &PrincipalId(org),
+            &team,
+            &body.member,
+        )
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+pub async fn remove_org_team_member(
+    State(app): State<AppState>,
+    actor: Actor,
+    Path((org, team)): Path<(String, String)>,
+    Json(body): Json<Membership>,
+) -> ApiResult<Json<Value>> {
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref()).remove_org_team_member(
+            &actor.0,
+            &PrincipalId(org),
+            &team,
+            &body.member,
+        )
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+/// Who holds what on one repository: every live grant scoped to it.
+/// For those on the inside: its owner, the organisation's members, or
+/// whoever runs the forge.
+pub async fn repo_access(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+) -> ApiResult<Json<Value>> {
+    let record = readable_repo(&app, &actor, &name)?;
+    let inside = app.with_store(|s| {
+        let s = s.acting_as(actor.1.as_ref());
+        Ok::<_, ambolt_core::CoreError>(
+            s.owns(&actor.0, &record.owner)?
+                || s.is_team_member(&record.owner, &actor.0)?
+                || s.is_admin(&actor.0),
+        )
+    })?;
+    if !inside {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            format!("who holds what on {name} is its owner's to see"),
+        ));
+    }
+    let grants = app.with_store(|s| s.grants_on(&name))?;
+    Ok(Json(json!({
+        "repo": name,
+        "owner": record.owner,
+        "members_act": app.with_store(|s| s.members_act(&record.owner))?,
+        "grants": grants,
+    })))
+}
+
 /// Make somebody an owner of the organisation: one of its owners may,
 /// and so may whoever runs the forge.
 pub async fn make_owner(

@@ -2188,6 +2188,11 @@ impl Store {
         if raw::owns(&self.conn, actor.as_str(), record.owner.as_str()).unwrap_or(false) {
             return true;
         }
+        // Being on the organisation reads every repository of it, whether
+        // or not its members act as owners.
+        if raw::is_team_member(&self.conn, record.owner.as_str(), actor.as_str()).unwrap_or(false) {
+            return true;
+        }
         let Ok(grants) = grants_that_count(
             &self.conn,
             Acting::of(&self.scope, self.admin_elsewhere),
@@ -2743,6 +2748,201 @@ impl Store {
         Ok(vec![registered, joined])
     }
 
+    /// What being on the organisation means on its repositories. An
+    /// owner's to set; every member reads either way.
+    pub fn set_members_act(
+        &mut self,
+        actor: &PrincipalId,
+        team: &PrincipalId,
+        members_act: crate::types::MembersAct,
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            team,
+        )?;
+        if raw::members_act(&tx, team.as_str())? == members_act {
+            return Err(CoreError::Conflict(format!(
+                "{team}'s members already act as {}",
+                members_act.as_str()
+            )));
+        }
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::TeamSettingsSet {
+                team: team.clone(),
+                members_act,
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
+    /// A team inside the organisation, named under it. An owner's to
+    /// make; the name is the organisation's own, so two organisations
+    /// may each have a `backend`, and it may not be one of the
+    /// organisation's repositories' names, so `org/name` says one thing.
+    pub fn make_org_team(
+        &mut self,
+        actor: &PrincipalId,
+        organisation: &PrincipalId,
+        team: &str,
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            organisation,
+        )?;
+        require(validate_slug(team), || {
+            format!("{team:?} is not a valid name: lowercase letters, digits and hyphens")
+        })?;
+        require(!raw::is_org_team(&tx, organisation.as_str(), team)?, || {
+            format!("{organisation} already has a team named {team}")
+        })?;
+        let as_repo = format!("{organisation}/{team}");
+        require(raw::repo(&tx, &as_repo)?.is_none(), || {
+            format!("{as_repo} is one of {organisation}'s repositories; a team takes another name")
+        })?;
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::OrgTeamMade {
+                organisation: organisation.clone(),
+                team: team.to_owned(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
+    /// The team goes, and every grant it held with it: what its members
+    /// carried through it, they carry no more.
+    pub fn remove_org_team(
+        &mut self,
+        actor: &PrincipalId,
+        organisation: &PrincipalId,
+        team: &str,
+    ) -> CoreResult<Vec<Envelope>> {
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            organisation,
+        )?;
+        require(raw::is_org_team(&tx, organisation.as_str(), team)?, || {
+            format!("{organisation} has no team named {team}")
+        })?;
+        let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
+        let mut envs = Vec::new();
+        let named = format!("{organisation}/{team}");
+        for grant in raw::grants_of(&tx, &named)? {
+            envs.push(append(
+                &tx,
+                actor,
+                via,
+                Event::GrantRevoked {
+                    grant: grant.id,
+                    reason: format!("{named} was removed"),
+                },
+            )?);
+        }
+        envs.push(append(
+            &tx,
+            actor,
+            via,
+            Event::OrgTeamRemoved {
+                organisation: organisation.clone(),
+                team: team.to_owned(),
+            },
+        )?);
+        tx.commit()?;
+        Ok(envs)
+    }
+
+    /// Put a member of the organisation on one of its teams. An owner's.
+    pub fn add_org_team_member(
+        &mut self,
+        actor: &PrincipalId,
+        organisation: &PrincipalId,
+        team: &str,
+        member: &PrincipalId,
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            organisation,
+        )?;
+        require(raw::is_org_team(&tx, organisation.as_str(), team)?, || {
+            format!("{organisation} has no team named {team}")
+        })?;
+        require(
+            raw::is_team_member(&tx, organisation.as_str(), member.as_str())?,
+            || {
+                format!(
+                    "{member} is not on {organisation}; a team's members are the organisation's"
+                )
+            },
+        )?;
+        let on_it = raw::org_team_members(&tx, organisation.as_str(), team)?;
+        require(!on_it.iter().any(|m| m == member), || {
+            format!("{member} is already on {organisation}/{team}")
+        })?;
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::OrgTeamMemberAdded {
+                organisation: organisation.clone(),
+                team: team.to_owned(),
+                member: member.clone(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
+    pub fn remove_org_team_member(
+        &mut self,
+        actor: &PrincipalId,
+        organisation: &PrincipalId,
+        team: &str,
+        member: &PrincipalId,
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        Self::may_manage_team(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            organisation,
+        )?;
+        let on_it = raw::org_team_members(&tx, organisation.as_str(), team)?;
+        require(on_it.iter().any(|m| m == member), || {
+            format!("{member} is not on {organisation}/{team}")
+        })?;
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::OrgTeamMemberRemoved {
+                organisation: organisation.clone(),
+                team: team.to_owned(),
+                member: member.clone(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
     pub fn remove_team_member(
         &mut self,
         actor: &PrincipalId,
@@ -2782,6 +2982,24 @@ impl Store {
                 "{member} is the last owner of {team}: name another owner first, or ask whoever \
                  runs the forge"
             )));
+        }
+        // Off the organisation is off its teams: what those hold went
+        // with being on it.
+        let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
+        let prefix = format!("{team}/");
+        for named in raw::org_teams_of_member(&tx, member.as_str())? {
+            if let Some(inner) = named.strip_prefix(&prefix) {
+                append(
+                    &tx,
+                    actor,
+                    via,
+                    Event::OrgTeamMemberRemoved {
+                        organisation: team.clone(),
+                        team: inner.to_owned(),
+                        member: member.clone(),
+                    },
+                )?;
+            }
         }
         let env = append(
             &tx,
@@ -5136,11 +5354,64 @@ impl Store {
             Capability::Admin,
             repo,
         )?;
-        let who = raw::principal(&tx, grantee.as_str())?
-            .ok_or_else(|| CoreError::NotFound(format!("principal {grantee}")))?;
-        if let Some(repo) = repo {
-            raw::repo(&tx, repo)?.ok_or_else(|| CoreError::NotFound(format!("repo {repo}")))?;
+        let record = match repo {
+            Some(repo) => Some(
+                raw::repo(&tx, repo)?.ok_or_else(|| CoreError::NotFound(format!("repo {repo}")))?,
+            ),
+            None => None,
+        };
+        // On an organisation's repository, its owners decide who else
+        // acts, whatever its members do; whoever runs the forge can too.
+        if let Some(record) = &record
+            && raw::principal(&tx, record.owner.as_str())?
+                .is_some_and(|o| o.kind == PrincipalKind::Team)
+            && !raw::runs(&tx, actor.as_str(), record.owner.as_str())?
+        {
+            authorize(
+                &tx,
+                Acting::of(&self.scope, self.admin_elsewhere),
+                actor,
+                Capability::Admin,
+                None,
+            )
+            .map_err(|_| {
+                CoreError::Forbidden(format!(
+                    "{actor} is not an owner of {}: its owners grant on its repositories, or \
+                     whoever runs the forge",
+                    record.owner
+                ))
+            })?;
         }
+        // A team inside an organisation is named `org/team`, which no
+        // principal is. It holds grants on that organisation's
+        // repositories and nothing wider, and never admin.
+        let who = match grantee.as_str().split_once('/') {
+            Some((organisation, team)) => {
+                let Some(record) = &record else {
+                    return Err(CoreError::Invalid(format!(
+                        "{grantee} is a team inside {organisation}; a grant to it names one of \
+                         {organisation}'s repositories"
+                    )));
+                };
+                require(record.owner.as_str() == organisation, || {
+                    format!(
+                        "{grantee} is a team inside {organisation}, and {} is not {organisation}'s",
+                        record.name
+                    )
+                })?;
+                require(raw::is_org_team(&tx, organisation, team)?, || {
+                    format!("{organisation} has no team named {team}")
+                })?;
+                require(!actions.contains(&Capability::Admin), || {
+                    format!("{grantee} is a team, and admin is never a team's")
+                })?;
+                None
+            }
+            None => Some(
+                raw::principal(&tx, grantee.as_str())?
+                    .ok_or_else(|| CoreError::NotFound(format!("principal {grantee}")))?,
+            ),
+        };
         require(!actions.is_empty(), || {
             "a grant must carry at least one capability".into()
         })?;
@@ -5150,7 +5421,9 @@ impl Store {
         // one refusal away from a bypass. Grant it the capabilities its
         // work needs, on the repositories where it does that work.
         require(
-            who.kind != PrincipalKind::Agent || !actions.contains(&Capability::Admin),
+            who.as_ref().is_none_or(|w| {
+                w.kind != PrincipalKind::Agent || !actions.contains(&Capability::Admin)
+            }),
             || format!("{grantee} is an agent, and admin is never an agent's"),
         )?;
         let mut actions = actions;
@@ -5231,11 +5504,12 @@ impl Store {
         let current = raw::grant(&tx, grant.as_str())?
             .ok_or_else(|| CoreError::NotFound(format!("grant {grant}")))?;
         // The grantor's, the grantee's, the owner's of the repository it
-        // is scoped to — whoever holds a repository decides who acts on
-        // it, whoever issued the grant — or the forge's.
+        // is scoped to (an organisation's owners, for its repositories)
+        // — whoever runs a repository decides who acts on it, whoever
+        // issued the grant — or the forge's.
         let on_their_repo = match current.repo.as_deref() {
             Some(repo) => match raw::repo(&tx, repo)? {
-                Some(record) => raw::owns(&tx, actor.as_str(), record.owner.as_str())?,
+                Some(record) => raw::runs(&tx, actor.as_str(), record.owner.as_str())?,
                 None => false,
             },
             None => false,

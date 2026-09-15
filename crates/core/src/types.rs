@@ -329,6 +329,19 @@ str_enum!(
     }
 );
 
+str_enum!(
+    /// What membership of an organisation means on its repositories.
+    MembersAct {
+        /// Every member acts as the owner of every repository: the
+        /// right shape for a small company, and the default.
+        Owners => "owners",
+        /// Members read every repository and make repositories in the
+        /// organisation's name; pushing, reviewing, merging and
+        /// verifying come from grants its owners issue.
+        Readers => "readers",
+    }
+);
+
 /// What an operator has said about one owner in particular.
 ///
 /// Each field is three-valued on purpose, because "the same as everyone

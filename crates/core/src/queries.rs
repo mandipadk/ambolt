@@ -8,10 +8,10 @@ use crate::error::{CoreError, CoreResult};
 use crate::id::{ChangeId, PrincipalId, SessionId, TaskId, ThreadId};
 use crate::store::Store;
 use crate::types::{
-    Capability, Change, ChangeState, Claim, ClaimKind, Disposition, Grant, Lease, Lesson, Mirror,
-    Notice, ObjectFormat, Policy, Principal, PrincipalKind, Provenance, QueueEntry, Repo,
-    ReviewDomain, Revision, Session, SessionState, Task, TaskState, TokenInfo, Verdict,
-    Verification, Visibility,
+    Capability, Change, ChangeState, Claim, ClaimKind, Disposition, Grant, Lease, Lesson,
+    MembersAct, Mirror, Notice, ObjectFormat, Policy, Principal, PrincipalKind, Provenance,
+    QueueEntry, Repo, ReviewDomain, Revision, Session, SessionState, Task, TaskState, TokenInfo,
+    Verdict, Verification, Visibility,
 };
 use crate::types::{Reply, Resolution, Resolved, Thread, ThreadKind};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -96,10 +96,91 @@ pub(crate) mod raw {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
-    /// Whether `actor` holds what `owner` holds: they are the owner, or
-    /// a member of the organisation that is.
+    /// Whether `actor` holds what `owner` holds: they are the owner; an
+    /// owner of the organisation that is; or a member of it, while the
+    /// organisation says its members act as owners.
     pub fn owns(conn: &Connection, actor: &str, owner: &str) -> CoreResult<bool> {
-        Ok(actor == owner || is_team_member(conn, owner, actor)?)
+        if actor == owner {
+            return Ok(true);
+        }
+        if !is_team_member(conn, owner, actor)? {
+            return Ok(false);
+        }
+        Ok(is_team_owner(conn, owner, actor)? || members_act(conn, owner)? == MembersAct::Owners)
+    }
+
+    /// Whether `actor` runs what `owner` holds: the owner, or an owner
+    /// of the organisation that is. What decides who else may act on
+    /// it, whatever its members do.
+    pub fn runs(conn: &Connection, actor: &str, owner: &str) -> CoreResult<bool> {
+        Ok(actor == owner || is_team_owner(conn, owner, actor)?)
+    }
+
+    pub fn members_act(conn: &Connection, team: &str) -> CoreResult<MembersAct> {
+        let said: Option<String> = conn
+            .prepare_cached("SELECT members_act FROM team_settings WHERE team = ?")?
+            .query_row(params![team], |row| row.get(0))
+            .optional()?;
+        Ok(said
+            .as_deref()
+            .and_then(MembersAct::parse)
+            .unwrap_or(MembersAct::Owners))
+    }
+
+    /// The teams inside an organisation, by name.
+    pub fn org_teams(conn: &Connection, organisation: &str) -> CoreResult<Vec<String>> {
+        Ok(conn
+            .prepare_cached("SELECT team FROM org_teams WHERE organisation = ? ORDER BY team")?
+            .query_map(params![organisation], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn is_org_team(conn: &Connection, organisation: &str, team: &str) -> CoreResult<bool> {
+        Ok(conn
+            .prepare_cached("SELECT 1 FROM org_teams WHERE organisation = ? AND team = ?")?
+            .query_row(params![organisation, team], |_| Ok(()))
+            .optional()?
+            .is_some())
+    }
+
+    pub fn org_team_members(
+        conn: &Connection,
+        organisation: &str,
+        team: &str,
+    ) -> CoreResult<Vec<PrincipalId>> {
+        Ok(conn
+            .prepare_cached(
+                "SELECT member FROM org_team_members WHERE organisation = ? AND team = ? ORDER BY member",
+            )?
+            .query_map(params![organisation, team], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(PrincipalId)
+            .collect())
+    }
+
+    /// The teams somebody is on inside an organisation, as `org/team`,
+    /// which is how a grant names one.
+    pub fn org_teams_of_member(conn: &Connection, member: &str) -> CoreResult<Vec<String>> {
+        Ok(conn
+            .prepare_cached(
+                "SELECT organisation || '/' || team FROM org_team_members WHERE member = ?
+                  ORDER BY organisation, team",
+            )?
+            .query_map(params![member], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?)
+    }
+
+    /// Every live grant scoped to one repository, by grantee.
+    pub fn grants_on(conn: &Connection, repo: &str) -> CoreResult<Vec<Grant>> {
+        conn.prepare_cached(&format!(
+            "SELECT {GRANT_COLS} FROM grants WHERE repo = ? AND revoked = 0 ORDER BY grantee, rowid"
+        ))?
+        .query_map(params![repo], grant_from_row)?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(finish_grant)
+        .collect()
     }
 
     /// What a repository once called `old` is called now, if it was renamed.
@@ -1232,6 +1313,16 @@ pub(crate) mod raw {
         for team in teams_of(conn, principal)? {
             grants.extend(grants_of(conn, &team)?);
         }
+        // A team inside an organisation holds grants like any grantee;
+        // being on it carries them, and only while on the organisation.
+        for team in org_teams_of_member(conn, principal)? {
+            let Some((organisation, _)) = team.split_once('/') else {
+                continue;
+            };
+            if is_team_member(conn, organisation, principal)? {
+                grants.extend(grants_of(conn, &team)?);
+            }
+        }
         Ok(grants)
     }
 
@@ -1829,6 +1920,37 @@ impl Store {
         member: &PrincipalId,
     ) -> CoreResult<Vec<(String, crate::types::TeamRole)>> {
         raw::memberships_of(&self.conn, member.as_str())
+    }
+
+    pub fn members_act(&self, team: &PrincipalId) -> CoreResult<crate::types::MembersAct> {
+        raw::members_act(&self.conn, team.as_str())
+    }
+
+    /// Whether `actor` runs what `owner` holds: the owner, or an owner
+    /// of the organisation that is.
+    pub fn runs(&self, actor: &PrincipalId, owner: &PrincipalId) -> CoreResult<bool> {
+        raw::runs(&self.conn, actor.as_str(), owner.as_str())
+    }
+
+    pub fn org_teams(&self, organisation: &PrincipalId) -> CoreResult<Vec<String>> {
+        raw::org_teams(&self.conn, organisation.as_str())
+    }
+
+    pub fn org_team_members(
+        &self,
+        organisation: &PrincipalId,
+        team: &str,
+    ) -> CoreResult<Vec<PrincipalId>> {
+        raw::org_team_members(&self.conn, organisation.as_str(), team)
+    }
+
+    pub fn is_org_team(&self, organisation: &PrincipalId, team: &str) -> CoreResult<bool> {
+        raw::is_org_team(&self.conn, organisation.as_str(), team)
+    }
+
+    /// Every live grant scoped to one repository.
+    pub fn grants_on(&self, repo: &str) -> CoreResult<Vec<Grant>> {
+        raw::grants_on(&self.conn, repo)
     }
 
     /// Own grants plus every team's, which is what authority checks use.

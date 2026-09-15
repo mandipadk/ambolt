@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Bump whenever a projection table changes shape. The log is never
 /// touched; projections are rebuilt from it.
-const SCHEMA_VERSION: i64 = 32;
+const SCHEMA_VERSION: i64 = 33;
 
 /// The log itself, which outlives every schema.
 const EVENT_SCHEMA: &str = "
@@ -319,6 +319,26 @@ CREATE TABLE IF NOT EXISTS team_members (
   PRIMARY KEY (team, member)
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_team_members_member ON team_members (member);
+-- What being on an organisation means on its repositories. Absent
+-- means owners. Filled from TeamSettingsSet.
+CREATE TABLE IF NOT EXISTS team_settings (
+  team        TEXT PRIMARY KEY,
+  members_act TEXT NOT NULL
+) STRICT;
+-- Teams inside an organisation: named under it, never principals.
+-- Filled from OrgTeamMade and its members from OrgTeamMemberAdded.
+CREATE TABLE IF NOT EXISTS org_teams (
+  organisation TEXT NOT NULL,
+  team         TEXT NOT NULL,
+  PRIMARY KEY (organisation, team)
+) STRICT;
+CREATE TABLE IF NOT EXISTS org_team_members (
+  organisation TEXT NOT NULL,
+  team         TEXT NOT NULL,
+  member       TEXT NOT NULL,
+  PRIMARY KEY (organisation, team, member)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_org_team_members_member ON org_team_members (member);
 CREATE INDEX IF NOT EXISTS idx_event_scope_subject ON event_scope (subject);
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -526,6 +546,9 @@ const PROJECTION_TABLES: &[&str] = &[
     "event_scope",
     "notices",
     "team_members",
+    "team_settings",
+    "org_teams",
+    "org_team_members",
     "tokens",
     "grants",
     "repos",
@@ -1080,7 +1103,12 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         PrincipalRegistered { .. }
         | TeamMemberAdded { .. }
         | TeamMemberRemoved { .. }
-        | TeamRoleSet { .. } => (None, None),
+        | TeamRoleSet { .. }
+        | TeamSettingsSet { .. }
+        | OrgTeamMade { .. }
+        | OrgTeamRemoved { .. }
+        | OrgTeamMemberAdded { .. }
+        | OrgTeamMemberRemoved { .. } => (None, None),
     };
 
     tx.execute(
@@ -1576,6 +1604,30 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                     format!("{actor} made you a member of {team}, no longer an owner")
                 }
             },
+        )),
+        OrgTeamMemberAdded {
+            organisation,
+            team,
+            member,
+        } => Some((
+            member.as_str().to_owned(),
+            "team",
+            None,
+            None,
+            None,
+            format!("{actor} put you on {organisation}/{team}"),
+        )),
+        OrgTeamMemberRemoved {
+            organisation,
+            team,
+            member,
+        } => Some((
+            member.as_str().to_owned(),
+            "team",
+            None,
+            None,
+            None,
+            format!("{actor} took you off {organisation}/{team}"),
         )),
 
         MirrorPushed {
@@ -2157,6 +2209,48 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
             tx.execute(
                 "UPDATE team_members SET role = ? WHERE team = ? AND member = ?",
                 params![role.as_str(), team.as_str(), member.as_str()],
+            )?;
+        }
+        Event::TeamSettingsSet { team, members_act } => {
+            tx.execute(
+                "INSERT OR REPLACE INTO team_settings (team, members_act) VALUES (?, ?)",
+                params![team.as_str(), members_act.as_str()],
+            )?;
+        }
+        Event::OrgTeamMade { organisation, team } => {
+            tx.execute(
+                "INSERT OR IGNORE INTO org_teams (organisation, team) VALUES (?, ?)",
+                params![organisation.as_str(), team],
+            )?;
+        }
+        Event::OrgTeamRemoved { organisation, team } => {
+            tx.execute(
+                "DELETE FROM org_team_members WHERE organisation = ? AND team = ?",
+                params![organisation.as_str(), team],
+            )?;
+            tx.execute(
+                "DELETE FROM org_teams WHERE organisation = ? AND team = ?",
+                params![organisation.as_str(), team],
+            )?;
+        }
+        Event::OrgTeamMemberAdded {
+            organisation,
+            team,
+            member,
+        } => {
+            tx.execute(
+                "INSERT OR IGNORE INTO org_team_members (organisation, team, member) VALUES (?, ?, ?)",
+                params![organisation.as_str(), team, member.as_str()],
+            )?;
+        }
+        Event::OrgTeamMemberRemoved {
+            organisation,
+            team,
+            member,
+        } => {
+            tx.execute(
+                "DELETE FROM org_team_members WHERE organisation = ? AND team = ? AND member = ?",
+                params![organisation.as_str(), team, member.as_str()],
             )?;
         }
         Event::MirrorSet { repo, mirror } => {
@@ -3091,7 +3185,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                32,
+                33,
                 r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null}"#
             ),
             "the policy's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
@@ -3145,7 +3239,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                32,
+                33,
                 r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25}"#
             ),
             "the quota's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
