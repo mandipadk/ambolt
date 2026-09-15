@@ -239,6 +239,12 @@ the unscoped admin grant:
   organisation's page offers it under Allowance.
   `GET /api/principals/{id}/organisations` — the organisations a
   principal is on and what they are to each.
+- `POST /api/repos/{owner}/{name}/bookmark` and `/unbookmark`,
+  `GET /api/you/bookmarks` — keep a repository you may read in reach;
+  the sidebar lists what you saved under Saved, and under Repositories
+  only what is yours to work in: your own, your organisations', and
+  those you hold a grant on. A public repository you merely read is
+  neither until you save it.
 - `GET /api/invitations/unclaimed` — who was invited and never came,
   with when their invitation lapses; `POST /api/invitations/purge` lets
   go those whose invitation has lapsed: each is deactivated, its

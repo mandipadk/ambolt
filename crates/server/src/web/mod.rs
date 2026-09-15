@@ -198,6 +198,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{owner}/{repo}/settings/delete", post(repo_delete))
         .route("/{owner}/{repo}/settings/transfer", post(repo_transfer))
         .route("/{owner}/{repo}/settings/access", post(repo_access_action))
+        .route("/{owner}/{repo}/save", post(repo_save))
         .route(
             "/{owner}/{repo}/transfer",
             get(transfer_page).post(transfer_answer),
@@ -1946,7 +1947,7 @@ fn chrome_for(app: &AppState, who: &PrincipalId) -> Result<Chrome, ambolt_core::
         let mut owned = Vec::new();
         let mut yours = 0;
         let mut leases = Vec::new();
-        for repo in store.readable_repos(who)? {
+        for repo in store.mine_repos(who)? {
             if store.owns(who, &repo.owner)? {
                 owned.push(repo.name.clone());
             }
@@ -2005,6 +2006,7 @@ fn chrome_for(app: &AppState, who: &PrincipalId) -> Result<Chrome, ambolt_core::
             admin: store.is_admin(who),
             owned,
             orgs: store.memberships_of(who)?,
+            saved: store.bookmarks_of(who)?,
         })
     })
 }
@@ -2096,6 +2098,8 @@ pub struct Chrome {
     pub owned: Vec<String>,
     /// The organisations the viewer is on, and what they are to each.
     pub orgs: Vec<(String, ambolt_core::TeamRole)>,
+    /// Repositories the viewer saved to keep in reach.
+    pub saved: Vec<String>,
 }
 
 pub struct Viewer(pub PrincipalId, pub Chrome);
@@ -2184,6 +2188,7 @@ fn chrome_public(app: &AppState) -> Result<Chrome, ambolt_core::CoreError> {
             admin: false,
             owned: Vec::new(),
             orgs: Vec::new(),
+            saved: Vec::new(),
         })
     })
 }
@@ -2287,6 +2292,31 @@ async fn org_team_members_action(
             back(None)
         }
         Err(err) => back(Some(humane(&err))),
+    }
+}
+
+#[derive(Deserialize)]
+struct SaveForm {
+    #[serde(default)]
+    action: String,
+}
+
+/// Save a repository to reach it from the sidebar, or let it go.
+async fn repo_save(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Form(form): Form<SaveForm>,
+) -> Response {
+    let result = if form.action == "unsave" {
+        app.with_store(|s| s.unbookmark(&viewer.0, &repo))
+    } else {
+        app.with_store(|s| s.bookmark(&viewer.0, &repo))
+    };
+    match result {
+        Ok(()) => Redirect::to(&format!("/{repo}")).into_response(),
+        Err(ambolt_core::CoreError::NotFound(_)) => not_found(),
+        Err(err) => flash(&format!("/{repo}"), &humane(&err)),
     }
 }
 
@@ -3902,10 +3932,18 @@ async fn render_tree(
                     .filter_map(|e| e.change.as_ref().map(|c| c.owner.as_str())),
             ),
     );
+    let saved = match &who {
+        Who::Signed(viewer) => Some(
+            app.with_store(|s| s.is_bookmarked(&viewer.0, &record.name))
+                .unwrap_or(false),
+        ),
+        Who::Anonymous(_) => None,
+    };
     views::repository(views::RepoPage {
         theme,
         who: who.reading(),
         repo: &record,
+        saved,
         tip: tip.as_deref(),
         path: &path,
         entries: &entries,

@@ -1922,6 +1922,32 @@ impl Store {
         raw::memberships_of(&self.conn, member.as_str())
     }
 
+    /// What somebody saved, newest first. Only what they may still read
+    /// is answered; a repository that went private since stays saved
+    /// and unseen, and comes back if it opens again.
+    pub fn bookmarks_of(&self, who: &PrincipalId) -> CoreResult<Vec<String>> {
+        let saved: Vec<String> = self
+            .conn
+            .prepare_cached(
+                "SELECT repo FROM bookmarks WHERE principal = ? ORDER BY added DESC, repo",
+            )?
+            .query_map(params![who.as_str()], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(saved
+            .into_iter()
+            .filter(|repo| self.may_read(who, repo))
+            .collect())
+    }
+
+    pub fn is_bookmarked(&self, who: &PrincipalId, repo: &str) -> CoreResult<bool> {
+        Ok(self
+            .conn
+            .prepare_cached("SELECT 1 FROM bookmarks WHERE principal = ? AND repo = ?")?
+            .query_row(params![who.as_str(), repo], |_| Ok(()))
+            .optional()?
+            .is_some())
+    }
+
     pub fn members_act(&self, team: &PrincipalId) -> CoreResult<crate::types::MembersAct> {
         raw::members_act(&self.conn, team.as_str())
     }

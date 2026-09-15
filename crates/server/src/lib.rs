@@ -266,6 +266,12 @@ pub fn router(state: AppState) -> Router {
             post(routes::remove_org_team_member),
         )
         .route("/api/repos/{owner}/{name}/access", get(routes::repo_access))
+        .route("/api/repos/{owner}/{name}/bookmark", post(routes::bookmark))
+        .route(
+            "/api/repos/{owner}/{name}/unbookmark",
+            post(routes::unbookmark),
+        )
+        .route("/api/you/bookmarks", get(routes::bookmarks))
         .route("/api/teams/{id}/ask", post(routes::ask_for))
         .route(
             "/api/principals/{id}/organisations",

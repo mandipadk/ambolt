@@ -123,6 +123,7 @@ b, strong { font-weight: var(--wbold); }
 .btn.wide { display: flex; width: 100%; }
 .btn.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
 .btn2 { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 13px; border-radius: 8px; font-size: 13.5px; font-weight: var(--wmed); color: var(--ink); background: var(--bg); border: 1px solid var(--hair2); white-space: nowrap; line-height: 1.4; }
+.btn2.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .btn2:hover { background: var(--raise); }
 .btn2.danger:hover { color: var(--bad); border-color: var(--bad); }
 .btn2.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }

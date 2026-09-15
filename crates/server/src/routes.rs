@@ -2123,6 +2123,31 @@ pub async fn remove_org_team_member(
     Ok(committed(None, &env))
 }
 
+/// Keep a repository in reach: it joins the caller's Saved list.
+pub async fn bookmark(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+) -> ApiResult<Json<Value>> {
+    app.with_store(|s| s.acting_as(actor.1.as_ref()).bookmark(&actor.0, &name))?;
+    Ok(Json(json!({ "repo": name, "saved": true })))
+}
+
+pub async fn unbookmark(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+) -> ApiResult<Json<Value>> {
+    app.with_store(|s| s.unbookmark(&actor.0, &name))?;
+    Ok(Json(json!({ "repo": name, "saved": false })))
+}
+
+/// What the caller saved, newest first, readable ones only.
+pub async fn bookmarks(State(app): State<AppState>, actor: Actor) -> ApiResult<Json<Value>> {
+    let saved = app.with_store(|s| s.acting_as(actor.1.as_ref()).bookmarks_of(&actor.0))?;
+    Ok(Json(json!({ "saved": saved })))
+}
+
 /// Who holds what on one repository: every live grant scoped to it.
 /// For those on the inside: its owner, the organisation's members, or
 /// whoever runs the forge.

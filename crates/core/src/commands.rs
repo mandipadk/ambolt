@@ -2272,6 +2272,55 @@ impl Store {
             .collect())
     }
 
+    /// The repositories that are somebody's own to work in: theirs, an
+    /// organisation's they are on, or one they hold a grant on. A public
+    /// repository they merely may read is not among them; that is what
+    /// saving is for.
+    pub fn mine_repos(&self, actor: &PrincipalId) -> CoreResult<Vec<crate::types::Repo>> {
+        let grants = grants_that_count(
+            &self.conn,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+        )?;
+        let now = jiff::Timestamp::now().to_string();
+        let mut out = Vec::new();
+        for repo in raw::repos(&self.conn)? {
+            let mine = raw::owns(&self.conn, actor.as_str(), repo.owner.as_str())?
+                || raw::is_team_member(&self.conn, repo.owner.as_str(), actor.as_str())?
+                || grants.iter().any(|g| {
+                    !g.revoked
+                        && !g.actions.is_empty()
+                        && g.until.as_deref().is_none_or(|until| until > now.as_str())
+                        && g.repo.as_deref().is_none_or(|scope| scope == repo.name)
+                });
+            if mine && self.may_read(actor, &repo.name) {
+                out.push(repo);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Keep a repository in reach. Anyone may save what they may read;
+    /// nothing is said to anybody, since it is theirs alone.
+    pub fn bookmark(&mut self, who: &PrincipalId, repo: &str) -> CoreResult<()> {
+        if !self.may_read(who, repo) {
+            return Err(CoreError::NotFound(format!("repo {repo}")));
+        }
+        self.conn.execute(
+            "INSERT OR IGNORE INTO bookmarks (principal, repo, added) VALUES (?, ?, ?)",
+            rusqlite::params![who.as_str(), repo, jiff::Timestamp::now().to_string()],
+        )?;
+        Ok(())
+    }
+
+    pub fn unbookmark(&mut self, who: &PrincipalId, repo: &str) -> CoreResult<()> {
+        self.conn.execute(
+            "DELETE FROM bookmarks WHERE principal = ? AND repo = ?",
+            rusqlite::params![who.as_str(), repo],
+        )?;
+        Ok(())
+    }
+
     /// Decide whether a repository can be read without credentials.
     ///
     /// Admin authority, and recorded: making a repository public is a

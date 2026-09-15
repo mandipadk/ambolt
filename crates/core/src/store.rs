@@ -87,6 +87,15 @@ CREATE TABLE IF NOT EXISTS reports (
   version TEXT NOT NULL
 ) STRICT;
 
+-- Repositories somebody chose to keep in reach. Theirs alone, so an
+-- operational table rather than the log; a rename or a delete follows.
+CREATE TABLE IF NOT EXISTS bookmarks (
+  principal TEXT NOT NULL,
+  repo      TEXT NOT NULL,
+  added     TEXT NOT NULL,
+  PRIMARY KEY (principal, repo)
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS inbox_read (
   principal TEXT NOT NULL,
   seq       INTEGER NOT NULL,
@@ -2072,7 +2081,7 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
             // Operational tables follow the name too, where they exist:
             // fsck replays the log into projections alone, which have
             // no debt snapshots.
-            for table in ["debt_snapshots", "repo_sizes"] {
+            for table in ["debt_snapshots", "repo_sizes", "bookmarks"] {
                 if table_exists(tx, table)? {
                     tx.execute(
                         &format!("UPDATE {table} SET repo = ? WHERE repo = ?"),
@@ -2129,6 +2138,9 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                    WHERE repo = ? AND state IN ('open', 'claimed')",
                 params![repo],
             )?;
+            if table_exists(tx, "bookmarks")? {
+                tx.execute("DELETE FROM bookmarks WHERE repo = ?", params![repo])?;
+            }
             if table_exists(tx, "repo_sizes")? {
                 tx.execute("DELETE FROM repo_sizes WHERE repo = ?", params![repo])?;
             }
