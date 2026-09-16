@@ -61,12 +61,19 @@ cargo fmt --all
 cargo clippy -j 2 --workspace --all-targets -- -D warnings
 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
   cargo test -j 2 --workspace --no-fail-fast
+cargo fmt --all --check      # last, and again after any further edit
 ```
 
 The git configuration is emptied on purpose: the suite drives real git,
 and a developer's global configuration has broken it before.
 `--no-fail-fast` is not optional — cargo otherwise stops at the first
 failing crate and you will report a pass that never ran.
+
+The first `fmt` rewrites and says nothing; the last one is what CI runs,
+and it fails. Anything you edit after the first line — a rename while
+reading the diff, a secret swapped for a placeholder at commit time —
+leaves the tree unformatted with no local signal at all, and the mirror
+goes red minutes after the change has already landed. End on `--check`.
 
 ## Things this codebase will not forgive
 
