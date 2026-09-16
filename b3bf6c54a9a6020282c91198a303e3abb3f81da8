@@ -1,0 +1,134 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "I7c4f3b1d8e2a6094fbc5d3720ae81f96c4d05b3a",
+      "id": "c-6gvzndgr1nk8vgyx1pgy5gxtbm",
+      "landed_oid": "b3bf6c54a9a6020282c91198a303e3abb3f81da8",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 158,
+      "opened_at": "2026-09-16T03:37:34.972580476Z",
+      "owner": "mandip",
+      "parent_change": "c-7d6s93s0q7230emyyfryc1vwct",
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": null,
+      "title": "Give a repository somewhere for people to say it",
+      "updated_at": "2026-09-16T03:39:53.732239867Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-6gvzndgr1nk8vgyx1pgy5gxtbm",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-221xmax62g93etmbwn3q3xx4aa",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1483,
+        "summary": "clippy -D warnings clean and the whole suite green: 378 tests, 0 failures, on the laptop before pushing.",
+        "unchecked": [
+          "the pages were looked at in both themes at 1440px, not at phone width",
+          "no client renders the forge mail; unrelated to this change"
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "b3bf6c54a9a6020282c91198a303e3abb3f81da8",
+    "landed_at": "2026-09-16T03:39:53.732239867Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-6gvzndgr1nk8vgyx1pgy5gxtbm",
+      "commit_oid": "b3bf6c54a9a6020282c91198a303e3abb3f81da8",
+      "message": "Give a repository somewhere for people to say it\n\nThe verbs landed last change with nowhere to read them: the URL\n`ambolt report` printed was a 404. This is the Community tab.\n\nThe list is what was said, newest first, filtered by kind and by\nwhether it is still open. Every row carries the same facts in the same\nplaces — who filed it, when, how many replies, and for a bug whether\nanybody can re-run it yet — so the list reads down a column rather than\nbeing deciphered per row.\n\nA report's own page shows the reproduction as named fields rather than\na paragraph somebody has to parse: the version, the command in mono,\nwhat happened, what was expected. A bug with no command says so, in the\nplace where the person who could supply one is already reading.\nSettling is a small panel that makes you say which kind of closure it\nis; discarding is a quiet row beneath it, because it is the exception\nand should not look like Settle's equal.\n\nThe tab is there for anyone who may read the repository. The policy\nswitch governs who may write, which is a different question.\n\nNothing here runs script, so the three doors are links: `?new=bug`\nrenders the bug form, and the URL is what says where the composer\ngoes — the same way a line number opens a thread on a change.\n\nLooked at before landing, dark and light, which found five faults a\ntest would not have: chips of different widths pushed every title to a\ndifferent place, the form ran the width of the page, \"What happened\"\nwas the label on two different fields, a textarea carried an input's\nheight, and Discard stood beside Settle as an equal panel of a\ndifferent height.\n\nChange-Id: I7c4f3b1d8e2a6094fbc5d3720ae81f96c4d05b3a\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/community_flow.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/lib.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md"
+      ],
+      "session": null
+    },
+    "seq": 1490,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-221xmax62g93etmbwn3q3xx4aa",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-221xmax62g93etmbwn3q3xx4aa",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 211 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 6 path(s) outside docs/, *.md: crates/cli/tests/suite/community_flow.rs, crates/core/src/commands.rs, crates/core/src/lib.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-6gvzndgr1nk8vgyx1pgy5gxtbm",
+        "claim": "cl-221xmax62g93etmbwn3q3xx4aa",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-0g9a8jv0wbdz9bfctq9k48etbr",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1485
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "gT6l8MLOLLrES7Dq6Xp1/WuiR9K7nTlZNqkWFiIRJb0Ex94AEj9VPLrZNijDGmignejzZIz97vHKnKJxBwdmAw=="
+  }
+}
