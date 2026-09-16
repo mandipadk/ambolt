@@ -565,3 +565,173 @@ async fn a_mention_in_a_report_reaches_the_person_named() {
     assert_eq!(mentioned[0]["number"], 1, "{inbox}");
     assert!(mentioned[0]["change"].is_null(), "{inbox}");
 }
+
+/// The pages: what a reader sees, and what only somebody who may act
+/// on the repository sees.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_pages_show_the_reports_and_who_may_do_what() {
+    let forge = boot().await;
+    let app = &forge.app;
+    open_the_door(&forge).await;
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "nadia", "kind": "human", "display": "Nadia" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (_, nadia) = sign_in_as(&forge, "nadia").await;
+    let (_, ada) = sign_in_as(&forge, "ada").await;
+
+    // Filing from the form lands on the report it made.
+    let (status, to) = post_form(
+        app,
+        "/ada/demo/community",
+        &nadia,
+        "kind=bug&title=clone+hangs&body=It+hangs.&version=alpha.3\
+         &command=git+clone+http%3A%2F%2Flocal%2Fgit%2Fada%2Fdemo\
+         &observed=hangs&expected=a+clone",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{to}");
+    assert_eq!(to, "/ada/demo/community/1", "{to}");
+
+    // The list names its facts rather than running them together.
+    let (status, page) = page_with_cookie(app, "/ada/demo/community", &nadia).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("#1 clone hangs"), "{page}");
+    assert!(
+        page.contains(r#"<span class="k">Reproduction</span>"#),
+        "{page}"
+    );
+    assert!(page.contains("a command to run"), "{page}");
+    // Every fact on the row is labelled: no run-together metadata.
+    for label in ["Filed by", "On", "Replies", "Reproduction"] {
+        assert!(
+            page.contains(&format!(r#"<span class="k">{label}</span>"#)),
+            "{label} is unlabelled: {page}"
+        );
+    }
+
+    // The report shows the reproduction as named fields, not a blob.
+    let (status, page) = page_with_cookie(app, "/ada/demo/community/1", &nadia).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains(r#"<span class="k">Command</span>"#), "{page}");
+    assert!(
+        page.contains("git clone http://local/git/ada/demo"),
+        "{page}"
+    );
+    // Nadia may reply to hers, and may not settle it for the project.
+    assert!(
+        page.contains(r#"action="/ada/demo/community/1/reply""#),
+        "{page}"
+    );
+    assert!(!page.contains("/settle"), "{page}");
+    assert!(!page.contains("/discard"), "{page}");
+
+    // Ada, who runs the repository, gets both.
+    let (status, page) = page_with_cookie(app, "/ada/demo/community/1", &ada).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        page.contains(r#"action="/ada/demo/community/1/settle""#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"action="/ada/demo/community/1/discard""#),
+        "{page}"
+    );
+
+    // And settling from the page says which kind of closure it was.
+    let (status, to) = post_form(
+        app,
+        "/ada/demo/community/1/settle",
+        &ada,
+        "how=fixed&note=Landed+in+alpha.5.&duplicate_of=",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{to}");
+    let (_, page) = page_with_cookie(app, "/ada/demo/community/1", &ada).await;
+    assert!(page.contains("Already fixed"), "{page}");
+    assert!(page.contains("Landed in alpha.5."), "{page}");
+    // Settled, so there is nothing left to reply to.
+    assert!(
+        !page.contains(r#"action="/ada/demo/community/1/reply""#),
+        "{page}"
+    );
+}
+
+/// A bug nobody can re-run says so, on its own page, where the person
+/// who could fix that is reading.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bug_without_a_command_says_that_nobody_can_check_it() {
+    let forge = boot().await;
+    let app = &forge.app;
+    open_the_door(&forge).await;
+    let (_, ada) = sign_in_as(&forge, "ada").await;
+    let (status, to) = post_form(
+        app,
+        "/ada/demo/community",
+        &ada,
+        "kind=bug&title=it+breaks&body=It+breaks+sometimes.",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{to}");
+    let (_, page) = page_with_cookie(app, "/ada/demo/community/1", &ada).await;
+    assert!(page.contains("Nothing here can be re-run yet"), "{page}");
+    assert!(page.contains("anybody can add one"), "{page}");
+}
+
+/// The door governs who may write, not who may look: a reader of a
+/// public repository always sees what was said.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_closed_door_still_shows_what_was_said() {
+    let forge = boot().await;
+    let app = &forge.app;
+    open_the_door(&forge).await;
+    let (_, ada) = sign_in_as(&forge, "ada").await;
+    let (status, _) = post_form(
+        app,
+        "/ada/demo/community",
+        &ada,
+        "kind=question&title=how+do+I+pin&body=Asking.",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+
+    // Somebody signed in with no part in the repository, once the
+    // door is shut again.
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "nadia", "kind": "human", "display": "Nadia" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/repos/ada/demo/policy",
+        "ada",
+        Some(
+            json!({ "require_executed_check": true, "independence": "human_or_two_models",
+                     "require_runner_verification": false, "runner_quorum": 1,
+                     "required_domains": [], "require_concerns_resolved": true,
+                     "agents_act_in_sessions": false, "proposals": false,
+                     "community": false }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (_, nadia) = sign_in_as(&forge, "nadia").await;
+    let (status, page) = page_with_cookie(app, "/ada/demo/community", &nadia).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("#1 how do I pin"), "{page}");
+    // Nothing to write with.
+    assert!(!page.contains("community?new="), "{page}");
+}

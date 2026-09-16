@@ -863,6 +863,21 @@ impl Store {
 
     /// Whether `actor` may propose a change to `repo` without holding
     /// push there. See [`may_propose`].
+    /// Whether this actor may settle somebody else's report here.
+    /// See [`may_answer`].
+    pub fn may_answer_reports(&self, actor: &PrincipalId, repo: &str) -> bool {
+        let Ok(tx) = self.conn.unchecked_transaction() else {
+            return false;
+        };
+        may_answer(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            repo,
+        )
+        .is_ok()
+    }
+
     /// Whether this actor may say something on the repository's
     /// community pages. See [`may_report`].
     pub fn may_report(&self, actor: &PrincipalId, repo: &str) -> bool {

@@ -53,8 +53,8 @@ pub use commands::{
 pub use error::{CoreError, CoreResult};
 pub use event::{Envelope, Event, EventSeq};
 pub use id::{
-    ChangeId, ClaimId, GrantId, PrincipalId, RESERVED_IDS, SessionId, TaskId, ThreadId, TokenId,
-    VerdictId, VerificationId, split_repo_name, validate_repo_name,
+    ChangeId, ClaimId, GrantId, OriginId, PrincipalId, RESERVED_IDS, SessionId, TaskId, ThreadId,
+    TokenId, VerdictId, VerificationId, split_repo_name, validate_repo_name,
 };
 pub use leases::{Overlap, covers, patterns_overlap};
 pub use policy::{PolicyTrace, Requirement};

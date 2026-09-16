@@ -542,6 +542,37 @@ a.ev-row:hover { background: var(--raise); }
 .thread .act form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .thread .act .input { width: auto; }
 .thread .act input.input { flex: 1; min-width: 160px; }
+/* A report is the same exchange as a thread, without the diff gutter
+   a thread sits in on a change. Its reproduction is part of it: the
+   fields are what decides whether anybody else can check the thing. */
+.said .thread { margin-left: 14px; max-width: 820px; }
+.said .repro { margin: 10px 0 0 36px; padding: 12px 14px; background: var(--panel); border-radius: 8px; display: flex; flex-direction: column; gap: 10px; }
+.said .repro .field { gap: 4px; }
+.said .repro .field .k { font-size: 11px; font-weight: var(--wmed); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink3); }
+.said .repro .field p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.said .repro pre { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--hair); border-radius: 6px; overflow-x: auto; }
+.said .repro pre code { font-family: var(--mono); font-size: 12.5px; }
+.said .repro > p { margin: 0; font-size: 13.5px; color: var(--ink3); }
+/* A report's row: the kind sits in a column of its own, so every
+   title starts in the same place however wide the word is. */
+.row.report { grid-template-columns: 96px minmax(0, 1fr) auto auto; }
+.row.report .chips { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+/* A form the width of a page is a form nobody finishes. */
+.report-new { margin-bottom: 14px; max-width: 620px; }
+.report-new .pref { max-width: 560px; }
+.report-new .grid2 { grid-template-columns: 1fr 1fr; }
+.report-new textarea { width: 100%; font-size: 14px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--hair2); border-radius: 8px; color: var(--ink); resize: vertical; }
+/* Settling is the ordinary end; discarding is the exception, and does
+   not stand beside it as an equal. */
+.answer { margin-top: 14px; max-width: 560px; display: flex; flex-direction: column; gap: 10px; }
+.answer .panel { padding: 16px 18px; }
+.answer .pref { display: flex; flex-direction: column; gap: 12px; max-width: 420px; }
+.answer h3 { margin: 0; font-size: 14.5px; }
+.discard { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 18px; }
+.discard .t { font-size: 13.5px; font-weight: var(--wmed); color: var(--ink2); }
+.discard .input { width: auto; flex: 1 1 240px; }
+.discard .hint { flex-basis: 100%; font-size: 12.5px; color: var(--ink3); }
+.grow { flex: 1 1 auto; }
 .thread .closed { margin: 8px 0 0 36px; color: var(--ink2); font-size: 13px; }
 .thread.new .at { color: var(--ink3); font-size: 12.5px; margin-bottom: 8px; }
 .thread.new .act { margin-left: 0; }

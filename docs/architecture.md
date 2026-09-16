@@ -302,6 +302,12 @@ for what should never have arrived: the number and the reason stay, the
 text and its replies do not, and somebody holding `merge` does it on
 the record.
 
+All of it lives under the repository's Community tab, at
+`/{owner}/{repo}/community`, which anybody who may read the repository
+may read. A report's own page shows the reproduction as named fields
+rather than a paragraph to parse, and a bug carrying no command says so
+where the person who could supply one is already reading.
+
 A repository's door is its owner's switch (`community`), off unless
 said, and it opens to anyone signed in while the repository is public —
 the same shape `proposals` has, and for the same reason. Anyone with a

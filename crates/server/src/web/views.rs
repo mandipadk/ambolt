@@ -10,8 +10,8 @@ use ambolt_core::{
 };
 use ambolt_core::{
     BrowserSession, Change, ChangeState, Claim, Contact, Disposition, Envelope, Event, HitKind,
-    Notice, PasskeyRecord, PolicyTrace, PrincipalId, Repo, Revision, Task, Verdict, Verification,
-    Visibility,
+    Notice, Origin, OriginKind, OriginState, PasskeyRecord, PolicyTrace, PrincipalId, Repo,
+    Revision, Settlement, Task, Verdict, Verification, Visibility,
 };
 use maud::{DOCTYPE, Markup, PreEscaped, html};
 
@@ -133,6 +133,7 @@ pub struct Entry {
 pub enum Tab {
     Code,
     Changes,
+    Community,
     Tasks,
     Review,
     Coverage,
@@ -608,6 +609,7 @@ fn repohead(repo: &str, active: Option<Tab>, viewer: Option<&Viewer>, chrome: &C
                 @if viewer.is_some() {
                     (tab_to(&format!("/tasks?repo={repo}"), "tasks", "Tasks", 0, active == Some(Tab::Tasks)))
                 }
+                (tab(repo, "/community", "message", "Community", 0, active == Some(Tab::Community)))
                 (tab(repo, "/review", "review", "Review", 0, active == Some(Tab::Review)))
                 (tab(repo, "/coverage", "coverage", "Coverage", 0, active == Some(Tab::Coverage)))
                 (tab(repo, "/activity", "activity", "Activity", 0, active == Some(Tab::Activity)))
@@ -4414,6 +4416,351 @@ fn hunk_range(hunk: &super::diff::Hunk) -> String {
 /// The list of a repository's changes: newest first, filtered by state,
 /// a page at a time, each row saying who opened it, when, and when it
 /// was last touched.
+/// What a kind is called where a person reads it.
+fn kind_words(kind: OriginKind) -> &'static str {
+    match kind {
+        OriginKind::Bug => "Bug",
+        OriginKind::Request => "Request",
+        OriginKind::Question => "Question",
+    }
+}
+
+fn kind_chip(kind: OriginKind) -> Markup {
+    let icon = match kind {
+        OriginKind::Bug => "alert",
+        OriginKind::Request => "sparkle",
+        OriginKind::Question => "message",
+    };
+    html! { span class="chip" { (ic(icon, "")) (kind_words(kind)) } }
+}
+
+/// How a settlement reads, in the words somebody would use about it.
+fn settlement_words(how: Settlement) -> &'static str {
+    match how {
+        Settlement::Answered => "Answered",
+        Settlement::Fixed => "Already fixed",
+        Settlement::Declined => "Not planned",
+        Settlement::Withdrawn => "Withdrawn",
+        Settlement::Duplicate => "Said before",
+    }
+}
+
+/// The three doors, as the query parameter that opens each form.
+fn new_form(repo: &str, kind: OriginKind) -> Markup {
+    let bug = kind == OriginKind::Bug;
+    html! {
+        form class="panel report-new" id="new" method="post" action={ "/" (repo) "/community" } {
+            input type="hidden" name="kind" value=(kind.as_str());
+            div class="pref" {
+                h3 { @match kind {
+                    OriginKind::Bug => "Report a bug",
+                    OriginKind::Request => "Ask for something",
+                    OriginKind::Question => "Ask a question",
+                } }
+                div class="field" {
+                    label for="title" { "In one line" }
+                    input class="input" id="title" name="title" type="text" required maxlength="300"
+                        placeholder=(match kind {
+                            OriginKind::Bug => "What goes wrong",
+                            OriginKind::Request => "What you cannot do",
+                            OriginKind::Question => "What you want to know",
+                        });
+                }
+                div class="field" {
+                    label for="body" { @match kind {
+                        OriginKind::Bug => "What happened",
+                        OriginKind::Request => "What you were trying to do, and what you do instead today",
+                        OriginKind::Question => "The question",
+                    } }
+                    textarea id="body" name="body" rows="5" required {}
+                }
+                @if bug {
+                    div class="grid2 tight" {
+                        div class="field" {
+                            label for="version" { "Version" }
+                            input class="input" id="version" name="version" type="text" placeholder="What you were running";
+                        }
+                        div class="field" {
+                            label for="command" { "Command that shows it" }
+                            input class="input" id="command" name="command" type="text" placeholder="Someone else can run this";
+                        }
+                        div class="field" {
+                            label for="observed" { "Exactly what it printed" }
+                            input class="input" id="observed" name="observed" type="text";
+                        }
+                        div class="field" {
+                            label for="expected" { "What you expected instead" }
+                            input class="input" id="expected" name="expected" type="text";
+                        }
+                    }
+                    p class="hint" {
+                        "A bug with a command gets re-run and reaches a maintainer with evidence. \
+                         Without one it waits for somebody to add it — send it anyway if you have none."
+                    }
+                }
+                div class="act" {
+                    button class="btn" type="submit" { "Send" }
+                    a class="btn2" href={ "/" (repo) "/community" } { "Cancel" }
+                }
+            }
+        }
+    }
+}
+
+/// Everything said about a repository that is not work yet.
+#[allow(clippy::too_many_arguments)]
+pub fn community(
+    theme: Theme,
+    who: Reading<'_>,
+    repo: &str,
+    reports: &[Origin],
+    kind: Option<OriginKind>,
+    open_only: bool,
+    may_report: bool,
+    new: Option<OriginKind>,
+    people: &People,
+    error: Option<&str>,
+) -> Markup {
+    let href = |kind: Option<OriginKind>, open_only: bool| {
+        let mut parts = Vec::new();
+        if let Some(kind) = kind {
+            parts.push(format!("kind={}", kind.as_str()));
+        }
+        if !open_only {
+            parts.push("state=all".to_owned());
+        }
+        match parts.is_empty() {
+            true => format!("/{repo}/community"),
+            false => format!("/{repo}/community?{}", parts.join("&")),
+        }
+    };
+    layout_reading(
+        theme,
+        who,
+        Some(repo),
+        Some(Tab::Community),
+        "Community",
+        html! {
+            div class="sec top" {
+                div class="sh" {
+                    h2 { "Community" }
+                    span class="n" { (reports.len()) }
+                    @if may_report {
+                        span class="grow" {}
+                        @for one in [OriginKind::Bug, OriginKind::Request, OriginKind::Question] {
+                            a class="btn2 sm" href={ "/" (repo) "/community?new=" (one.as_str()) "#new" } {
+                                (ic("plus", "")) (kind_words(one))
+                            }
+                        }
+                    }
+                }
+                @if let Some(error) = error { p class="error" { (error) } }
+                @if let Some(new) = new { (new_form(repo, new)) }
+                div class="filters" {
+                    a class=[kind.is_none().then_some("on")] href=(href(None, open_only)) { "All" }
+                    @for one in [OriginKind::Bug, OriginKind::Request, OriginKind::Question] {
+                        a class=[(kind == Some(one)).then_some("on")] href=(href(Some(one), open_only)) { (kind_words(one)) "s" }
+                    }
+                    span class="grow" {}
+                    a class=[open_only.then_some("on")] href=(href(kind, true)) { "Open" }
+                    a class=[(!open_only).then_some("on")] href=(href(kind, false)) { "Everything" }
+                }
+                div class="panel" {
+                    @if reports.is_empty() {
+                        div class="empty" {
+                            b { "Nobody has said anything yet." }
+                            @if may_report { "Report a bug, ask for something, or ask a question." }
+                            @else { "This repository does not take reports from outside." }
+                        }
+                    }
+                    @for report in reports {
+                        @let (display, agent) = people.name(&report.by);
+                        a class="row report" href={ "/" (repo) "/community/" (report.number) } {
+                            span class="chips" {
+                                (kind_chip(report.kind))
+                                @match (&report.state, &report.settled) {
+                                    (OriginState::Discarded, _) => { span class="chip" { (ic("x", "")) "Discarded" } }
+                                    (_, Some(done)) => { span class="chip good" { (ic("check", "")) (settlement_words(done.how)) } }
+                                    _ => {}
+                                }
+                            }
+                            span class="tt" {
+                                span class="t" { "#" (report.number) " " (report.title) }
+                                @let facts = {
+                                    let mut facts = vec![
+                                        ("Filed by", html! { (display) }),
+                                        ("On", html! { span title=(report.at) { (short_day(&report.at)) } }),
+                                        ("Replies", html! { (report.replies.len()) }),
+                                    ];
+                                    // Only a bug has one, and a fact that
+                                    // says nothing is worth no room.
+                                    if report.kind == OriginKind::Bug {
+                                        facts.push((
+                                            "Reproduction",
+                                            html! {
+                                                @if report.repro.is_runnable() { "a command to run" }
+                                                @else { span class="none" { "none yet" } }
+                                            },
+                                        ));
+                                    }
+                                    facts
+                                };
+                                (kv(&facts))
+                            }
+                            span class="avs" { (avatar(report.by.as_str(), display, agent, false)) }
+                            span class="age" title=(report.at) { (ago(&report.at)) }
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
+/// One report, with what was said on it and where it stands.
+#[allow(clippy::too_many_arguments)]
+pub fn community_report(
+    theme: Theme,
+    who: Reading<'_>,
+    repo: &str,
+    report: &Origin,
+    may_reply: bool,
+    may_answer: bool,
+    people: &People,
+    error: Option<&str>,
+) -> Markup {
+    let (display, agent) = people.name(&report.by);
+    let discarded = report.state == OriginState::Discarded;
+    let action = format!("/{repo}/community/{}", report.number);
+    layout_reading(
+        theme,
+        who,
+        Some(repo),
+        Some(Tab::Community),
+        &format!("#{} {}", report.number, report.title),
+        html! {
+            div class="sec top" {
+                div class="sh" {
+                    h2 { "#" (report.number) " " (report.title) }
+                    (kind_chip(report.kind))
+                    @match (&report.state, &report.settled) {
+                        (OriginState::Discarded, _) => { span class="chip" { (ic("x", "")) "Discarded" } }
+                        (_, Some(done)) => { span class="chip good" { (ic("check", "")) (settlement_words(done.how)) } }
+                        _ => { span class="chip acc" { "Open" } }
+                    }
+                }
+                @if let Some(error) = error { p class="error" { (error) } }
+                div class="panel said" {
+                    div class="thread" {
+                        div class="h" {
+                            (avatar(report.by.as_str(), display, agent, false))
+                            b { (display) }
+                            span class="when" title=(report.at) { (ago(&report.at)) }
+                        }
+                        p class="body" { (with_mentions(&report.body)) }
+                    @if report.kind == OriginKind::Bug && !discarded {
+                        div class="repro" {
+                            @if report.repro.is_empty() {
+                                p class="none" {
+                                    "Nothing here can be re-run yet. The command that shows it is what \
+                                     would change that — anybody can add one below."
+                                }
+                            } @else {
+                                (kv(&[
+                                    ("Version", html! { @match &report.repro.version {
+                                        Some(v) => { (v) } None => { span class="none" { "not said" } } } }),
+                                ]))
+                                @if let Some(command) = &report.repro.command {
+                                    div class="field" {
+                                        span class="k" { "Command" }
+                                        pre { code { (command) } }
+                                    }
+                                }
+                                div class="grid2 tight" {
+                                    @if let Some(observed) = &report.repro.observed {
+                                        div class="field" { span class="k" { "What happened" } p { (observed) } }
+                                    }
+                                    @if let Some(expected) = &report.repro.expected {
+                                        div class="field" { span class="k" { "What you expected" } p { (expected) } }
+                                    }
+                                }
+                                @if !report.repro.is_runnable() {
+                                    p class="none" { "No command yet, so nobody else can check this." }
+                                }
+                            }
+                        }
+                    }
+                    @for reply in &report.replies {
+                        @let (display, agent) = people.name(&reply.by);
+                        div class="reply" {
+                            (avatar(reply.by.as_str(), display, agent, false))
+                            span {
+                                b { (display) } span class="when" title=(reply.at) { (ago(&reply.at)) }
+                                p { (with_mentions(&reply.body)) }
+                            }
+                        }
+                    }
+                    @if let Some(done) = &report.settled {
+                        @let (by, _) = people.name(&done.by);
+                        p class="closed" {
+                            (settlement_words(done.how)) " by " (by)
+                            @if let Some(of) = done.duplicate_of {
+                                " — see " a href={ "/" (repo) "/community/" (of) } { "#" (of) }
+                            }
+                            @if !done.note.is_empty() { ": " (done.note) }
+                        }
+                    }
+                    @if may_reply && !discarded && report.settled.is_none() {
+                        div class="act" {
+                            form method="post" action={ (action) "/reply" } {
+                                input class="input sm" type="text" name="body" placeholder="Reply" aria-label="Reply" required autocomplete="off";
+                                button class="btn2 sm" type="submit" { "Reply" }
+                            }
+                        }
+                    }
+                    }
+                }
+                @if may_answer && !discarded && report.settled.is_none() {
+                    div class="answer" {
+                        form class="panel" method="post" action={ (action) "/settle" } {
+                            div class="pref" {
+                                h3 { "Settle" }
+                                div class="field" {
+                                    label for="how" { "How" }
+                                    select class="input" id="how" name="how" {
+                                        option value="answered" { "Answered" }
+                                        option value="fixed" { "Already fixed" }
+                                        option value="declined" { "Not planned" }
+                                        option value="duplicate" { "Said before" }
+                                    }
+                                }
+                                div class="field" {
+                                    label for="note" { "Why" }
+                                    input class="input" id="note" name="note" type="text" required
+                                        placeholder="The next person to ask reads this";
+                                }
+                                div class="field" {
+                                    label for="duplicate_of" { "Repeats which report" }
+                                    input class="input" id="duplicate_of" name="duplicate_of" type="number" min="1"
+                                        placeholder="Only for “said before”";
+                                }
+                                div class="act" { button class="btn" type="submit" { "Settle" } }
+                            }
+                        }
+                        form class="discard" method="post" action={ (action) "/discard" } {
+                            span class="t" { "Discard" }
+                            input class="input sm" name="reason" type="text" required
+                                placeholder="Why this should never have arrived" aria-label="Reason";
+                            button class="btn2 sm danger" type="submit" { "Discard" }
+                            span class="hint" { "The number and the reason stay; the text and its replies do not." }
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
 pub fn changes(
     theme: Theme,
     who: Reading<'_>,

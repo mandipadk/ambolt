@@ -18,7 +18,7 @@ mod views;
 use crate::auth::resolve_bearer;
 use crate::repo_path::RepoName;
 use crate::state::AppState;
-use ambolt_core::{Disposition, PrincipalId, Repo, ReviewDomain};
+use ambolt_core::{Disposition, OriginKind, OriginState, PrincipalId, Repo, ReviewDomain};
 use axum::Router;
 use axum::extract::{Form, FromRequestParts, Path, Query, State};
 use axum::http::request::Parts;
@@ -151,6 +151,26 @@ pub fn routes() -> Router<AppState> {
         .route("/{owner}/{repo}", get(repo_page))
         .route("/{owner}/{repo}/tree/{*path}", get(tree_page))
         .route("/{owner}/{repo}/blame/{*path}", get(blame_page))
+        .route(
+            "/{owner}/{repo}/community",
+            get(community_page).post(submit_report),
+        )
+        .route(
+            "/{owner}/{repo}/community/{number}",
+            get(community_report_page),
+        )
+        .route(
+            "/{owner}/{repo}/community/{number}/reply",
+            post(submit_report_reply),
+        )
+        .route(
+            "/{owner}/{repo}/community/{number}/settle",
+            post(submit_report_settle),
+        )
+        .route(
+            "/{owner}/{repo}/community/{number}/discard",
+            post(submit_report_discard),
+        )
         .route("/{owner}/{repo}/changes", get(changes_page))
         .route("/{owner}/{repo}/changes/{number}", get(change_page))
         .route(
@@ -4201,6 +4221,281 @@ async fn blame_page(
         });
     }
     views::blame(theme, who.reading(), &repo, &path, &rows).into_response()
+}
+
+#[derive(Deserialize)]
+struct CommunityQuery {
+    /// `bug`, `request` or `question`; anything else lists all three.
+    #[serde(default)]
+    kind: Option<String>,
+    /// `all` shows what has been settled too; the default is what is open.
+    #[serde(default)]
+    state: Option<String>,
+    /// Which form to open, since the pages run no script and the URL
+    /// is what says where a composer goes.
+    #[serde(default)]
+    new: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+async fn community_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    reader: Reader,
+    RepoName(repo): RepoName,
+    Query(query): Query<CommunityQuery>,
+) -> Response {
+    let who = match read_repo(&app, reader, &repo) {
+        Ok((_, who)) => who,
+        Err(response) => return *response,
+    };
+    let kind = query.kind.as_deref().and_then(OriginKind::parse);
+    let open_only = query.state.as_deref() != Some("all");
+    let may_report = match &who {
+        Who::Signed(viewer) => app.with_store(|s| s.may_report(&viewer.0, &repo)),
+        Who::Anonymous(_) => false,
+    };
+    match app.with_store(|s| s.origins_in(&repo, Some(200))) {
+        Ok(mut reports) => {
+            if let Some(kind) = kind {
+                reports.retain(|o| o.kind == kind);
+            }
+            if open_only {
+                reports.retain(|o| o.state == OriginState::Open);
+            }
+            let people = people_named(&app, reports.iter().map(|o| o.by.as_str()));
+            views::community(
+                theme,
+                who.reading(),
+                &repo,
+                &reports,
+                kind,
+                open_only,
+                may_report,
+                query.new.as_deref().and_then(OriginKind::parse),
+                &people,
+                query.error.as_deref(),
+            )
+            .into_response()
+        }
+        Err(err) => oops(err),
+    }
+}
+
+async fn community_report_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    reader: Reader,
+    RepoName(repo): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+    Query(query): Query<FlashQuery>,
+) -> Response {
+    let who = match read_repo(&app, reader, &repo) {
+        Ok((_, who)) => who,
+        Err(response) => return *response,
+    };
+    let report = match app.with_store(|s| s.origin_numbered(&repo, number)) {
+        Ok(Some(report)) => report,
+        Ok(None) => return not_found(),
+        Err(err) => return oops(err),
+    };
+    let (may_reply, may_answer) = match &who {
+        Who::Signed(viewer) => app.with_store(|s| {
+            (
+                s.may_report(&viewer.0, &repo) || report.by == viewer.0,
+                s.may_answer_reports(&viewer.0, &repo),
+            )
+        }),
+        Who::Anonymous(_) => (false, false),
+    };
+    let people = people_named(
+        &app,
+        std::iter::once(report.by.as_str())
+            .chain(report.replies.iter().map(|r| r.by.as_str()))
+            .chain(report.settled.iter().map(|s| s.by.as_str())),
+    );
+    views::community_report(
+        theme,
+        who.reading(),
+        &repo,
+        &report,
+        may_reply,
+        may_answer,
+        &people,
+        query.error.as_deref(),
+    )
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct NewReportForm {
+    kind: String,
+    title: String,
+    body: String,
+    #[serde(default)]
+    version: String,
+    #[serde(default)]
+    command: String,
+    #[serde(default)]
+    observed: String,
+    #[serde(default)]
+    expected: String,
+}
+
+async fn submit_report(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Form(form): Form<NewReportForm>,
+) -> Response {
+    let back = format!("/{repo}/community");
+    let Some(kind) = OriginKind::parse(&form.kind) else {
+        return flash(&back, "Say whether this is a bug, a request or a question");
+    };
+    if let Err(response) = readable(&app, &viewer, &repo) {
+        return *response;
+    }
+    // An empty box is not an answer; the core would refuse it anyway,
+    // and this keeps whatever they typed out of the log.
+    let said = |value: &str| match value.trim() {
+        "" => None,
+        said => Some(said.to_owned()),
+    };
+    match app.with_store(|s| {
+        s.open_origin(
+            &viewer.0,
+            &repo,
+            kind,
+            form.title.trim(),
+            form.body.trim(),
+            ambolt_core::Repro {
+                version: said(&form.version),
+                command: said(&form.command),
+                observed: said(&form.observed),
+                expected: said(&form.expected),
+            },
+        )
+    }) {
+        Ok((_, number, env)) => {
+            app.publish(&env);
+            Redirect::to(&format!("{back}/{number}")).into_response()
+        }
+        Err(err) => flash(&format!("{back}?new={}", kind.as_str()), &humane(&err)),
+    }
+}
+
+/// The report a form names, and where to send the reader back to.
+fn report_at(
+    app: &AppState,
+    repo: &str,
+    number: i64,
+) -> Result<(ambolt_core::OriginId, String), Box<Response>> {
+    let back = format!("/{repo}/community/{number}");
+    match app.with_store(|s| s.origin_numbered(repo, number)) {
+        Ok(Some(report)) => Ok((report.id, back)),
+        Ok(None) => Err(Box::new(not_found())),
+        Err(err) => Err(Box::new(oops(err))),
+    }
+}
+
+#[derive(Deserialize)]
+struct ReportReplyForm {
+    body: String,
+}
+
+async fn submit_report_reply(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+    Form(form): Form<ReportReplyForm>,
+) -> Response {
+    if let Err(response) = readable(&app, &viewer, &repo) {
+        return *response;
+    }
+    let (report, back) = match report_at(&app, &repo, number) {
+        Ok(found) => found,
+        Err(response) => return *response,
+    };
+    match app.with_store(|s| s.reply_origin(&viewer.0, &report, form.body.trim())) {
+        Ok(env) => {
+            app.publish(&env);
+            Redirect::to(&back).into_response()
+        }
+        Err(err) => flash(&back, &humane(&err)),
+    }
+}
+
+#[derive(Deserialize)]
+struct SettleForm {
+    how: String,
+    note: String,
+    #[serde(default)]
+    duplicate_of: String,
+}
+
+async fn submit_report_settle(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+    Form(form): Form<SettleForm>,
+) -> Response {
+    if let Err(response) = readable(&app, &viewer, &repo) {
+        return *response;
+    }
+    let (report, back) = match report_at(&app, &repo, number) {
+        Ok(found) => found,
+        Err(response) => return *response,
+    };
+    let Some(how) = ambolt_core::Settlement::parse(&form.how) else {
+        return flash(&back, "Say how this was settled");
+    };
+    let duplicate_of = match form.duplicate_of.trim() {
+        "" => None,
+        said => match said.parse::<i64>() {
+            Ok(number) => Some(number),
+            Err(_) => return flash(&back, "A report is named by its number"),
+        },
+    };
+    match app
+        .with_store(|s| s.settle_origin(&viewer.0, &report, how, form.note.trim(), duplicate_of))
+    {
+        Ok(env) => {
+            app.publish(&env);
+            Redirect::to(&back).into_response()
+        }
+        Err(err) => flash(&back, &humane(&err)),
+    }
+}
+
+#[derive(Deserialize)]
+struct DiscardForm {
+    reason: String,
+}
+
+async fn submit_report_discard(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    RepoName(repo): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+    Form(form): Form<DiscardForm>,
+) -> Response {
+    if let Err(response) = readable(&app, &viewer, &repo) {
+        return *response;
+    }
+    let (report, back) = match report_at(&app, &repo, number) {
+        Ok(found) => found,
+        Err(response) => return *response,
+    };
+    match app.with_store(|s| s.discard_origin(&viewer.0, &report, form.reason.trim())) {
+        Ok(env) => {
+            app.publish(&env);
+            Redirect::to(&back).into_response()
+        }
+        Err(err) => flash(&back, &humane(&err)),
+    }
 }
 
 async fn changes_page(
