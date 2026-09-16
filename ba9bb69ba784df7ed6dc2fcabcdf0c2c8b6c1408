@@ -1,0 +1,137 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Iinvite0140",
+      "id": "c-720wbt5gpp2ayphbd0886g2pwy",
+      "landed_oid": "ba9bb69ba784df7ed6dc2fcabcdf0c2c8b6c1408",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 162,
+      "opened_at": "2026-09-16T04:59:47.638910379Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": null,
+      "title": "Let the minting keep the invitation's rules",
+      "updated_at": "2026-09-16T14:49:35.380986651Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-720wbt5gpp2ayphbd0886g2pwy",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-5fxt3q067r9203pne68fdfcb6x",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1528,
+        "summary": "262 tests pass on aquaman, with fmt and clippy clean on its toolchain. A second invitation kills the first link through the minting itself, and an invitation names an account nobody has been yet while leaving a claimed one alone.",
+        "unchecked": [
+          "the People page's new Shown as field was exercised by hand against a local forge, not by a browser test",
+          "no upgrade of a live database was rehearsed: the new event adds no column, it writes principals.display, which the log already rebuilds"
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "ba9bb69ba784df7ed6dc2fcabcdf0c2c8b6c1408",
+    "landed_at": "2026-09-16T14:49:35.380986651Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-720wbt5gpp2ayphbd0886g2pwy",
+      "commit_oid": "ba9bb69ba784df7ed6dc2fcabcdf0c2c8b6c1408",
+      "message": "Let the minting keep the invitation's rules\n\nOne invitation at a time was a rule three callers each carried out for\nthemselves: the operator's API, an organisation's owner, and the People\npage. Three copies of a rule is how a fourth way in comes to forget it,\nso the minting keeps it now — it revokes what the person still held and\nthen mints, and every caller inherits that by calling it. The People\npage keeps its own revoking only for cancelling, which mints nothing.\n\nAn invitation may also put a name right. A person's username is what\nevery reference to them is made of and never changes; the name they are\nshown by is another matter, and until somebody has been the account it\nis the operator's to correct — a row invited as \"hi\" can become Aditya\nSharma on the next invitation. Once somebody has arrived, that name is\ntheirs: an invitation leaves it alone, whatever the form says. The\nPeople page carries a \"Shown as\" beside the link button for exactly the\npeople nobody has been yet, and the console's waitlist row already\nsends the same field.\n\nThe name changing is an event like everything else, so the log explains\nthe profile that follows from it.\n\nChange-Id: Iinvite0140\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/invite_flow.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/event.rs",
+        "crates/core/src/store.rs",
+        "crates/core/tests/suite/lifecycle.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1531,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-5fxt3q067r9203pne68fdfcb6x",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-5fxt3q067r9203pne68fdfcb6x",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 217 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 9 path(s) outside docs/, *.md: crates/cli/tests/suite/invite_flow.rs, crates/core/src/commands.rs, crates/core/src/event.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-720wbt5gpp2ayphbd0886g2pwy",
+        "claim": "cl-5fxt3q067r9203pne68fdfcb6x",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test --workspace --no-fail-fast",
+        "id": "vr-712jfbpffpfjnw22jgxdzcqrbc",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1529
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "Il6BX27u8rK005+NY/+coTzEy4DxO2dfHJA6vBHuA1i2boobnyJV/XonYgI5KPmDDljyRly+QmjRERDEOXHZBg=="
+  }
+}
