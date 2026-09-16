@@ -211,6 +211,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/changes/{id}/prefer", post(routes::prefer_revision))
         .route("/api/changes/{id}/receipt", get(receipts::change_receipt))
         .route(
+            "/api/principals/{id}/record/signed",
+            get(receipts::principal_record_signed),
+        )
+        .route(
             "/api/repos/{owner}/{name}/receipts",
             get(receipts::repo_receipts),
         )

@@ -56,13 +56,21 @@ impl std::fmt::Display for Summary {
     }
 }
 
-/// Verify a signed receipt document. `expected_key` is a fingerprint or
-/// a base64 public key the receipt must have been signed with.
-pub fn verify(document: &str, expected_key: Option<&str>) -> anyhow::Result<Summary> {
-    let signed: Value = serde_json::from_str(document).context("the receipt is not JSON")?;
+/// Check a signed document's signature and hand back its body and the
+/// fingerprint of the key that signed it. `name` is what the body is
+/// filed under: `receipt` for a landing, `record` for a person's record.
+/// `expected_key` is a fingerprint or a base64 public key it must have
+/// been signed with.
+pub fn verify_signed(
+    document: &str,
+    name: &str,
+    expected_key: Option<&str>,
+) -> anyhow::Result<(Value, String)> {
+    let signed: Value =
+        serde_json::from_str(document).with_context(|| format!("the {name} is not JSON"))?;
     let body = signed
-        .get("receipt")
-        .context("no `receipt` in the document")?;
+        .get(name)
+        .with_context(|| format!("no `{name}` in the document"))?;
     let signature = signed
         .get("signature")
         .context("no `signature` in the document")?;
@@ -104,8 +112,15 @@ pub fn verify(document: &str, expected_key: Option<&str>) -> anyhow::Result<Summ
     let canonical = canonical_json(body);
     ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, &public)
         .verify(canonical.as_bytes(), &value)
-        .map_err(|_| anyhow::anyhow!("the signature does not match the receipt"))?;
+        .map_err(|_| anyhow::anyhow!("the signature does not match the {name}"))?;
+    Ok((body.clone(), key_id))
+}
 
+/// Verify a signed receipt document. `expected_key` is a fingerprint or
+/// a base64 public key the receipt must have been signed with.
+pub fn verify(document: &str, expected_key: Option<&str>) -> anyhow::Result<Summary> {
+    let (body, key_id) = verify_signed(document, "receipt", expected_key)?;
+    let body = &body;
     let get = |path: &str| body.pointer(path).cloned().unwrap_or(Value::Null);
     let verifications = get("/verifications");
     let runs = verifications.as_array().cloned().unwrap_or_default();

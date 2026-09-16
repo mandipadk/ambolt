@@ -170,6 +170,11 @@ enum Command {
         #[command(subcommand)]
         command: ReceiptCommand,
     },
+    /// A person's signed record: check one offline.
+    Record {
+        #[command(subcommand)]
+        command: RecordCommand,
+    },
     /// Offline administration against the forge database. Having file
     /// access to the database is the root authority.
     Admin {
@@ -300,6 +305,20 @@ enum Command {
         /// Principal to assert instead of a token (dev-mode servers only).
         #[arg(long)]
         principal: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum RecordCommand {
+    /// Check a record's signature offline and say what it certifies.
+    Verify {
+        /// The record document, as served by
+        /// /api/principals/{id}/record/signed.
+        file: PathBuf,
+        /// The key it must be signed with: a fingerprint or a base64
+        /// public key, as /api/forge/key publishes.
+        #[arg(long)]
+        key: Option<String>,
     },
 }
 
@@ -1357,6 +1376,14 @@ async fn main() -> anyhow::Result<()> {
             let document = std::fs::read_to_string(&file)
                 .with_context(|| format!("reading {}", file.display()))?;
             let summary = ambolt_client::receipt::verify(&document, key.as_deref())?;
+            println!("{summary}");
+        }
+        Command::Record {
+            command: RecordCommand::Verify { file, key },
+        } => {
+            let document = std::fs::read_to_string(&file)
+                .with_context(|| format!("reading {}", file.display()))?;
+            let summary = ambolt_client::record::verify(&document, key.as_deref())?;
             println!("{summary}");
         }
         Command::Report {

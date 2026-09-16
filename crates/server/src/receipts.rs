@@ -8,14 +8,14 @@
 //! may read the change. The signature is over a canonical form anyone
 //! can recompute; the forge's public key is published beside it.
 
-use crate::auth::MaybeActor;
+use crate::auth::{Actor, MaybeActor};
 use crate::error::Json;
 use crate::error::{ApiError, ApiResult};
 use crate::error::{Path, Query};
 use crate::repo_path::RepoName;
 use crate::routes::{readable_change_by, readable_repo_by};
 use crate::state::AppState;
-use ambolt_core::{ChangeId, Receipt};
+use ambolt_core::{ChangeId, PrincipalId, Receipt};
 use axum::extract::State;
 use axum::http::StatusCode;
 use base64::Engine as _;
@@ -89,18 +89,28 @@ impl Signer {
     /// verifies with, and the name of the canonical form.
     pub fn sign(&self, receipt: &Receipt) -> Value {
         let body = serde_json::to_value(receipt).expect("a receipt serializes");
+        self.sign_as("receipt", body)
+    }
+
+    /// Sign any document the forge vouches for, filed under the name a
+    /// verifier looks for it by: `receipt` for a landing, `record` for
+    /// a person's record.
+    pub fn sign_as(&self, name: &str, body: Value) -> Value {
         let canonical = ambolt_core::canonical_json(&body);
         let signature = self.key.sign(canonical.as_bytes());
-        json!({
-            "receipt": body,
-            "signature": {
+        let mut document = serde_json::Map::new();
+        document.insert(name.to_owned(), body);
+        document.insert(
+            "signature".to_owned(),
+            json!({
                 "alg": "ed25519",
                 "key": self.id,
                 "public_key": self.public_key_base64(),
                 "value": BASE64.encode(signature.as_ref()),
-            },
-            "canonical": CANONICAL,
-        })
+            }),
+        );
+        document.insert("canonical".to_owned(), json!(CANONICAL));
+        Value::Object(document)
     }
 }
 
@@ -182,6 +192,41 @@ pub async fn change_receipt(
     let change = ChangeId(id);
     readable_change_by(&app, &who, &change)?;
     Ok(Json(signed_receipt(&app, &change)?))
+}
+
+#[derive(Deserialize)]
+pub struct RecordWindow {
+    /// How far back to count; 90 days when absent, ten years at most.
+    pub days: Option<u32>,
+}
+
+/// A principal's record, signed by the forge, so it can be shown
+/// elsewhere and checked without the forge the way a receipt is:
+/// `ambolt record verify`. Anyone signed in may ask, as with the page.
+pub async fn principal_record_signed(
+    State(app): State<AppState>,
+    _actor: Actor,
+    Path(id): Path<String>,
+    Query(query): Query<RecordWindow>,
+) -> ApiResult<Json<Value>> {
+    let signer = app.signer().ok_or_else(unsigned)?;
+    let id = PrincipalId(id);
+    let principal = app
+        .with_store(|s| s.principal(&id))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found", "no such principal"))?;
+    let days = query.days.unwrap_or(90).clamp(1, 3650);
+    let record = app.with_store(|s| s.record_of(&id, days))?;
+    let mut body = serde_json::to_value(record).expect("a record serializes");
+    if let Value::Object(map) = &mut body {
+        map.insert("forge".to_owned(), json!(app.public_url()));
+        map.insert("display".to_owned(), json!(principal.display));
+        map.insert("kind".to_owned(), json!(principal.kind));
+        map.insert(
+            "issued_at".to_owned(),
+            json!(jiff::Timestamp::now().to_string()),
+        );
+    }
+    Ok(Json(signer.sign_as("record", body)))
 }
 
 #[derive(Deserialize)]

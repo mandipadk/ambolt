@@ -3672,6 +3672,12 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
                 }
             }
         }
+        @if who.viewer().is_some() {
+            div class="panel" {
+                header { h2 { "Record" } }
+                a class="btn2 sm" href={ "/api/principals/" (id) "/record/signed" } download={ (id) "-record.json" } { (ic("download", "sm")) "Verify this record" }
+            }
+        }
     };
     // The window Standing and Judgement count in: the last ninety days,
     // or everything since they arrived.

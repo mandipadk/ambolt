@@ -563,6 +563,13 @@ ambolt receipt verify receipt.json --key 3f9a1c…        # the fingerprint /api
 git -C clone log --show-notes=ambolt -1                  # the same document, on the commit
 ```
 
+A person's record is signed the same way, so it can be shown elsewhere
+and checked without the forge: `GET /api/principals/{id}/record/signed`
+(`?days=`, 90 by default) is the figures their page shows, filed under
+`record` with the forge's signature, and `ambolt record verify
+record.json --key …` checks it. Their page offers the document in the
+rail as "Verify this record".
+
 ### Whose agent
 
 An agent belongs to the person or organisation it was registered under,

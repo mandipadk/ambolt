@@ -454,3 +454,67 @@ async fn whois_says_who_somebody_is_over_the_api_and_the_binary() {
     let (ok, out) = run(&["nobody"]);
     assert!(!ok, "{out}");
 }
+
+/// A person's record is signed like a receipt, checks offline, and fails
+/// when a figure is changed; the page offers it in the rail.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_record_is_signed_and_verifies_offline() {
+    let forge = boot().await;
+    let app = &forge.app;
+    let (status, signed) = api(app, "GET", "/api/principals/ada/record/signed", "ada", None).await;
+    assert_eq!(status, StatusCode::OK, "{signed}");
+    assert_eq!(signed["record"]["principal"], "ada", "{signed}");
+    assert_eq!(signed["record"]["display"], "Ada", "{signed}");
+    assert_eq!(signed["record"]["window_days"], 90, "{signed}");
+    assert!(signed["record"]["issued_at"].is_string(), "{signed}");
+    assert_eq!(signed["signature"]["alg"], "ed25519", "{signed}");
+    let key = signed["signature"]["key"].as_str().unwrap().to_owned();
+    let (status, _) = api(
+        app,
+        "GET",
+        "/api/principals/nobody/record/signed",
+        "ada",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let verify = |name: &str, document: &serde_json::Value, key: Option<&str>| {
+        let file = forge.work.join(name);
+        std::fs::write(&file, document.to_string()).unwrap();
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ambolt"));
+        command.args(["record", "verify", file.to_str().unwrap()]);
+        if let Some(key) = key {
+            command.args(["--key", key]);
+        }
+        let output = command.output().expect("run ambolt record verify");
+        (
+            output.status.success(),
+            format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        )
+    };
+    let (ok, out) = verify("ada-record.json", &signed, Some(&key));
+    assert!(ok, "{out}");
+    assert!(
+        out.starts_with("verified  the record of Ada (@ada), person\n"),
+        "{out}"
+    );
+    assert!(out.contains("  window    90 days, issued 20"), "{out}");
+    assert!(out.contains("  key       "), "{out}");
+    let (ok, out) = verify("ada-record.json", &signed, Some("0000000000000000"));
+    assert!(!ok, "{out}");
+    let mut forged = signed.clone();
+    forged["record"]["landed"] = json!(999);
+    let (ok, out) = verify("forged.json", &forged, None);
+    assert!(!ok, "{out}");
+    assert!(out.contains("does not match"), "{out}");
+
+    let (_, cookie) = sign_in_as(&forge, "ada").await;
+    let (_, page) = page_with_cookie(app, "/ada", &cookie).await;
+    assert!(page.contains("/api/principals/ada/record/signed"), "{page}");
+    assert!(page.contains("Verify this record"), "{page}");
+}
