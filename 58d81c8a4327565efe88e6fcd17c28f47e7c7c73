@@ -1,0 +1,162 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Isweep0160",
+      "id": "c-4qzbj1pqfnktz7x8es9xc9mztt",
+      "landed_oid": "58d81c8a4327565efe88e6fcd17c28f47e7c7c73",
+      "landed_revision": 2,
+      "latest_revision": 2,
+      "number": 163,
+      "opened_at": "2026-09-16T18:12:46.324927986Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-3jxme8gmbfxqjx2a2scbhpzw8k",
+      "title": "Give every page its space and every fact its own place",
+      "updated_at": "2026-09-16T18:18:25.198910318Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-4qzbj1pqfnktz7x8es9xc9mztt",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-2yh9zkfzxb1jmccyf0af757ner",
+        "kind": "test",
+        "passed": true,
+        "revision": 2,
+        "seq": 1546,
+        "summary": "the whole suite, on the box: green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-4qzbj1pqfnktz7x8es9xc9mztt",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-0pn270hxjnet32jmwczqcfkqn5",
+        "kind": "lint",
+        "passed": true,
+        "revision": 2,
+        "seq": 1547,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "58d81c8a4327565efe88e6fcd17c28f47e7c7c73",
+    "landed_at": "2026-09-16T18:18:25.198910318Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-4qzbj1pqfnktz7x8es9xc9mztt",
+      "commit_oid": "58d81c8a4327565efe88e6fcd17c28f47e7c7c73",
+      "message": "Give every page its space and every fact its own place\n\nSix rules for every page, applied at once. No label is set in capitals:\nthe fact idiom reads as a small label over its value, in sentence case.\nNo two facts share a line with a dot between them; each has its own\nline or its own column, on the change rows, the people list, the\nsessions, the coverage page and the log's sentences alike. Rows align\nto their first line with the chip beside it, and the figures on Home,\nReview and a person's page share three rows, heading, number and note,\nso the numbers sit level across every column. Panels are open unless\nsomething needs lifting, and the few that do (readiness, an agent's\ncard, a README, a report's thread, a disagreement) say so. The\nsentences that explained the forge to itself are gone from the pages;\nwhat remains is a title, a count, and controls that say what they do.\n\nThe owner's page pays the gap at its top once, drops the sentence under\nthe record, offers one New repository (in the head row, under this\nowner), says the name once, shows four figures with the arithmetic\nfolded behind one link, and lists where a person's changes have landed\ninstead of announcing \"Nothing here yet\" to somebody whose work lives\nunder an organisation.\n\nTwo tests hold the line: no rule in the stylesheet sets text in\ncapitals, and no line in the views joins two facts with a dot.\n\nChange-Id: Isweep0160\nTask: t-3jxme8gmbfxqjx2a2scbhpzw8k\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 2,
+      "paths": [
+        "crates/cli/tests/suite/account_state_flow.rs",
+        "crates/cli/tests/suite/code_flow.rs",
+        "crates/cli/tests/suite/invite_flow.rs",
+        "crates/cli/tests/suite/profile_flow.rs",
+        "crates/cli/tests/suite/reset_flow.rs",
+        "crates/cli/tests/suite/sessions_flow.rs",
+        "crates/cli/tests/suite/style_flow.rs",
+        "crates/cli/tests/suite/web_flow.rs",
+        "crates/core/src/queries.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs"
+      ],
+      "session": null
+    },
+    "seq": 1551,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 2 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-2yh9zkfzxb1jmccyf0af757ner, cl-0pn270hxjnet32jmwczqcfkqn5",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-2yh9zkfzxb1jmccyf0af757ner",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 219 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 12 path(s) outside docs/, *.md: crates/cli/tests/suite/account_state_flow.rs, crates/cli/tests/suite/code_flow.rs, crates/cli/tests/suite/invite_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-4qzbj1pqfnktz7x8es9xc9mztt",
+        "claim": "cl-2yh9zkfzxb1jmccyf0af757ner",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-0vqwyxt6wz31jasrgyewf6cmae",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 2,
+        "seq": 1548
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-4qzbj1pqfnktz7x8es9xc9mztt",
+        "claim": "cl-0pn270hxjnet32jmwczqcfkqn5",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-5bcs2005n6w8ganacfrhzbxygv",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.80s",
+        "revision": 2,
+        "seq": 1549
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "O1aSXOlUk7JG6Mxov4lpYkfHAbtQJ0+ir76PGsJMGR2RPoy2bRZGIh9OTJFJi3wj/+2bHLDMbW1jK4CCETB0BQ=="
+  }
+}
