@@ -3375,6 +3375,541 @@ pub fn owner(
     )
 }
 
+/// Which of a person's pages is open.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum OwnerTab {
+    Overview,
+    Landed,
+    Agents,
+    Judgement,
+    Allowance,
+}
+
+impl OwnerTab {
+    /// The path segment under the owner, empty for the overview.
+    pub fn segment(self) -> &'static str {
+        match self {
+            OwnerTab::Overview => "",
+            OwnerTab::Landed => "/landed",
+            OwnerTab::Agents => "/agents",
+            OwnerTab::Judgement => "/judgement",
+            OwnerTab::Allowance => "/allowance",
+        }
+    }
+}
+
+/// The record with the shape a page draws it in: thirteen weeks of
+/// landings, oldest first, and where the month changes along them.
+pub struct Standing {
+    pub record: ambolt_core::Record,
+    pub weeks: Vec<u32>,
+    pub months: Vec<(usize, &'static str)>,
+}
+
+/// One landing on the diary, and whether a runner re-ran the revision
+/// that landed.
+pub struct LandedRow {
+    pub change: ambolt_core::Change,
+    pub reproduced: bool,
+}
+
+/// An agent acting in somebody's name, with its own record and holds.
+pub struct AgentRow {
+    pub principal: ambolt_core::Principal,
+    pub record: ambolt_core::Record,
+    pub grants: Vec<ambolt_core::Grant>,
+    /// Where it is mid-session, when it is; None when the viewer may
+    /// not see where.
+    pub at_work: Option<Option<String>>,
+}
+
+/// The rail beside a person's or an agent's page.
+pub struct Rail {
+    pub last_landed: Option<String>,
+    /// Agents of theirs mid-session: the agent's name and where, when the
+    /// viewer may see where.
+    pub at_work: Vec<(String, Option<String>)>,
+    pub orgs: Vec<(String, ambolt_core::TeamRole)>,
+    pub granted: Vec<ambolt_core::Grant>,
+    pub runs_forge: bool,
+    /// For an agent: who holds it, id and display.
+    pub held_by: Option<(String, String)>,
+}
+
+/// What the open tab shows.
+pub enum TabBody<'a> {
+    Overview,
+    Landed {
+        works_in: &'a [(String, u32)],
+        tree: &'a [(String, u32)],
+        tree_total: u32,
+        rows: &'a [LandedRow],
+        total: usize,
+        filter: Option<&'a str>,
+        all: bool,
+    },
+    Agents {
+        split: ambolt_core::Split,
+        agents: &'a [AgentRow],
+    },
+    Judgement(&'a ambolt_core::Judgement),
+    Allowance(&'a (ambolt_core::Usage, ambolt_core::Quota)),
+}
+
+/// A person's page, or an agent's: the head, the tabs, one tab's body,
+/// and the rail.
+pub struct PersonPage<'a> {
+    pub theme: Theme,
+    pub who: Reading<'a>,
+    pub owner: &'a ambolt_core::Principal,
+    pub tab: OwnerTab,
+    pub says: &'a Says,
+    pub standing: &'a Standing,
+    /// Landings the viewer may see, agents, looks given: the tab counts.
+    pub counts: (usize, usize, u32),
+    pub body: TabBody<'a>,
+    pub rail: &'a Rail,
+    pub is_self: bool,
+    pub may_allowance: bool,
+    pub may_create: bool,
+    pub people: &'a People,
+}
+
+/// Thirteen weekly bars in one drawing, labelled where the month turns.
+fn weeks_svg(weeks: &[u32], months: &[(usize, &str)]) -> Markup {
+    let most = weeks.iter().copied().max().unwrap_or(0).max(1) as f64;
+    html! {
+        svg viewBox="0 0 640 72" aria-label="Landings per week, thirteen weeks" {
+            @for (i, n) in weeks.iter().enumerate() {
+                @let x = 4 + i * 48;
+                @if *n == 0 {
+                    rect class="zero" x=(x) y="54" width="40" height="3" rx="1.5" {}
+                } @else {
+                    @let h = (f64::from(*n) / most * 36.0).max(3.0);
+                    rect x=(x) y=(format!("{:.1}", 57.0 - h)) width="40" height=(format!("{h:.1}")) rx="1.5" {}
+                    @if f64::from(*n) == most { text x=(x + 20) y=(format!("{:.1}", 57.0 - h - 5.0)) text-anchor="middle" { (n) } }
+                }
+            }
+            @for (i, month) in months { text x=(4 + i * 48) y="70" { (month) } }
+        }
+    }
+}
+
+fn agent_facts(
+    owner: &ambolt_core::Principal,
+    held_by: Option<&(String, String)>,
+    since: Option<&str>,
+) -> Vec<(&'static str, Markup)> {
+    let mut facts: Vec<(&'static str, Markup)> = vec![("Kind", html! { "Agent" })];
+    if let Some((id, display)) = held_by {
+        facts.push(("Held by", html! { a href={ "/" (id) } { (display) } }));
+    }
+    facts.push((
+        "Model",
+        html! { (owner.model.as_deref().unwrap_or("Not said")) },
+    ));
+    facts.push((
+        "Harness",
+        html! { (owner.harness.as_deref().unwrap_or("Not said")) },
+    ));
+    if let Some(since) = since {
+        facts.push(("Here since", html! { (since) }));
+    }
+    facts
+}
+
+/// One bar of a list: a name, a track filled in proportion, a number.
+fn bar(name: Markup, share: f64, count: Markup) -> Markup {
+    html! {
+        div class="b" {
+            span class="name" { (name) }
+            div class="tr" { i style={ "width: " (format!("{:.0}", (share * 100.0).clamp(0.0, 100.0))) "%" } {} }
+            span class="n" { (count) }
+        }
+    }
+}
+
+pub fn person_page(page: PersonPage<'_>) -> Markup {
+    let PersonPage {
+        theme,
+        who,
+        owner,
+        tab,
+        says,
+        standing,
+        counts,
+        body,
+        rail,
+        is_self,
+        may_allowance,
+        may_create,
+        people,
+    } = page;
+    let id = owner.id.as_str();
+    let agent = owner.kind == ambolt_core::PrincipalKind::Agent;
+    let record = &standing.record;
+    let nothing_yet =
+        record.landed == 0 && record.abandoned == 0 && record.claims == 0 && counts.2 == 0;
+    let head = may_create.then(|| Head {
+        count: None,
+        acts: Some(html! {
+            a class="btn2 sm" href={ "/new?owner=" (id) } { (ic("plus", "sm")) "New repository" }
+        }),
+    });
+    let tab_link = |which: OwnerTab, label: &str, count: Option<String>| {
+        html! {
+            a class={ "tab" @if tab == which { " on" } } href={ "/" (id) (which.segment()) } {
+                (label)
+                @if let Some(count) = count { span class="n" { (count) } }
+            }
+        }
+    };
+    let facts = if agent {
+        agent_facts(owner, rail.held_by.as_ref(), says.since.as_deref())
+    } else {
+        says.facts()
+    };
+    let rail_markup = html! {
+        div class="panel" {
+            header { h2 { "Now" } }
+            div class="kv rail-facts" {
+                @if agent {
+                    span class="pair" { span class="k" { "State" } span class="v" { @if rail.at_work.is_empty() { span class="dot" {} " Idle" } @else { span class="dot live" {} " At work" } } }
+                }
+                span class="pair" { span class="k" { "Last landed" } span class="v" { @match &rail.last_landed { Some(ts) => { (ago(ts)) } None => { "Nothing yet" } } } }
+                @if !agent {
+                    span class="pair" {
+                        span class="k" { "At work" }
+                        span class="v" {
+                            @if rail.at_work.is_empty() { span class="dot" {} " No agent is holding a path" }
+                            @for (name, repo) in &rail.at_work {
+                                span class="dot live" {} " " (name)
+                                @match repo { Some(repo) => { ", on " a href={ "/" (repo) } { (repo) } } None => { ", somewhere private" } }
+                                br;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        @if !agent && !rail.orgs.is_empty() {
+            div class="panel" {
+                header { h2 { "Organisations" } }
+                @for (org, role) in &rail.orgs {
+                    div class="row member" {
+                        span class="av org" title=(org) { (initials(org)) }
+                        span class="tt" { a class="t" href={ "/" (org) } { (org) } }
+                        span class="tags" {
+                            @match role {
+                                ambolt_core::TeamRole::Owner => { span class="chip acc" { "Owner" } }
+                                _ => { span class="chip" { "Member" } }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        div class="panel" {
+            header { h2 { "Holds" } }
+            div class="kv rail-facts" {
+                @if !agent {
+                    span class="pair" {
+                        span class="k" { "As owner" }
+                        span class="v" {
+                            "Everything under " a href={ "/" (id) } { (id) }
+                            @for (org, role) in &rail.orgs { @if *role == ambolt_core::TeamRole::Owner { " and " a href={ "/" (org) } { (org) } } }
+                        }
+                    }
+                }
+                span class="pair" {
+                    span class="k" { "Granted" }
+                    span class="v" {
+                        @if rail.granted.is_empty() { "Nothing" }
+                        @for grant in &rail.granted {
+                            @for (i, action) in grant.actions.iter().enumerate() { @if i > 0 { ", " } (action.as_str()) }
+                            " on "
+                            @match &grant.repo { Some(repo) => { a href={ "/" (repo) } { (repo) } } None => { "every repository" } }
+                            @if let Some(until) = &grant.until { ", until " (short_day(until)) }
+                            br;
+                        }
+                    }
+                }
+                @if rail.runs_forge { span class="pair" { span class="k" { "Runs the forge" } span class="v" { "Yes" } } }
+            }
+        }
+        @if let Some((held_id, held_display)) = &rail.held_by {
+            div class="panel" {
+                header { h2 { "Held by" } }
+                div class="row member" {
+                    (people.avatar(&ambolt_core::PrincipalId(held_id.clone()), false))
+                    span class="tt" { a class="t" href={ "/" (held_id) } { (held_display) } span class="s" { "answers for it" } }
+                    span class="tags" {}
+                }
+            }
+        }
+        @if !agent {
+            div class="panel" {
+                header { h2 { "Reach" } }
+                div class="kv rail-facts" {
+                    @for link in &says.profile.links {
+                        @let shown = link.trim_start_matches("https://").trim_start_matches("http://").trim_end_matches('/');
+                        span class="pair" { span class="k" { "Link" } span class="v" { a href=(link) rel="me nofollow" { (shown) } } }
+                    }
+                    span class="pair" { span class="k" { "Mention" } span class="v" { code { "@" (id) } " " button class="ghost sm" type="button" data-copy={ "@" (id) } { (ic("copy", "sm")) "Copy" } } }
+                }
+            }
+        }
+    };
+    frame_in(
+        theme,
+        Some(who),
+        None,
+        None,
+        None,
+        id,
+        html! {
+            div class="pagehead" {
+                div class="who" {
+                    span class="av lg" { (avatar_of_marked(id, &owner.display, owner.kind, !rail.at_work.is_empty() && agent, says.profile.mark)) }
+                    div {
+                        h1 { (owner.display) }
+                        @if let Some(line) = &says.profile.line { p class="says" { (line) } }
+                        div class="meta" {
+                            @if agent { span class="chip" { (ic("agents", "")) "Agent" } } @else { span class="chip" { (ic("user", "")) "Person" } }
+                            @if !owner.active { span class="chip bad" { "Deactivated" } }
+                        }
+                        @if !facts.is_empty() { div class="facts" { (kv(&facts)) } }
+                    }
+                }
+                div class="acts" {
+                    @if is_self { a class="btn2 sm" href="/you/settings#account" { "Edit profile" } }
+                    @else if who.viewer().is_some_and(|v| v.1.admin) && agent { a class="btn2 sm" href="/agents" { "Manage on Agents" } }
+                    @if who.viewer().is_none_or(|v| v.0 != owner.id) {
+                        a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (id) } title="Report this account to whoever runs the forge" { "Report" }
+                    }
+                }
+            }
+            nav class="tabs own" {
+                (tab_link(OwnerTab::Overview, "Overview", None))
+                (tab_link(OwnerTab::Landed, "Landed", Some(counts.0.to_string())))
+                @if !agent {
+                    (tab_link(OwnerTab::Agents, "Agents", Some(counts.1.to_string())))
+                    (tab_link(OwnerTab::Judgement, "Judgement", Some(counts.2.to_string())))
+                }
+                @if may_allowance { (tab_link(OwnerTab::Allowance, "Allowance", None)) }
+            }
+            @match body {
+                TabBody::Overview => {
+                    div class="sec" {
+                        div class="sh" { h2 { "Standing" } span class="n" { "the last " (record.window_days) " days" } }
+                        @if nothing_yet {
+                            div class="ghostfigs" {
+                                div class="g" { span { "Landed" } i {} }
+                                div class="g" { span { "Reproduced" } i {} }
+                                div class="g" { span { "Disputed" } i {} }
+                                div class="g" { span { "Blocked" } i {} }
+                            }
+                            p class="saying" { b { "Nothing witnessed yet." } " The record starts with the first change that lands." }
+                        } @else {
+                            div class="stats" {
+                                div class="stat" { span class="k" { "Landed" } span class="v" { (record.landed) } span class="d" { (record.abandoned) " abandoned" } }
+                                div class="stat" {
+                                    span class="k" { "Reproduced" }
+                                    span class="v" {
+                                        @match record.reproduced_percent {
+                                            Some(percent) => { (percent) small { "%" } }
+                                            None => { "–" }
+                                        }
+                                    }
+                                    span class="d" { (record.reproduced) " of " (record.judged) " re-run" }
+                                }
+                                div class="stat" { span class="k" { "Disputed" } span class="v" { (record.disputed) } span class="d" { "of " (record.judged) " re-run" } }
+                                div class="stat" {
+                                    span class="k" { "Blocked" }
+                                    span class="v" { (record.blocks) }
+                                    span class="d" { @if record.audits == 0 { "no looks yet" } @else { "of " (record.audits) " looks" } }
+                                }
+                            }
+                            @let not_rerun = record.claims.saturating_sub(record.judged);
+                            div class="bar-row" {
+                                span class="lbl" { "Claims" }
+                                div class="bar" {
+                                    @if record.reproduced > 0 { i class="ok" style={ "flex: " (record.reproduced) } {} }
+                                    @if record.disputed > 0 { i class="no" style={ "flex: " (record.disputed) } {} }
+                                    @if not_rerun > 0 { i class="none" style={ "flex: " (not_rerun) } {} }
+                                }
+                                span class="key" {
+                                    span { i class="sw ok" {} "Reproduced " b { (record.reproduced) } }
+                                    span { i class="sw no" {} "Disputed " b { (record.disputed) } }
+                                    span { i class="sw none" {} "Not re-run " b { (not_rerun) } }
+                                }
+                            }
+                            div class="bar-row weeks" {
+                                span class="lbl" { "Landed by week" }
+                                (weeks_svg(&standing.weeks, &standing.months))
+                            }
+                            details class="how" {
+                                summary { "How this is counted" }
+                                p { "Claims " (owner.display) " made with a command, and what a third-party runner found when it re-ran them. Verdicts on " (owner.display) "'s changes by somebody else, and how many were blocks. Changes that landed or were abandoned in the window. Nothing here is typed in." }
+                            }
+                        }
+                    }
+                    @if nothing_yet && is_self && !agent {
+                        div class="sec" {
+                            div class="sh" { h2 { "Start" } }
+                            div class="panel" {
+                                a class="row need" href="/agents" { span class="chip" { (ic("terminal", "")) "Agent" } span class="tt" { span class="t" { "Connect an agent" } span class="s" { "A token and a narrow grant" } } span class="avs" {} span class="age" { (ic("chev", "sm")) } }
+                                a class="row need" href="/new" { span class="chip" { (ic("repo", "")) "Repository" } span class="tt" { span class="t" { "Make or import a repository" } span class="s" { "Imported history is recorded as imported" } } span class="avs" {} span class="age" { (ic("chev", "sm")) } }
+                                @for (org, _) in &rail.orgs {
+                                    a class="row need" href={ "/" (org) } { span class="chip" { (ic("changes", "")) "Change" } span class="tt" { span class="t" { "Push your first change" } span class="s" { "You are a member of " (org) } } span class="avs" {} span class="age" { (ic("chev", "sm")) } }
+                                }
+                            }
+                        }
+                    }
+                }
+                TabBody::Landed { works_in, tree, tree_total, rows, total, filter, all } => {
+                    @if !works_in.is_empty() {
+                        div class="sec two-col" {
+                            div {
+                                h3 { "Where the landings went" }
+                                @let most = works_in.iter().map(|(_, n)| *n).max().unwrap_or(1).max(1);
+                                div class="tally" {
+                                    @for (repo, n) in works_in { (bar(html! { a href={ "/" (repo) } { (repo) } }, f64::from(*n) / f64::from(most), html! { (n) })) }
+                                }
+                            }
+                            @if !tree.is_empty() {
+                                div {
+                                    h3 { "Where in the tree" }
+                                    @let most = tree.iter().map(|(_, n)| *n).max().unwrap_or(1).max(1);
+                                    div class="tally" {
+                                        @for (dir, n) in tree.iter().take(6) { (bar(html! { code { (dir) } }, f64::from(*n) / f64::from(most), html! { (n) " file" @if *n != 1 { "s" } })) }
+                                        div class="foot" { (tree_total) " paths in " (record.window_days) " days" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    div class="sec" {
+                        div class="sh" {
+                            h2 { "Every landing" }
+                            @if works_in.len() > 1 {
+                                span class="right" { span class="filters" {
+                                    a class={ "" @if filter.is_none() { "on" } } href={ "/" (id) "/landed" } { "All " span class="n" { (total) } }
+                                    @for (repo, n) in works_in { a class={ "" @if filter == Some(repo.as_str()) { "on" } } href={ "/" (id) "/landed?repo=" (repo) } { (repo) " " span class="n" { (n) } } }
+                                } }
+                            }
+                        }
+                        div class="panel" {
+                            @if rows.is_empty() { div class="empty" { "Nothing has landed yet." } }
+                            @for row in rows {
+                                @let change = &row.change;
+                                div class="row landed" {
+                                    @if row.reproduced { span class="chip good" { (ic("rerun", "")) "Re-run" } } @else { span class="chip" { "Not re-run" } }
+                                    span class="tt" { a class="t" href={ "/" (change.repo) "/changes/" (change.number) } { (change.title) } }
+                                    span class="side1" { (change.repo) " #" (change.number) }
+                                    span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
+                                    a class="rcpt" href={ "/api/changes/" (change.id) "/receipt" } title="Signed receipt" { (ic("receipt", "sm")) }
+                                }
+                            }
+                        }
+                        @if !all && total > rows.len() {
+                            a class="plainlink" href={ "/" (id) "/landed?all=1" @if let Some(repo) = filter { "&repo=" (repo) } } { "Show " (total - rows.len()) " more" }
+                        }
+                    }
+                }
+                TabBody::Agents { split, agents } => {
+                    @let landed = split.in_person + split.by_agents;
+                    @if landed > 0 {
+                        div class="sec" {
+                            div class="bar-row" {
+                                span class="lbl" { (landed) " landed" }
+                                div class="bar" {
+                                    @if split.in_person > 0 { i class="human" style={ "flex: " (split.in_person) } {} }
+                                    @if split.by_agents > 0 { i class="agent" style={ "flex: " (split.by_agents) } {} }
+                                }
+                                span class="key" {
+                                    span { i class="sw human" {} (owner.display) ", in person " b { (split.in_person) } }
+                                    span { i class="sw agent" {} "Agents " b { (split.by_agents) } }
+                                }
+                            }
+                        }
+                    }
+                    div class="sec" {
+                        div class="sh" { h2 { "Acting in " (owner.display) "'s name" } span class="n" { (agents.len()) } @if is_self { span class="right" { a class="more" href="/agents" { "Manage on Agents" } } } }
+                        div class="panel" {
+                            @if agents.is_empty() { div class="empty" { "No agent yet." } }
+                            @for row in agents {
+                                @let aid = row.principal.id.as_str();
+                                div class="row agentrow" {
+                                    (avatar_marked(aid, &row.principal.display, true, row.at_work.is_some(), 0))
+                                    span class="tt" {
+                                        a class="t" href={ "/" (aid) } { (row.principal.display) }
+                                        div class="kv" {
+                                            span class="pair" { span class="k" { "Record" } span class="v" { (record_words(&row.record)) } }
+                                            span class="pair" { span class="k" { "Landed" } span class="v" { (row.record.landed) } }
+                                            span class="pair" { span class="k" { "Model" } span class="v" { (row.principal.model.as_deref().unwrap_or("Not said")) } }
+                                            span class="pair" { span class="k" { "Harness" } span class="v" { (row.principal.harness.as_deref().unwrap_or("Not said")) } }
+                                        }
+                                        span class="holds" {
+                                            @if row.grants.is_empty() { span class="chip" { "No live grant" } }
+                                            @for grant in &row.grants {
+                                                span class="chip" {
+                                                    @for (i, action) in grant.actions.iter().enumerate() { @if i > 0 { ", " } (action.as_str()) }
+                                                    " on "
+                                                    @match &grant.repo { Some(repo) => { (repo) } None => { "every repository" } }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    span class="now" {
+                                        @match &row.at_work {
+                                            Some(Some(repo)) => { span class="dot live" {} " On " (repo) }
+                                            Some(None) => { span class="dot live" {} " At work" }
+                                            None => { span class="dot" {} " Idle" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                TabBody::Judgement(judgement) => {
+                    div class="sec" {
+                        div class="sh" { h2 { "On other people's changes" } span class="n" { "the last " (judgement.window_days) " days" } }
+                        div class="stats three" {
+                            div class="stat" { span class="k" { "Looks given" } span class="v" { (judgement.looks) } span class="d" { "on " (judgement.changes) " change" @if judgement.changes != 1 { "s" } } }
+                            div class="stat" { span class="k" { "Approved" } span class="v" { (judgement.approved) } span class="d" { "of " (judgement.looks) " look" @if judgement.looks != 1 { "s" } } }
+                            div class="stat" { span class="k" { "Blocked" } span class="v" { (judgement.blocked) } span class="d" { @if judgement.blocked == 0 { "never" } @else { (judgement.held) " held" } } }
+                            div class="stat" { span class="k" { "Attempts compared" } span class="v" { (judgement.compared) } span class="d" { "a revision chosen each time" } }
+                            div class="stat" { span class="k" { "Questions answered" } span class="v" { (judgement.answered) } span class="d" { "in the community" } }
+                            div class="stat" { span class="k" { "Looks asked for" } span class="v" { (judgement.asked) } span class="d" { (judgement.asked_answered) " answered" } }
+                        }
+                        @if judgement.looks == 0 && judgement.asked == 0 && judgement.answered == 0 {
+                            p class="saying" { "No one else's change has asked for " (owner.display) "'s look yet." }
+                        }
+                    }
+                }
+                TabBody::Allowance(allowances) => {
+                    @let (usage, quota) = allowances;
+                    div class="sec" {
+                        div class="sh" { h2 { "Allowance" } }
+                        div class="panel" {
+                            (allowance("Repositories", usage.repos.to_string(), quota.repos.map(|n| n.to_string())))
+                            (allowance("Disk", crate::in_bytes(usage.disk), quota.disk.map(crate::in_bytes)))
+                            (allowance("Agents", usage.agents.to_string(), quota.agents.map(|n| n.to_string())))
+                            (allowance("Open tasks", usage.open_tasks.to_string(), quota.open_tasks.map(|n| n.to_string())))
+                            (allowance("Open changes", usage.open_changes.to_string(), quota.open_changes.map(|n| n.to_string())))
+                            (allowance("Tokens", usage.tokens.to_string(), quota.tokens.map(|n| n.to_string())))
+                        }
+                    }
+                }
+            }
+        },
+        Some(rail_markup),
+        head,
+    )
+}
+
 /// Where anyone says what broke. Works signed out, since the person most
 /// likely to have hit something is the one who could not get in.
 pub fn report(

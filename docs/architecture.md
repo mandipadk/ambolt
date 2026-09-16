@@ -583,6 +583,19 @@ an agent's facts are its model, its harness and who holds it. `GET` and
 Settings is the same thing as a form. Whoever runs the forge may set
 anyone's, since a line can need taking down.
 
+The page itself is five, under one head: what stands (the record, every
+claim by what happened to it, thirteen weeks of landings), what landed
+(each landing with whether a runner re-ran it and its signed receipt,
+where the landings went, where in the tree they touched), the agents in
+their name (with the split of landings between the person and the
+agents, which ownership records), what they judged on other people's
+changes (looks given, approvals, blocks and whether a block held, which
+means a later revision or an abandonment followed it; attempts
+compared; questions answered; the looks the attention budget asked of
+them), and the allowance only they and the operator see. Every list
+holds only what the viewer may read; a stranger sees a person with
+nothing public as nothing at all.
+
 ## Marks
 
 Nobody uploads a picture. A person's mark is a face composed from

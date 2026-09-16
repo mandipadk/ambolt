@@ -274,9 +274,12 @@ async fn an_allowance_is_the_owners_business() {
     )
     .await;
 
-    // Ada sees hers on her page; bee sees nothing of it.
+    // Ada sees hers on her page, on a tab of its own; bee sees nothing of it.
     let (_, ada) = sign_in_as(&forge, "ada").await;
     let (status, page) = page_with_cookie(app, "/ada", &ada).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("/ada/allowance"), "{page}");
+    let (status, page) = page_with_cookie(app, "/ada/allowance", &ada).await;
     assert_eq!(status, StatusCode::OK);
     assert!(
         page.contains("Allowance") && page.contains("Open tasks"),
@@ -294,6 +297,8 @@ async fn an_allowance_is_the_owners_business() {
     let (status, page) = page_with_cookie(app, "/ada", &bee).await;
     assert_eq!(status, StatusCode::OK, "the page is public now");
     assert!(!page.contains("Allowance"), "but not that part: {page}");
+    let (status, _) = page_with_cookie(app, "/ada/allowance", &bee).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "nor the tab itself");
     let (status, _) = api(app, "GET", "/api/principals/ada/quota", "bee", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "nor over the API");
 

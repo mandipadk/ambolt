@@ -42,7 +42,7 @@ async fn a_persons_page_carries_the_record_and_an_organisations_does_not() {
 
     // An agent has one too; an organisation does not.
     let (_, page) = page_with_cookie(app, "/scout", &cookie).await;
-    assert!(page.contains("How this is counted"), "{page}");
+    assert!(page.contains("<h2>Standing</h2>"), "{page}");
     let (status, body) = api(
         app,
         "POST",
@@ -54,7 +54,7 @@ async fn a_persons_page_carries_the_record_and_an_organisations_does_not() {
     assert!(status.is_success(), "{body}");
     let (status, page) = page_with_cookie(app, "/crew", &cookie).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(!page.contains("How this is counted"), "{page}");
+    assert!(!page.contains("<h2>Standing</h2>"), "{page}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -187,4 +187,111 @@ async fn the_account_panel_is_the_same_strip_as_a_form() {
     )
     .await;
     assert!(location.starts_with("/you/settings?error="), "{location}");
+}
+
+/// A person's page is five: what stands, what landed, the agents in
+/// their name, what they judged, and the allowance only they and the
+/// operator see. Every figure is the log's; the diary shows a stranger
+/// only what they may read.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_persons_page_has_tabs_and_each_counts_from_the_log() {
+    let forge = boot().await;
+    let app = &forge.app;
+    let (_, cookie) = sign_in_as(&forge, "ada").await;
+    // scout, ada's agent, opens a change; ada approves it; it lands.
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/changes",
+        "scout",
+        Some(json!({ "repo": "ada/demo", "target": "main", "title": "Scout's change" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let change = body["id"].as_str().unwrap().to_owned();
+    let (status, body) = api(
+        app,
+        "POST",
+        &format!("/api/changes/{change}/revisions"),
+        "scout",
+        Some(json!({ "commit_oid": format!("{:0>40}", 7), "message": "Scout's change" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        &format!("/api/changes/{change}/verdicts"),
+        "ada",
+        Some(json!({ "domain": "correctness", "disposition": "approve", "rationale": "Fine." })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, page) = page_with_cookie(app, "/ada", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains(r#"href="/ada/landed""#), "{page}");
+    assert!(page.contains(r#"href="/ada/agents""#), "{page}");
+    assert!(page.contains(r#"href="/ada/judgement""#), "{page}");
+    assert!(
+        page.contains(r#"href="/ada/allowance""#),
+        "the holder sees the allowance tab"
+    );
+    assert!(page.contains("Landed by week"), "{page}");
+
+    let (status, page) = page_with_cookie(app, "/ada/judgement", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("Looks given"), "{page}");
+    assert!(
+        page.contains(r#"<span class="v">1</span>"#),
+        "one look, on scout's change: {page}"
+    );
+
+    let (status, page) = page_with_cookie(app, "/ada/agents", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        page.contains("Acting in Ada's name") || page.contains("Acting in"),
+        "{page}"
+    );
+    assert!(page.contains(r#"href="/scout""#), "{page}");
+
+    let (status, page) = page_with_cookie(app, "/ada/allowance", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("Repositories"), "{page}");
+
+    // An agent's page: overview and landed, nothing else.
+    let (status, page) = page_with_cookie(app, "/scout", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("Held by"), "{page}");
+    assert!(!page.contains(r#"href="/scout/judgement""#), "{page}");
+    let (status, _) = page_with_cookie(app, "/scout/judgement", &cookie).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Somebody else may not see the allowance.
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "bee", "kind": "human", "display": "Bee" })),
+    )
+    .await;
+    assert!(status.is_success(), "{body}");
+    let (_, bee) = sign_in_as(&forge, "bee").await;
+    let (status, page) = page_with_cookie(app, "/ada", &bee).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!page.contains(r#"href="/ada/allowance""#), "{page}");
+    let (status, _) = page_with_cookie(app, "/ada/allowance", &bee).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // No repository may take a tab's name.
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/repos",
+        "ada",
+        Some(json!({ "name": "landed" })),
+    )
+    .await;
+    assert!(!status.is_success(), "{body}");
 }

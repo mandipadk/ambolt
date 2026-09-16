@@ -43,9 +43,15 @@ pub const RESERVED_IDS: &[&str] = &[
 pub fn split_repo_name(name: &str) -> Option<(&str, &str)> {
     let (owner, short) = name.split_once('/')?;
     // `/owner/teams/...` and `/owner/members` are the organisation's own
-    // pages, so no repository takes those names.
-    (validate_slug(owner) && validate_slug(short) && !matches!(short, "teams" | "members"))
-        .then_some((owner, short))
+    // pages, and `/owner/landed`, `/agents`, `/judgement` and
+    // `/allowance` a person's, so no repository takes those names.
+    (validate_slug(owner)
+        && validate_slug(short)
+        && !matches!(
+            short,
+            "teams" | "members" | "landed" | "agents" | "judgement" | "allowance"
+        ))
+    .then_some((owner, short))
 }
 
 pub fn validate_repo_name(name: &str) -> bool {

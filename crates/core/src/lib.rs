@@ -40,6 +40,7 @@ mod leases;
 pub mod mentions;
 pub mod names;
 mod policy;
+mod profile;
 mod queries;
 mod record;
 mod search;
@@ -59,6 +60,7 @@ pub use id::{
 pub use leases::{Overlap, covers, patterns_overlap};
 pub use policy::{PolicyTrace, Requirement};
 pub use policy::{packs, path_matches};
+pub use profile::{Judgement, Split};
 pub use record::Record;
 pub use search::{HitKind, SearchHit, SearchQuery};
 pub use store::Store;

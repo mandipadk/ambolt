@@ -144,6 +144,10 @@ pub fn routes() -> Router<AppState> {
         .route("/teams", get(teams_page).post(teams_action))
         .route("/join", get(join))
         .route("/{owner}", get(owner_page))
+        .route("/{owner}/landed", get(owner_landed_page))
+        .route("/{owner}/agents", get(owner_agents_page))
+        .route("/{owner}/judgement", get(owner_judgement_page))
+        .route("/{owner}/allowance", get(owner_allowance_page))
         .route("/{owner}/members", post(owner_members_action))
         .route("/{owner}/teams/{team}", get(org_team_page))
         .route(
@@ -2505,6 +2509,11 @@ struct OwnerQuery {
     /// Set after an owner asked for more; the page says it was heard.
     #[serde(default)]
     asked: Option<String>,
+    /// The landed tab: one repository, and everything rather than a page.
+    #[serde(default)]
+    repo: Option<String>,
+    #[serde(default)]
+    all: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2883,6 +2892,426 @@ async fn owner_page(
     Path(owner): Path<String>,
     axum::extract::Query(query): axum::extract::Query<OwnerQuery>,
 ) -> Response {
+    owner_page_in(app, theme, reader, owner, query, views::OwnerTab::Overview).await
+}
+
+async fn owner_landed_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    reader: Reader,
+    Path(owner): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<OwnerQuery>,
+) -> Response {
+    owner_page_in(app, theme, reader, owner, query, views::OwnerTab::Landed).await
+}
+
+async fn owner_agents_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    reader: Reader,
+    Path(owner): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<OwnerQuery>,
+) -> Response {
+    owner_page_in(app, theme, reader, owner, query, views::OwnerTab::Agents).await
+}
+
+async fn owner_judgement_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    reader: Reader,
+    Path(owner): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<OwnerQuery>,
+) -> Response {
+    owner_page_in(app, theme, reader, owner, query, views::OwnerTab::Judgement).await
+}
+
+async fn owner_allowance_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    reader: Reader,
+    Path(owner): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<OwnerQuery>,
+) -> Response {
+    owner_page_in(app, theme, reader, owner, query, views::OwnerTab::Allowance).await
+}
+
+/// Landings per week for the last thirteen weeks, oldest first, from the
+/// days changes last moved; and where along them the month turns.
+fn weeks_of<'a>(dates: impl Iterator<Item = &'a str>) -> (Vec<u32>, Vec<(usize, &'static str)>) {
+    const MONTHS: [&str; 12] = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    let today = jiff::Timestamp::now()
+        .to_zoned(jiff::tz::TimeZone::UTC)
+        .date();
+    let back = i64::from(today.weekday().to_monday_zero_offset());
+    let monday = today
+        .checked_sub(jiff::Span::new().days(back))
+        .unwrap_or(today);
+    let starts: Vec<jiff::civil::Date> = (0..13)
+        .map(|i| {
+            monday
+                .checked_sub(jiff::Span::new().days(7 * (12 - i)))
+                .unwrap_or(monday)
+        })
+        .collect();
+    let mut weeks = vec![0u32; 13];
+    for date in dates {
+        let Some(day) = date
+            .parse::<jiff::Timestamp>()
+            .ok()
+            .map(|ts| ts.to_zoned(jiff::tz::TimeZone::UTC).date())
+        else {
+            continue;
+        };
+        if let Some(i) = starts.iter().rposition(|start| *start <= day) {
+            let end = starts[i]
+                .checked_add(jiff::Span::new().days(7))
+                .unwrap_or(starts[i]);
+            if day < end {
+                weeks[i] += 1;
+            }
+        }
+    }
+    let mut months = Vec::new();
+    let mut last = 0;
+    for (i, start) in starts.iter().enumerate() {
+        let month = start.month() as usize;
+        if i == 0 || month != last {
+            months.push((i, MONTHS[month - 1]));
+        }
+        last = month;
+    }
+    (weeks, months)
+}
+
+/// A person's or an agent's page: the head, one tab, the rail. Every
+/// list on it holds only what the viewer may read.
+async fn person_page(
+    app: &AppState,
+    theme: views::Theme,
+    who: Who,
+    owner: ambolt_core::Principal,
+    tab: views::OwnerTab,
+    query: &OwnerQuery,
+) -> Response {
+    let owner_id = owner.id.clone();
+    let agent = owner.kind == ambolt_core::PrincipalKind::Agent;
+    let viewer = match &who {
+        Who::Signed(viewer) => Some(viewer),
+        Who::Anonymous(_) => None,
+    };
+    let is_self = viewer.is_some_and(|v| v.0 == owner_id);
+    let admin = viewer.is_some_and(|v| v.1.admin);
+    // Whether the viewer may read a repository, by name.
+    let public: std::collections::HashSet<String> = app
+        .with_store(|s| s.repos())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| r.visibility == ambolt_core::Visibility::Public)
+        .map(|r| r.name)
+        .collect();
+    let may_read = |name: &str| match viewer {
+        None => public.contains(name),
+        Some(viewer) => readable(app, viewer, name).is_ok(),
+    };
+    let landed_all = app
+        .with_store(|s| s.landed_by(&owner_id, 500))
+        .unwrap_or_default();
+    let landed: Vec<views::LandedRow> = landed_all
+        .iter()
+        .filter(|c| may_read(&c.repo))
+        .map(|c| views::LandedRow {
+            reproduced: app
+                .with_store(|s| {
+                    s.reproduced_on(&c.id, c.landed_revision.unwrap_or(c.latest_revision))
+                })
+                .unwrap_or(false),
+            change: c.clone(),
+        })
+        .collect();
+    let works_in: Vec<(String, u32)> = app
+        .with_store(|s| s.repos_landed_in(&owner_id))
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(name, _)| may_read(name))
+        .collect();
+    // To a stranger, somebody with nothing public is nobody, the way a
+    // private repository is nothing: names are not confirmed for free.
+    if viewer.is_none() && works_in.is_empty() {
+        let owned = app
+            .with_store(|s| s.repos_of_owner(&owner_id))
+            .unwrap_or_default();
+        if !owned.iter().any(|r| public.contains(&r.name)) {
+            return not_found();
+        }
+    }
+    let record = match app.with_store(|s| s.record_of(&owner_id, 90)) {
+        Ok(record) => record,
+        Err(err) => return oops(err),
+    };
+    let (weeks, months) = weeks_of(landed_all.iter().map(|c| c.updated_at.as_str()));
+    let standing = views::Standing {
+        record,
+        weeks,
+        months,
+    };
+    let judgement = if agent {
+        ambolt_core::Judgement::default()
+    } else {
+        app.with_store(|s| s.judgement_of(&owner_id, 90))
+            .unwrap_or_default()
+    };
+    let agent_ids: Vec<String> = if agent {
+        Vec::new()
+    } else {
+        app.with_store(|s| s.active_agents_of(&owner_id))
+            .unwrap_or_default()
+    };
+    // Where the agents are mid-session, when the viewer may see where.
+    let sessions = app.with_store(|s| s.active_sessions()).unwrap_or_default();
+    let mut at_work: Vec<(String, Option<String>)> = Vec::new();
+    let mut working: std::collections::HashMap<String, Option<String>> =
+        std::collections::HashMap::new();
+    let subjects: Vec<String> = if agent {
+        vec![owner_id.to_string()]
+    } else {
+        agent_ids.clone()
+    };
+    for session in sessions
+        .iter()
+        .filter(|s| subjects.iter().any(|a| *a == s.agent.as_str()))
+    {
+        let repo = app
+            .with_store(|s| s.task(&session.task))
+            .ok()
+            .flatten()
+            .and_then(|t| t.repo)
+            .filter(|r| may_read(r));
+        let display = app
+            .with_store(|s| s.principal(&session.agent))
+            .ok()
+            .flatten()
+            .map(|p| p.display)
+            .unwrap_or_else(|| session.agent.to_string());
+        working.insert(session.agent.to_string(), repo.clone());
+        at_work.push((display, repo));
+    }
+    let people = people_named(
+        app,
+        agent_ids
+            .iter()
+            .map(String::as_str)
+            .chain(owner.owner.iter().map(|o| o.as_str())),
+    );
+    let grants_alive = |grants: Vec<ambolt_core::Grant>| -> Vec<ambolt_core::Grant> {
+        let now = jiff::Timestamp::now().to_string();
+        grants
+            .into_iter()
+            .filter(|g| !g.revoked && g.until.as_deref().is_none_or(|u| u > now.as_str()))
+            .filter(|g| g.repo.as_deref().is_none_or(&may_read))
+            .collect()
+    };
+    // Running the forge is said once below, not again as a grant.
+    let granted: Vec<ambolt_core::Grant> = grants_alive(
+        app.with_store(|s| s.grants_of(&owner_id))
+            .unwrap_or_default(),
+    )
+    .into_iter()
+    .filter(|g| !(g.repo.is_none() && g.actions == [ambolt_core::Capability::Admin]))
+    .collect();
+    let runs_forge = app
+        .with_store(|s| s.effective_grants(&owner_id))
+        .unwrap_or_default()
+        .iter()
+        .any(|g| {
+            !g.revoked && g.repo.is_none() && g.actions.contains(&ambolt_core::Capability::Admin)
+        });
+    let held_by = owner.owner.as_ref().filter(|_| agent).map(|holder| {
+        let (display, _) = people.name(holder);
+        (holder.to_string(), display.to_owned())
+    });
+    let rail = views::Rail {
+        last_landed: landed.first().map(|row| row.change.updated_at.clone()),
+        at_work,
+        orgs: app
+            .with_store(|s| s.memberships_of(&owner_id))
+            .unwrap_or_default(),
+        granted,
+        runs_forge,
+        held_by,
+    };
+    let says = says_of(app, &owner);
+    // An agent takes up its holder's allowance, so it has no tab of its own.
+    let may_allowance = !agent && (is_self || admin);
+    let may_create = is_self;
+    let counts = (landed.len(), agent_ids.len(), judgement.looks);
+    // Only what the tab shows is computed for it.
+    let allowances = if tab == views::OwnerTab::Allowance {
+        match app.with_store(|s| {
+            Ok::<_, ambolt_core::CoreError>((s.usage(&owner_id)?, s.quota(&owner_id)?))
+        }) {
+            Ok(pair) => Some(pair),
+            Err(err) => return oops(err),
+        }
+    } else {
+        None
+    };
+    let filter = query
+        .repo
+        .as_deref()
+        .filter(|r| works_in.iter().any(|(name, _)| name == r));
+    let all = query.all.is_some();
+    let filtered: Vec<&views::LandedRow> = landed
+        .iter()
+        .filter(|row| filter.is_none_or(|r| row.change.repo == r))
+        .collect();
+    let total = filtered.len();
+    let rows: Vec<views::LandedRow> = filtered
+        .into_iter()
+        .take(if all { 500 } else { 30 })
+        .map(|row| views::LandedRow {
+            change: row.change.clone(),
+            reproduced: row.reproduced,
+        })
+        .collect();
+    let (tree, tree_total) = if tab == views::OwnerTab::Landed {
+        let (groups, total) = app
+            .with_store(|s| s.landed_tree(&owner_id, &standing.record.since))
+            .unwrap_or_default();
+        (groups, total)
+    } else {
+        (Vec::new(), 0)
+    };
+    let agents: Vec<views::AgentRow> = if tab == views::OwnerTab::Agents {
+        agent_ids
+            .iter()
+            .filter_map(|aid| {
+                let id = PrincipalId(aid.clone());
+                let principal = app.with_store(|s| s.principal(&id)).ok().flatten()?;
+                let record = app.with_store(|s| s.record_of(&id, 90)).ok()?;
+                let grants = grants_alive(app.with_store(|s| s.grants_of(&id)).unwrap_or_default());
+                Some(views::AgentRow {
+                    principal,
+                    record,
+                    grants,
+                    at_work: working.get(aid).cloned(),
+                })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let split = if tab == views::OwnerTab::Agents {
+        app.with_store(|s| s.landed_split(&owner_id))
+            .unwrap_or_default()
+    } else {
+        ambolt_core::Split::default()
+    };
+    let body = match tab {
+        views::OwnerTab::Overview => views::TabBody::Overview,
+        views::OwnerTab::Landed => views::TabBody::Landed {
+            works_in: &works_in,
+            tree: &tree,
+            tree_total,
+            rows: &rows,
+            total,
+            filter,
+            all,
+        },
+        views::OwnerTab::Agents => {
+            if agent {
+                return not_found();
+            }
+            views::TabBody::Agents {
+                split,
+                agents: &agents,
+            }
+        }
+        views::OwnerTab::Judgement => {
+            if agent {
+                return not_found();
+            }
+            views::TabBody::Judgement(&judgement)
+        }
+        views::OwnerTab::Allowance => {
+            if !may_allowance {
+                return not_found();
+            }
+            match &allowances {
+                Some(pair) => views::TabBody::Allowance(pair),
+                None => return not_found(),
+            }
+        }
+    };
+    views::person_page(views::PersonPage {
+        theme,
+        who: who.reading(),
+        owner: &owner,
+        tab,
+        says: &says,
+        standing: &standing,
+        counts,
+        body,
+        rail: &rail,
+        is_self,
+        may_allowance,
+        may_create,
+        people: &people,
+    })
+    .into_response()
+}
+
+/// What somebody says about themself, with the facts a page reads off it.
+fn says_of(app: &AppState, owner: &ambolt_core::Principal) -> views::Says {
+    let owner_id = &owner.id;
+    let profile = app
+        .with_store(|s| s.profile_of(owner_id))
+        .unwrap_or_default();
+    let since = app
+        .with_store(|s| s.registered_at(owner_id))
+        .ok()
+        .flatten()
+        .and_then(|ts| ts.parse::<jiff::Timestamp>().ok())
+        .map(|ts| {
+            ts.to_zoned(jiff::tz::TimeZone::UTC)
+                .strftime("%B %Y")
+                .to_string()
+        });
+    let local = profile
+        .zone
+        .as_deref()
+        .and_then(|zone| jiff::tz::TimeZone::get(zone).ok().map(|tz| (zone, tz)))
+        .map(|(zone, tz)| {
+            let now = jiff::Timestamp::now().to_zoned(tz);
+            let (hour, minute) = (now.hour(), now.minute());
+            let (twelve, half) = match hour {
+                0 => (12, "am"),
+                1..=11 => (hour, "am"),
+                12 => (12, "pm"),
+                _ => (hour - 12, "pm"),
+            };
+            let city = zone.rsplit('/').next().unwrap_or(zone).replace('_', " ");
+            (format!("{twelve}:{minute:02} {half}"), city)
+        });
+    views::Says {
+        orgs: app
+            .with_store(|s| s.memberships_of(owner_id))
+            .unwrap_or_default(),
+        profile,
+        since,
+        local,
+    }
+}
+
+async fn owner_page_in(
+    app: AppState,
+    theme: views::Theme,
+    reader: Reader,
+    owner: String,
+    query: OwnerQuery,
+    tab: views::OwnerTab,
+) -> Response {
     let Some(owner_id) = PrincipalId::new(&owner) else {
         return not_found();
     };
@@ -2915,6 +3344,12 @@ async fn owner_page(
         return not_found();
     }
     let organisation = principal.kind == ambolt_core::PrincipalKind::Team;
+    if !organisation {
+        return person_page(&app, theme, who, principal, tab, &query).await;
+    }
+    if tab != views::OwnerTab::Overview {
+        return not_found();
+    }
     // Where their changes landed, in repositories the viewer may read.
     let works_in: Vec<(String, u32)> = if organisation {
         Vec::new()
@@ -3019,43 +3454,7 @@ async fn owner_page(
     } else {
         app.with_store(|s| s.record_of(&owner_id, 90)).ok()
     };
-    let profile = app
-        .with_store(|s| s.profile_of(&owner_id))
-        .unwrap_or_default();
-    let since = app
-        .with_store(|s| s.registered_at(&owner_id))
-        .ok()
-        .flatten()
-        .and_then(|ts| ts.parse::<jiff::Timestamp>().ok())
-        .map(|ts| {
-            ts.to_zoned(jiff::tz::TimeZone::UTC)
-                .strftime("%B %Y")
-                .to_string()
-        });
-    let local = profile
-        .zone
-        .as_deref()
-        .and_then(|zone| jiff::tz::TimeZone::get(zone).ok().map(|tz| (zone, tz)))
-        .map(|(zone, tz)| {
-            let now = jiff::Timestamp::now().to_zoned(tz);
-            let (hour, minute) = (now.hour(), now.minute());
-            let (twelve, half) = match hour {
-                0 => (12, "am"),
-                1..=11 => (hour, "am"),
-                12 => (12, "pm"),
-                _ => (hour - 12, "pm"),
-            };
-            let city = zone.rsplit('/').next().unwrap_or(zone).replace('_', " ");
-            (format!("{twelve}:{minute:02} {half}"), city)
-        });
-    let says = views::Says {
-        orgs: app
-            .with_store(|s| s.memberships_of(&owner_id))
-            .unwrap_or_default(),
-        profile,
-        since,
-        local,
-    };
+    let says = says_of(&app, &principal);
     views::owner(
         theme,
         who.reading(),

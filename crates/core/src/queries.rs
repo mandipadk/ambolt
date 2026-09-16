@@ -573,6 +573,19 @@ pub(crate) mod raw {
         .collect()
     }
 
+    /// What landed in somebody's name, newest first.
+    pub fn changes_landed_by(conn: &Connection, who: &str, limit: i64) -> CoreResult<Vec<Change>> {
+        conn.prepare_cached(&format!(
+            "SELECT {CHANGE_COLS} FROM changes WHERE owner = ? AND state = 'merged'
+              ORDER BY updated_at DESC, number DESC LIMIT ?"
+        ))?
+        .query_map(params![who, limit], change_from_row)?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(finish_change)
+        .collect()
+    }
+
     pub fn revisions(conn: &Connection, change: &str) -> CoreResult<Vec<Revision>> {
         Ok(conn
             .prepare_cached(
@@ -2010,6 +2023,41 @@ impl Store {
             },
             None => crate::Profile::default(),
         })
+    }
+
+    /// What landed in somebody's name, newest first, at most `limit`.
+    pub fn landed_by(&self, who: &PrincipalId, limit: i64) -> CoreResult<Vec<Change>> {
+        raw::changes_landed_by(&self.conn, who.as_str(), limit)
+    }
+
+    /// Whether a runner re-ran the revision of a change that landed and
+    /// agreed with what was claimed on it.
+    pub fn reproduced_on(&self, change: &ChangeId, revision: i64) -> CoreResult<bool> {
+        crate::profile::reproduced_on(&self.conn, change.as_str(), revision)
+    }
+
+    /// What somebody decided on other people's changes, over a window.
+    pub fn judgement_of(
+        &self,
+        who: &PrincipalId,
+        window_days: u32,
+    ) -> CoreResult<crate::Judgement> {
+        crate::profile::judgement_of(&self.conn, who.as_str(), window_days)
+    }
+
+    /// The directories somebody's landings touched since a moment, most
+    /// first, and how many paths in all.
+    pub fn landed_tree(
+        &self,
+        who: &PrincipalId,
+        since: &str,
+    ) -> CoreResult<(Vec<(String, u32)>, u32)> {
+        crate::profile::landed_tree(&self.conn, who.as_str(), since)
+    }
+
+    /// Landings by the person and by the agents they hold.
+    pub fn landed_split(&self, who: &PrincipalId) -> CoreResult<crate::Split> {
+        crate::profile::split_of(&self.conn, who.as_str())
     }
 
     /// When somebody was registered: the log's first word of them.
