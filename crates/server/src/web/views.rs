@@ -4776,7 +4776,7 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
             div class="panel" {
                 header { h2 { "Tags" } span class="n" { (sidebar.tags.len()) } }
                 @for tag in sidebar.tags.iter().take(8) {
-                    div class="row tag" {
+                    div class="row tagrow" {
                         span class="chip" { (ic("tag", "")) (tag.name) }
                         (kv(&[("Commit", html! { code { (short(&tag.commit_oid)) } }), ("By", html! { (people.name(&tag.by).0) })]))
                     }
@@ -4792,9 +4792,9 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
         name,
         html! {
             div class="repometa" {
-                div class="about" {
-                    @if !repo.description.is_empty() { p class="sub" { (repo.description) } }
-                    @else if tip.is_none() { p class="sub" { "Nothing here yet." } }
+                @if !repo.description.is_empty() { p class="sub" { (repo.description) } }
+                @else if tip.is_none() { p class="sub" { "Nothing here yet." } }
+                div class="bar" {
                     div class="chips" {
                         @if repo.visibility == Visibility::Public { span class="chip" { (ic("globe", "")) "Public" } } @else { span class="chip" { (ic("lock", "")) "Private" } }
                         span class="chip" { (ic("branch", "")) (branch) }
@@ -4808,33 +4808,33 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
                         @if let Some(tip) = tip { span class="chip" { code { (short(tip)) } } }
                         @if repo.archived { span class="chip bad" { (ic("archive", "")) "Archived" } }
                     }
-                }
-                div class="acts" {
-                    @if repo.visibility == Visibility::Public {
-                        a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (name.replace('/', "%2F")) } title="Report this repository to whoever runs the forge" { "Report" }
-                    }
-                    @if let Some(watching) = watching {
-                        form method="post" action={ "/" (name) "/watch" } {
-                            input type="hidden" name="action" value=(if watching { "unwatch" } else { "watch" });
-                            button class={ "btn2 sm" @if watching { " on" } } type="submit" title=(if watching { "You hear when something lands here or needs a person; click to stop" } else { "Hear when something lands here, or needs a person" }) {
-                                (ic("bell", "sm")) @if watching { "Watching" } @else { "Watch" }
+                    div class="acts" {
+                        @if repo.visibility == Visibility::Public {
+                            a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (name.replace('/', "%2F")) } title="Report this repository to whoever runs the forge" { "Report" }
+                        }
+                        @if let Some(watching) = watching {
+                            form method="post" action={ "/" (name) "/watch" } {
+                                input type="hidden" name="action" value=(if watching { "unwatch" } else { "watch" });
+                                button class={ "btn2 sm" @if watching { " on" } } type="submit" title=(if watching { "You hear when something lands here or needs a person; click to stop" } else { "Hear when something lands here, or needs a person" }) {
+                                    (ic("bell", "sm")) @if watching { "Watching" } @else { "Watch" }
+                                }
                             }
                         }
-                    }
-                    @if let Some(saved) = saved {
-                        form method="post" action={ "/" (name) "/save" } {
-                            input type="hidden" name="action" value=(if saved { "unsave" } else { "save" });
-                            button class={ "btn2 sm" @if saved { " on" } } type="submit" title=(if saved { "In your sidebar; click to let it go" } else { "Keep it in your sidebar" }) {
-                                (ic("bookmark", "sm")) @if saved { "Saved" } @else { "Save" }
+                        @if let Some(saved) = saved {
+                            form method="post" action={ "/" (name) "/save" } {
+                                input type="hidden" name="action" value=(if saved { "unsave" } else { "save" });
+                                button class={ "btn2 sm" @if saved { " on" } } type="submit" title=(if saved { "In your sidebar; click to let it go" } else { "Keep it in your sidebar" }) {
+                                    (ic("bookmark", "sm")) @if saved { "Saved" } @else { "Save" }
+                                }
                             }
                         }
-                    }
-                    details class="clone" {
-                        summary class="btn2 sm" { (ic("download", "sm")) "Clone" }
-                        div class="pop" {
-                            code id="clone-url" { "git clone " (clone_url) }
-                            span class="s" { "git asks for a password: paste a token of yours." }
-                            button class="ghost sm" type="button" data-copy="clone-url" { (ic("copy", "sm")) "Copy" }
+                        details class="clone" {
+                            summary class="btn2 sm" { (ic("download", "sm")) "Clone" }
+                            div class="pop" {
+                                code id="clone-url" { "git clone " (clone_url) }
+                                span class="s" { "git asks for a password: paste a token of yours." }
+                                button class="ghost sm" type="button" data-copy="clone-url" { (ic("copy", "sm")) "Copy" }
+                            }
                         }
                     }
                 }
