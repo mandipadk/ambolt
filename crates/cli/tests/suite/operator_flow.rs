@@ -232,7 +232,7 @@ async fn an_invitation_never_hands_over_a_claimed_account() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    let mail = std::fs::read_to_string(&outbox).unwrap_or_default();
+    let mail = mail_as_read(&outbox);
     let link = mail
         .lines()
         .filter_map(|l| l.split_whitespace().find(|w| w.contains("/join?token=")))
@@ -398,9 +398,9 @@ async fn an_invitation_is_mailed_when_the_forge_can_mail() {
     assert_eq!(status, StatusCode::OK, "{invited}");
     assert_eq!(invited["mailed"], true);
     assert!(invited["link"].is_null(), "{invited}");
-    let mail = std::fs::read_to_string(&outbox).unwrap_or_default();
+    let mail = mail_as_read(&outbox);
     assert!(mail.contains("https://forge.example/join?token="), "{mail}");
-    assert!(mail.contains("ada has invited you"), "{mail}");
+    assert!(mail.contains("ada invited you"), "{mail}");
 }
 
 /// What people said broke is read and dismissed behind the door.
@@ -569,7 +569,7 @@ async fn a_self_made_account_confirms_an_address_first_and_the_forge_fills_up() 
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
     // The confirmation link went to the address; following it opens the forge.
-    let mail = std::fs::read_to_string(&outbox).unwrap_or_default();
+    let mail = mail_as_read(&outbox);
     let link = mail
         .split_whitespace()
         .find(|w| w.contains("/verify?token="))

@@ -50,9 +50,9 @@ async fn a_reset_link_arrives_by_mail_and_works_exactly_once() {
         settings.contains("ada@example.org is awaiting confirmation"),
         "{settings}"
     );
-    let confirm = std::fs::read_to_string(&mail_file).unwrap();
+    let confirm = mail_as_read(&mail_file);
     assert!(
-        confirm.contains("Subject: Confirm your address on ambolt"),
+        confirm.contains("Subject: Confirm your address on"),
         "{confirm}"
     );
     std::fs::remove_file(&mail_file).unwrap();
@@ -71,12 +71,12 @@ async fn a_reset_link_arrives_by_mail_and_works_exactly_once() {
     // Asking by address or by name sends a link; a stranger's name does not.
     let (_, location) = post_form(app, "/forgot", "", "who=ada%40example.org").await;
     assert_eq!(location, "/forgot?done=1");
-    let mail = std::fs::read_to_string(&mail_file).expect("a mail was written");
+    let mail = mail_as_read(&mail_file);
     assert!(
         mail.starts_with("From: ambolt@forge.example\r\nTo: ada@example.org\r\n"),
         "{mail}"
     );
-    assert!(mail.contains("Subject: Reset your ambolt password"));
+    assert!(mail.contains("Subject: Reset your password on"), "{mail}");
     let link = link_in(&mail);
     assert!(link.contains("/reset?token="), "{link}");
     std::fs::remove_file(&mail_file).unwrap();
@@ -186,7 +186,7 @@ async fn an_invitation_goes_by_mail_when_the_forge_can_send_it() {
     .await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert!(location.starts_with("/people?once="), "{location}");
-    let mail = std::fs::read_to_string(&mail_file).unwrap();
+    let mail = mail_as_read(&mail_file);
     assert!(mail.contains("To: bee@example.org"), "{mail}");
     assert!(mail.contains("/join?token="), "{mail}");
     let (_, page) = page_with_cookie(app, &location, &ada).await;
@@ -222,13 +222,13 @@ async fn a_sign_in_link_signs_you_in_once_and_only_to_a_confirmed_address() {
         "email=ada%40example.org",
     )
     .await;
-    let confirm = std::fs::read_to_string(&mail_file).unwrap();
+    let confirm = mail_as_read(&mail_file);
     std::fs::remove_file(&mail_file).unwrap();
     get_redirect(app, &path_of(&link_in(&confirm)), &cookie).await;
     let (_, location) = post_form(app, "/login/link", "", "who=ada%40example.org").await;
     assert_eq!(location, "/login?sent=1");
-    let mail = std::fs::read_to_string(&mail_file).expect("a sign-in link was mailed");
-    assert!(mail.contains("Subject: Your ambolt sign-in link"), "{mail}");
+    let mail = mail_as_read(&mail_file);
+    assert!(mail.contains("Subject: Your sign-in link for"), "{mail}");
     let path = path_of(&link_in(&mail));
     assert!(path.starts_with("/signin?token="), "{path}");
 

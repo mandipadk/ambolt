@@ -6,7 +6,8 @@
 //! such as `sendmail -t`, for machines that already have a mail system
 //! and would rather not put credentials in one more place.
 
-use lettre::message::header::ContentType;
+use crate::letters::Letter;
+use lettre::message::{Mailbox, MultiPart};
 use lettre::transport::smtp::SmtpTransport;
 use lettre::{Message, Transport};
 use std::io::Write;
@@ -108,33 +109,29 @@ impl Mailer {
         }
     }
 
-    /// Send one plain-text message. Blocking; call it off the runtime.
-    pub fn send(&self, to: &str, subject: &str, body: &str) -> Result<(), String> {
+    /// Send one message. It goes out as both forms at once — the HTML
+    /// for a client that shows it, the plain text for one that does not,
+    /// for a reader who prefers it, and for the spam filters that expect
+    /// a message to have both. Blocking; call it off the runtime.
+    pub fn send(&self, to: &str, letter: &Letter) -> Result<(), String> {
+        let (Mailer::Smtp { from, .. } | Mailer::Command { from, .. }) = self;
+        let from: Mailbox = from.parse().map_err(|e| format!("bad From address: {e}"))?;
+        let to: Mailbox = to.parse().map_err(|e| format!("bad To address: {e}"))?;
+        let message = Message::builder()
+            .from(from)
+            .to(to)
+            .subject(&letter.subject)
+            .multipart(MultiPart::alternative_plain_html(
+                letter.text.clone(),
+                letter.html.clone(),
+            ))
+            .map_err(|e| format!("cannot build the message: {e}"))?;
         match self {
-            Mailer::Smtp { transport, from } => {
-                let message = Message::builder()
-                    .from(from.parse().map_err(|e| format!("bad From address: {e}"))?)
-                    .to(to.parse().map_err(|e| format!("bad To address: {e}"))?)
-                    .subject(subject)
-                    .header(ContentType::TEXT_PLAIN)
-                    .body(body.to_owned())
-                    .map_err(|e| format!("cannot build the message: {e}"))?;
-                transport
-                    .send(&message)
-                    .map(|_| ())
-                    .map_err(|e| format!("the relay refused the message: {e}"))
-            }
-            Mailer::Command { command, from } => {
-                let clean = |s: &str| s.replace(['\r', '\n'], " ");
-                let message = format!(
-                    "From: {}\r\nTo: {}\r\nSubject: {}\r\nDate: {}\r\nMIME-Version: 1.0\r\n\
-                     Content-Type: text/plain; charset=utf-8\r\n\r\n{}\r\n",
-                    clean(from),
-                    clean(to),
-                    clean(subject),
-                    jiff::Timestamp::now().strftime("%a, %d %b %Y %H:%M:%S %z"),
-                    body
-                );
+            Mailer::Smtp { transport, .. } => transport
+                .send(&message)
+                .map(|_| ())
+                .map_err(|e| format!("the relay refused the message: {e}")),
+            Mailer::Command { command, .. } => {
                 let mut child = Command::new("sh")
                     .arg("-c")
                     .arg(command)
@@ -147,7 +144,7 @@ impl Mailer {
                     .stdin
                     .take()
                     .ok_or("no stdin on the mail command")?
-                    .write_all(message.as_bytes())
+                    .write_all(&message.formatted())
                     .map_err(|e| format!("cannot write to the mail command: {e}"))?;
                 let output = child
                     .wait_with_output()

@@ -17,6 +17,7 @@ mod debt;
 mod error;
 mod git_http;
 mod guard;
+pub mod letters;
 pub mod mail;
 pub mod oidc;
 pub mod passkeys;

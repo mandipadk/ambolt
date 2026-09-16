@@ -1346,6 +1346,21 @@ impl GitStore {
         }
     }
 
+    /// How many commits are reachable from a ref: the depth of what is
+    /// on the branch, counted by git rather than kept by the forge, so
+    /// imported history counts the same as history made here.
+    pub async fn commit_count(&self, name: &str, refname: &str) -> GitResult<u64> {
+        let path = self.existing_repo_path(name)?;
+        match self
+            .run(Some(&path), &["rev-list", "--count", refname])
+            .await
+        {
+            Ok(stdout) => Ok(String::from_utf8_lossy(&stdout).trim().parse().unwrap_or(0)),
+            Err(GitError::CommandFailed { .. }) => Ok(0),
+            Err(other) => Err(other),
+        }
+    }
+
     pub async fn is_ancestor(
         &self,
         name: &str,

@@ -949,13 +949,18 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                             p class="joined" { (ic("check", "")) "You are on the list. We will be in touch." }
                         } @else {
                             form class="join" method="post" action="/waitlist" {
-                                input name="email" type="email" required autocomplete="email" placeholder="you@example.com" aria-label="Email";
-                                input name="company" type="text" autocomplete="organization" placeholder="for my company (optional)" aria-label="Company, if this is for one";
+                                div class="field" {
+                                    label for="join-email" { "Email" }
+                                    input id="join-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com";
+                                }
+                                div class="field" {
+                                    label for="join-note" { "What would you use it for?" span { "optional" } }
+                                    input id="join-note" name="note" type="text" maxlength="200" autocomplete="off" placeholder="a team, a side project, agents on my own code";
+                                }
                                 button class="btn" type="submit" { "Join the waitlist" }
                             }
                             @if let Some(error) = error { p class="error" { (error) } }
-                            p class="alt" { "Name a company and we make it a forge of its own instead, with its people and organisations as owners." }
-                            p class="alt" { "One address, kept so we can tell you when this opens up. Ask and it is deleted: it is deliberately not written to the log, because a log that cannot forget is the wrong place for a person's details." }
+                            p class="alt" { "One address, deleted whenever you ask." }
                         }
                         p class="alt" { "Or run it now: " code { "cargo install --git https://ambolt.sh/git/ambolt/ambolt ambolt" } }
                     }
@@ -3987,6 +3992,8 @@ pub struct RepoPage<'a> {
     pub sidebar: &'a Sidebar,
     pub clone_url: &'a str,
     pub people: &'a People,
+    /// Commits on the default branch, however they got there.
+    pub commits: u64,
 }
 
 pub fn repository(page: RepoPage<'_>) -> Markup {
@@ -4004,6 +4011,7 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
         sidebar,
         clone_url,
         people,
+        commits,
     } = page;
     let name = repo.name.as_str();
     let branch = repo.default_branch.as_str();
@@ -4096,6 +4104,9 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
                     div class="chips" {
                         @if repo.visibility == Visibility::Public { span class="chip" { (ic("globe", "")) "Public" } } @else { span class="chip" { (ic("lock", "")) "Private" } }
                         span class="chip" { (ic("branch", "")) (branch) }
+                        @if commits > 0 {
+                            span class="chip" { (commits) @if commits == 1 { " commit" } @else { " commits" } }
+                        }
                         @for topic in &repo.topics {
                             a class="chip" href={ "/explore?topic=" (topic) } { "#" (topic) }
                         }

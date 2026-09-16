@@ -1222,14 +1222,16 @@ form.line input[type="number"]:focus { outline: none; border-color: var(--ink2);
 .cta-block::before { content: ""; position: absolute; inset: auto -10% -60% -10%; height: 320px; background: radial-gradient(600px 220px at 50% 100%, var(--glow), transparent 70%); pointer-events: none; }
 .cta-block h2 { font-size: clamp(32px, 4.4vw, 52px); }
 .cta-block > p { color: var(--ink2); font-size: 18px; margin: 14px 0 0; position: relative; }
-.join { display: flex; gap: 8px; max-width: 640px; margin: 30px auto 0; position: relative; flex-wrap: wrap; }
-.join input { flex: 1; min-width: 180px; height: 46px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--hair2); background: var(--bg); font: inherit; font-size: 15px; color: var(--ink); }
+.join { position: relative; display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; margin: 32px auto 0; padding: 22px; border-radius: 16px; border: 1px solid var(--hair2); background: var(--bg); box-shadow: var(--shadow); text-align: left; }
+.join .field label { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; }
+.join .field label span { font-size: 12px; font-weight: var(--wbody); color: var(--ink3); }
+.join input { height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--hair2); background: var(--panel); font: inherit; font-size: 15px; color: var(--ink); }
 .join input::placeholder { color: var(--ink3); }
 .join input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
-.join .btn { height: 46px; }
+.join .btn { height: 46px; justify-content: center; margin-top: 2px; }
 .cta-block .joined { position: relative; margin: 26px 0 0; color: var(--good); font-weight: var(--wmed); display: inline-flex; align-items: center; gap: 8px; }
-.cta-block .error { position: relative; margin-top: 12px; }
-.cta-block .alt { margin: 18px auto 0; font-size: 14px; color: var(--ink3); position: relative; max-width: 64ch; }
+.cta-block .error { position: relative; margin: 12px auto 0; max-width: 420px; font-size: 13.5px; color: var(--bad); }
+.cta-block .alt { margin: 14px auto 0; font-size: 14px; color: var(--ink3); position: relative; max-width: 64ch; }
 .cta-block .alt code { background: var(--raise); padding: 3px 8px; border-radius: 6px; color: var(--ink); font-size: 13px; }
 .landing footer { padding-block: 48px 64px; border-top: 1px solid var(--hair); }
 .landing footer .wrap { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; font-size: 14px; color: var(--ink3); }

@@ -80,10 +80,13 @@ async fn joining_twice_is_indistinguishable_from_joining_once() {
     assert!(list[0].company.is_none());
 }
 
-/// A company asking for a forge of its own is on the same list, with
-/// the company named; and the front page says what an account gets.
+/// Everybody who asks is on the same list and is invited the same way.
+/// A company name still reaches the store, since a page from before may
+/// send one, but the front page no longer offers a forge of their own:
+/// that is for somebody who has outgrown this one, not for somebody
+/// filling in a field.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_company_asks_on_the_same_list_and_the_page_says_the_numbers() {
+async fn a_company_asks_on_the_same_list_and_is_offered_no_forge_of_its_own() {
     let forge = boot_token_only().await;
     let (_, location) = post_form(
         &forge.app,
@@ -113,7 +116,14 @@ async fn a_company_asks_on_the_same_list_and_the_page_says_the_numbers() {
         !page.contains("An account here gets"),
         "the allowance sentence left the front page: {page}"
     );
-    assert!(page.contains("for my company"), "{page}");
+    assert!(
+        !page.contains("a forge of its own"),
+        "the front page still offers a company its own forge: {page}"
+    );
+    assert!(
+        page.contains("What would you use it for?"),
+        "the form asks what it is for: {page}"
+    );
 }
 
 /// Obvious rubbish is refused. Every attempt here comes from the one

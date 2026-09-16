@@ -35,7 +35,7 @@ async fn a_stranger_reports_and_whoever_runs_the_forge_hears_of_it() {
     )
     .await;
     assert_eq!(status, StatusCode::SEE_OTHER, "{location}");
-    let confirm = std::fs::read_to_string(&mail_file).expect("a confirmation was mailed");
+    let confirm = mail_as_read(&mail_file);
     let (status, _) = get_redirect(app, &path_of(&link_in(&confirm)), &cookie).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     std::fs::remove_file(&mail_file).unwrap();
@@ -58,9 +58,9 @@ async fn a_stranger_reports_and_whoever_runs_the_forge_hears_of_it() {
     assert!(page.contains("Recorded as report 1"), "{page}");
 
     // It reached ada by mail, with the version and the address.
-    let mail = std::fs::read_to_string(&mail_file).expect("the report was mailed");
+    let mail = mail_as_read(&mail_file);
     assert!(mail.contains("To: ada@example.org"), "{mail}");
-    assert!(mail.contains("Subject: ambolt report 1"), "{mail}");
+    assert!(mail.contains("Subject: Report 1 on"), "{mail}");
     assert!(mail.contains("landing page said nothing"), "{mail}");
     assert!(mail.contains("someone@example.test"), "{mail}");
     assert!(mail.contains(ambolt_core::VERSION), "{mail}");

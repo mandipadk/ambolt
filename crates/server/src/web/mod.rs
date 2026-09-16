@@ -885,13 +885,11 @@ async fn change_email(
         &headers,
         &format!("/verify?token={}", urlencode(&secret)),
     );
-    let body = confirmation_body(&viewer.0, &link);
+    let letter = crate::letters::confirm_address(viewer.0.as_str(), &link);
     let to = email.clone();
-    let sent = tokio::task::spawn_blocking(move || {
-        mailer.send(&to, "Confirm your address on ambolt", &body)
-    })
-    .await
-    .unwrap_or_else(|e| Err(e.to_string()));
+    let sent = tokio::task::spawn_blocking(move || mailer.send(&to, &letter))
+        .await
+        .unwrap_or_else(|e| Err(e.to_string()));
     match sent {
         Ok(()) => Redirect::to("/you/settings?sent=1").into_response(),
         Err(err) => {
@@ -1016,23 +1014,10 @@ async fn forgot_submit(
                     &headers,
                     &format!("/reset?token={}", urlencode(&secret)),
                 );
-                let host = link
-                    .split("://")
-                    .nth(1)
-                    .and_then(|rest| rest.split('/').next())
-                    .unwrap_or("this forge")
-                    .to_owned();
-                let body = format!(
-                    "Somebody asked to reset the password for {} on {host}.\n\n\
-                     If that was you, open this link within thirty minutes; it works once:\n\n  {link}\n\n\
-                     If it was not you, nothing has changed and you can ignore this.\n",
-                    who.as_str()
-                );
-                let sent = tokio::task::spawn_blocking(move || {
-                    mailer.send(&email, "Reset your ambolt password", &body)
-                })
-                .await
-                .unwrap_or_else(|e| Err(e.to_string()));
+                let letter = crate::letters::reset_password(who.as_str(), &link);
+                let sent = tokio::task::spawn_blocking(move || mailer.send(&email, &letter))
+                    .await
+                    .unwrap_or_else(|e| Err(e.to_string()));
                 if let Err(err) = sent {
                     tracing::error!(%err, "password reset mail failed");
                 }
@@ -1611,7 +1596,7 @@ async fn people_action(
         && let Some(to) = destination
     {
         let link = join_link(&app, &headers, &secret);
-        match mail_invitation(&app, &to, &link, &viewer.0, None).await {
+        match mail_invitation(&app, &to, &link, &viewer.0, &id, None).await {
             Ok(()) => mailed = Some(to),
             Err(err) => tracing::error!(%err, "invitation mail failed"),
         }
@@ -1634,24 +1619,21 @@ pub(crate) async fn mail_invitation(
     to: &str,
     link: &str,
     by: &PrincipalId,
+    who: &PrincipalId,
     organisation: Option<&PrincipalId>,
 ) -> Result<(), String> {
     let Some(mailer) = app.mailer() else {
         return Err("this forge does not send mail".to_owned());
     };
-    let (subject, where_to) = match organisation {
-        Some(org) => (
-            format!("You are invited to {org} on ambolt"),
-            format!("{org} on ambolt"),
-        ),
-        None => ("You are invited to ambolt".to_owned(), "ambolt".to_owned()),
-    };
-    let body = format!(
-        "{by} has invited you to {where_to}.\n\nOpen this link to sign in; it works once, and \
-         you will be asked to set a password:\n\n  {link}\n"
+    let letter = crate::letters::invitation(
+        by.as_str(),
+        who.as_str(),
+        organisation.map(|o| o.as_str()),
+        link,
+        INVITATION_DAYS,
     );
     let to = to.to_owned();
-    tokio::task::spawn_blocking(move || mailer.send(&to, &subject, &body))
+    tokio::task::spawn_blocking(move || mailer.send(&to, &letter))
         .await
         .unwrap_or_else(|e| Err(e.to_string()))
 }
@@ -3053,13 +3035,11 @@ async fn sign_up(
                         &headers,
                         &format!("/verify?token={}", urlencode(&secret)),
                     );
-                    let body = confirmation_body(&id, &link);
+                    let letter = crate::letters::confirm_address(id.as_str(), &link);
                     let to = email.clone();
-                    let sent = tokio::task::spawn_blocking(move || {
-                        mailer.send(&to, "Confirm your address on ambolt", &body)
-                    })
-                    .await
-                    .unwrap_or_else(|e| Err(e.to_string()));
+                    let sent = tokio::task::spawn_blocking(move || mailer.send(&to, &letter))
+                        .await
+                        .unwrap_or_else(|e| Err(e.to_string()));
                     if let Err(err) = sent {
                         tracing::error!(%err, "verification mail failed");
                     }
@@ -3072,14 +3052,6 @@ async fn sign_up(
         Ok(session) => signed_in_to(&app, SESSION_COOKIE, &session, "/you/settings?first=1"),
         Err(err) => oops(err),
     }
-}
-
-/// The mail that confirms an address, worded once.
-fn confirmation_body(who: &PrincipalId, link: &str) -> String {
-    format!(
-        "This address was given for {who} on ambolt.\n\nOpen this link within a day to confirm it; \
-         it works once:\n\n  {link}\n\nIf that was not you, ignore this and nothing changes.\n"
-    )
 }
 
 #[derive(Deserialize)]
@@ -3173,14 +3145,17 @@ async fn file_report(
             (contact, None) => contact.to_owned(),
             (contact, Some(by)) => format!("{contact}, signed in as {by}"),
         };
-        let body = format!(
-            "Report {id} on ambolt {}\nWhere: {}\nFrom: {from}\n\n{}\n",
+        let letter = crate::letters::report(
+            id,
+            kind.as_str(),
             ambolt_core::VERSION,
             form.place.trim(),
-            form.what.trim()
+            &from,
+            form.what.trim(),
+            &absolute(&app, &headers, "/"),
         );
         for to in addresses {
-            if let Err(err) = mailer.send(&to, &format!("ambolt report {id}"), &body) {
+            if let Err(err) = mailer.send(&to, &letter) {
                 tracing::warn!(error = %err, to, "report mail not sent");
             }
         }
@@ -3523,16 +3498,10 @@ async fn login_link(
                 &headers,
                 &format!("/signin?token={}", urlencode(&secret)),
             );
-            let body = format!(
-                "Here is your sign-in link for {} on ambolt. It works once, for fifteen \
-                 minutes:\n\n  {link}\n\nIf you did not ask for it, ignore this; nothing changes.\n",
-                who.as_str()
-            );
-            let sent = tokio::task::spawn_blocking(move || {
-                mailer.send(&email, "Your ambolt sign-in link", &body)
-            })
-            .await
-            .unwrap_or_else(|e| Err(e.to_string()));
+            let letter = crate::letters::signin_link(who.as_str(), &link);
+            let sent = tokio::task::spawn_blocking(move || mailer.send(&email, &letter))
+                .await
+                .unwrap_or_else(|e| Err(e.to_string()));
             if let Err(err) = sent {
                 tracing::error!(%err, "sign-in link mail failed");
             }
@@ -4061,6 +4030,10 @@ async fn render_tree(
         Ok(sidebar) => sidebar,
         Err(err) => return oops(err),
     };
+    let commits = match tip {
+        Some(_) => git.store.commit_count(&repo, &rev).await.unwrap_or(0),
+        None => 0,
+    };
     let people = people_named(
         &app,
         sidebar
@@ -4109,6 +4082,7 @@ async fn render_tree(
         sidebar: &sidebar,
         clone_url: &clone_url,
         people: &people,
+        commits,
     })
     .into_response()
 }

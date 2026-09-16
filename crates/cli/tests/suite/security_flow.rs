@@ -261,7 +261,7 @@ async fn links_are_built_from_configuration_not_from_the_caller() {
         "email=ada%40example.org",
     )
     .await;
-    let confirm = std::fs::read_to_string(&mail_file).unwrap();
+    let confirm = mail_as_read(&mail_file);
     std::fs::remove_file(&mail_file).unwrap();
     assert!(
         confirm.contains("https://forge.example/verify?token="),
@@ -301,7 +301,7 @@ async fn links_are_built_from_configuration_not_from_the_caller() {
     tower::ServiceExt::oneshot(app.clone(), request)
         .await
         .unwrap();
-    let reset = std::fs::read_to_string(&mail_file).expect("a reset was mailed");
+    let reset = mail_as_read(&mail_file);
     assert!(
         reset.contains("https://forge.example/reset?token="),
         "{reset}"

@@ -16,6 +16,83 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tower::ServiceExt;
 
+/// The outbox as a reader with a plain-text client sees it: every
+/// message's headers, then the text half of the two the forge sends,
+/// with the transport's quoted-printable encoding undone so a link is
+/// one unbroken string again. Tests read mail through this, so what
+/// they check is what a person is actually told.
+pub fn mail_as_read(path: &Path) -> String {
+    let raw = std::fs::read_to_string(path).unwrap_or_default();
+    // A message begins where a `From:` line is followed by the headers
+    // of one: the same words appear inside a message a report quotes.
+    let starts: Vec<usize> = raw
+        .match_indices("From: ")
+        .filter(|(at, _)| *at == 0 || raw.as_bytes()[at - 1] == b'\n')
+        .filter(|(at, _)| {
+            raw[*at..]
+                .chars()
+                .take(400)
+                .collect::<String>()
+                .contains("MIME-Version:")
+        })
+        .map(|(at, _)| at)
+        .collect();
+    starts
+        .iter()
+        .enumerate()
+        .map(|(n, at)| {
+            let end = starts.get(n + 1).copied().unwrap_or(raw.len());
+            one_mail_as_read(&raw[*at..end])
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn one_mail_as_read(message: &str) -> String {
+    let Some((head, body)) = message.split_once("\r\n\r\n") else {
+        return message.to_owned();
+    };
+    let Some(boundary) = head
+        .split("boundary=\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+    else {
+        return format!("{head}\r\n\r\n{}", undo_quoted_printable(body));
+    };
+    let text = body
+        .split(&format!("--{boundary}"))
+        .find(|part| part.contains("text/plain"))
+        .and_then(|part| part.split_once("\r\n\r\n"))
+        .map(|(_, text)| undo_quoted_printable(text))
+        .unwrap_or_default();
+    format!("{head}\r\n\r\n{text}")
+}
+
+/// Soft line breaks go away entirely; `=XX` is the byte XX.
+fn undo_quoted_printable(text: &str) -> String {
+    let bytes = text.replace("=\r\n", "").replace("=\n", "");
+    let mut out = Vec::new();
+    let mut rest = bytes.as_bytes();
+    while let Some(at) = rest.iter().position(|b| *b == b'=') {
+        out.extend_from_slice(&rest[..at]);
+        match rest
+            .get(at + 1..at + 3)
+            .and_then(|hex| u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok())
+        {
+            Some(byte) => {
+                out.push(byte);
+                rest = &rest[at + 3..];
+            }
+            None => {
+                out.push(b'=');
+                rest = &rest[at + 1..];
+            }
+        }
+    }
+    out.extend_from_slice(rest);
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 pub struct Forge {
     pub _tmp: tempfile::TempDir,
     pub app: Router,

@@ -151,12 +151,13 @@ pub fn once(
     let previous = read_state(state)?;
     let answer = probe(&agent, url);
     let now = jiff::Timestamp::now().as_second();
-    let (seen, letter) = decide(previous.as_ref(), &answer, now, url);
-    if let (Some(letter), Some((to, mailer))) = (&letter, mail) {
+    let (seen, mail_to_send) = decide(previous.as_ref(), &answer, now, url);
+    if let (Some(word), Some((to, mailer))) = (&mail_to_send, mail) {
+        let letter = ambolt_server::letters::notice("Forge watch", &word.subject, &word.body, url);
         mailer
-            .send(to, &letter.subject, &letter.body)
+            .send(to, &letter)
             .map_err(|e| anyhow::anyhow!("mailing {to}: {e}"))?;
-        println!("mailed {to}: {}", letter.subject);
+        println!("mailed {to}: {}", word.subject);
     }
     write_state(state, &seen)?;
     Ok(seen)

@@ -208,8 +208,8 @@ Behind that door, four things a forge on its own may want, all needing
 the unscoped admin grant:
 
 - `GET /api/waitlist` — who asked for an account, oldest first, with
-  the company named when they asked for a forge of their own;
-  `DELETE /api/waitlist/{email}` takes one off.
+  what they said they wanted it for, and a company name where an older
+  form sent one; `DELETE /api/waitlist/{email}` takes one off.
 - `POST /api/invitations {"id": "jane", "display": "Jane", "email": "jane@…"}`
   — an account under that name if there is none, the address on it, and
   an invitation that signs them in once. Mailed when the forge can mail;
@@ -370,6 +370,11 @@ mail-check` proves the configuration — reaches the relay, negotiates TLS,
 authenticates, hangs up — without sending anyone anything. On a machine
 that already has a mail system, `--mail-command "sendmail -t"` hands each
 message to that instead; the command gets the whole message on stdin.
+
+Every message goes out in both forms at once — HTML for a client that
+shows it, plain text for one that does not and for a reader who prefers
+it. The plain-text half says the same thing and carries the same link,
+so nothing depends on a client rendering anything.
 
 With mail configured, an invitation from the People page goes to the
 address given, and following it proves that address. An address given

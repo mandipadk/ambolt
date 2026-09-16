@@ -3251,7 +3251,7 @@ pub(crate) async fn invite_into(
     };
     let link = crate::web::join_link(app, headers, &secret);
     let mailed = if will_mail {
-        match crate::web::mail_invitation(app, email, &link, &actor.0, organisation).await {
+        match crate::web::mail_invitation(app, email, &link, &actor.0, id, organisation).await {
             Ok(()) => true,
             Err(err) => {
                 tracing::error!(%err, "invitation mail failed");
