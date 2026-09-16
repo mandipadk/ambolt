@@ -258,6 +258,11 @@ the unscoped admin grant:
   only what is yours to work in: your own, your organisations', and
   those you hold a grant on. A public repository you merely read is
   neither until you save it.
+- `GET /api/you/profile` and `PATCH /api/you/profile` — what you say
+  about yourself: the name you are shown by (`display`), a `line`, up
+  to three `links`, a `zone` (an IANA name), `pronouns`, and which drawn
+  `mark` is yours. Only the fields sent change; an empty string clears
+  one. The Account panel in Settings is the same thing as a form.
 - `GET /api/invitations/unclaimed` — who was invited and never came,
   with when their invitation lapses; `POST /api/invitations/purge` lets
   go those whose invitation has lapsed: each is deactivated, its

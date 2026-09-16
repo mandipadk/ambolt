@@ -71,18 +71,35 @@ pub fn ic(name: &str, size: &str) -> Markup {
 /// squircle with a live dot for an agent. The hue comes from the id so it
 /// is the same on every page and every day.
 pub fn avatar(id: &str, display: &str, agent: bool, live: bool) -> Markup {
+    avatar_marked(id, display, agent, live, 0)
+}
+
+/// The same, for a person who chose one of the drawings.
+pub fn avatar_marked(id: &str, display: &str, agent: bool, live: bool, mark: u32) -> Markup {
     let kind = if agent {
         ambolt_core::PrincipalKind::Agent
     } else {
         ambolt_core::PrincipalKind::Human
     };
-    avatar_of(id, display, kind, live)
+    avatar_of_marked(id, display, kind, live, mark)
 }
 
 /// The mark for a principal of a known kind: a face for a person, a Lens
 /// for an agent (blinking while at work), a lettered tile for an
 /// organisation, which is many people and has no face of its own.
 pub fn avatar_of(id: &str, display: &str, kind: ambolt_core::PrincipalKind, live: bool) -> Markup {
+    avatar_of_marked(id, display, kind, live, 0)
+}
+
+/// The mark, with the drawing a person chose: its number rides in the
+/// file name, so every picture stays an immutable file.
+pub fn avatar_of_marked(
+    id: &str,
+    display: &str,
+    kind: ambolt_core::PrincipalKind,
+    live: bool,
+    mark: u32,
+) -> Markup {
     let drawn = super::avatars::GENERATION;
     match kind {
         ambolt_core::PrincipalKind::Agent => html! {
@@ -90,7 +107,7 @@ pub fn avatar_of(id: &str, display: &str, kind: ambolt_core::PrincipalKind, live
                 src={ "/avatars/" (drawn) "/agent/" (id) ".svg" @if live { "?live" } };
         },
         ambolt_core::PrincipalKind::Human => html! {
-            img class="av" alt="" title=(display) src={ "/avatars/" (drawn) "/person/" (id) ".svg" };
+            img class="av" alt="" title=(display) src={ "/avatars/" (drawn) "/person/" (id) @if mark != 0 { "." (mark) } ".svg" };
         },
         ambolt_core::PrincipalKind::Team => html! {
             span class="av org" title=(display) { (initials(display)) }
@@ -493,7 +510,7 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
                 Some(viewer) => {
                     details class="me" {
                         summary {
-                            (avatar(viewer.0.as_str(), &chrome.display, false, false))
+                            (avatar_marked(viewer.0.as_str(), &chrome.display, false, false, chrome.mark))
                             span class="t" {
                                 b { (chrome.display) }
                                 span { (viewer.0.as_str()) }
@@ -1190,7 +1207,6 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                     @for entry in &data.needs_you {
                         @let item = &entry.item;
                         @let (chip, label) = attention_chip(item);
-                        @let (display, agent) = people.name(&item.change.owner);
                         a class="row need" href={ "/" (entry.repo) "/changes/" (item.change.number) } title=(attention_evidence(item)) {
                             span class=(chip) { (label) }
                             span class="tt" {
@@ -1203,7 +1219,7 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                                     }
                                 }
                             }
-                            span class="avs" { (avatar(item.change.owner.as_str(), display, agent, false)) }
+                            span class="avs" { (people.avatar(&item.change.owner, false)) }
                             span class="age" title=(item.change.updated_at) { (ago(&item.change.updated_at)) }
                         }
                     }
@@ -1234,9 +1250,9 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                     div class="panel" {
                         @if data.recent.is_empty() { div class="empty" { "Nothing has happened across your repositories yet." } }
                         @for line in &data.recent {
-                            @let (display, agent) = people.name(&line.actor);
+                            @let (display, _) = people.name(&line.actor);
                             div class="row feed" {
-                                (avatar(line.actor.as_str(), display, agent, false))
+                                (people.avatar(&line.actor, false))
                                 span class="s wrap" {
                                     b { (display) } " " (line.what)
                                     @if let Some((href, label)) = &line.object { " " a href=(href) { b { (label) } } }
@@ -1255,9 +1271,9 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                     div class="sh" { h2 { "Stopped, with a lesson" } span class="n" { (data.lessons.len()) } }
                     div class="panel" {
                         @for lesson in &data.lessons {
-                            @let (display, agent) = people.name(&lesson.agent);
+                            @let (display, _) = people.name(&lesson.agent);
                             div class="row ls" {
-                                (avatar(lesson.agent.as_str(), display, agent, false))
+                                (people.avatar(&lesson.agent, false))
                                 span class="tt" {
                                     span class="t" { (lesson.task_title) }
                                     span class="s wrap" { (lesson.outcome) }
@@ -1563,10 +1579,10 @@ pub fn inbox(
                     div class="sh" { h2 { (day_label(day)) } }
                     div class="panel" {
                         @for notice in group {
-                            @let (display, agent) = people.name(&notice.actor);
+                            @let (display, _) = people.name(&notice.actor);
                             a class={ "row ib" @if notice.read { " read" } } href=(notice_href(notice)) {
                                 i class={ "dot" @if !notice.read { " acc" } } {}
-                                (avatar(notice.actor.as_str(), display, agent, false))
+                                (people.avatar(&notice.actor, false))
                                 span class="tt" {
                                     span class="t" {
                                         @match notice.what.strip_prefix(notice.actor.as_str()).filter(|rest| rest.starts_with(' ')) {
@@ -1799,8 +1815,7 @@ pub fn tasks(
                             }
                             span class="avs" {
                                 @for who in task.claimants.iter().chain(task.claimed_by.iter()).take(3) {
-                                    @let (display, agent) = people.name(who);
-                                    (avatar(who.as_str(), display, agent, false))
+                                    (people.avatar(who, false))
                                 }
                             }
                         }
@@ -1818,9 +1833,9 @@ pub fn tasks(
                     }
                     div class="panel" {
                         @for lesson in lessons {
-                            @let (display, agent) = people.name(&lesson.agent);
+                            @let (display, _) = people.name(&lesson.agent);
                             div class="row ls" {
-                                (avatar(lesson.agent.as_str(), display, agent, false))
+                                (people.avatar(&lesson.agent, false))
                                 span class="tt" {
                                     span class="t" { (lesson.task_title) }
                                     span class="s wrap" { (lesson.outcome) }
@@ -1940,8 +1955,8 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                     div class="meta" {
                         (task_chip(task.state))
                         span class="by" {
-                            @let (display, agent) = people.name(&task.created_by);
-                            (avatar(task.created_by.as_str(), display, agent, false))
+                            @let (display, _) = people.name(&task.created_by);
+                            (people.avatar(&task.created_by, false))
                             b { (display) }
                         }
                         @if task.attempts > 1 {
@@ -1976,10 +1991,10 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                 @for attempt in &attempts {
                                     @let latest = attempt.revisions.last().expect("an attempt has a revision");
                                     @let chosen = f.change.preferred_revision == Some(latest.number);
-                                    @let (display, agent) = people.name(attempt.by);
+                                    @let (display, _) = people.name(attempt.by);
                                     div class={ "try" @if chosen { " chosen" } } {
                                         div class="h" {
-                                            (avatar(attempt.by.as_str(), display, agent, false))
+                                            (people.avatar(attempt.by, false))
                                             b { (display) }
                                             @if chosen { span class="chip acc" { (ic("check", "")) "chosen" } }
                                             @for session in &attempt.sessions {
@@ -2005,10 +2020,10 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                             }
                             @if let Some(preference) = &f.preference {
                                 @if f.change.preferred_revision.is_some() {
-                                    @let (display, agent) = people.name(&preference.by);
+                                    @let (display, _) = people.name(&preference.by);
                                     div class="panel" {
                                         div class="ev-row" {
-                                            (avatar(preference.by.as_str(), display, agent, false))
+                                            (people.avatar(&preference.by, false))
                                             div {
                                                 div class="h" {
                                                     b { (display) }
@@ -2054,9 +2069,9 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                     div class="panel" {
                         @if sessions.is_empty() { div class="empty" { "Nobody has run against this yet." } }
                         @for session in sessions {
-                            @let (display, agent) = people.name(&session.agent);
+                            @let (display, _) = people.name(&session.agent);
                             div class="row ls" {
-                                (avatar(session.agent.as_str(), display, agent, session.state == SessionState::Active))
+                                (people.avatar(&session.agent, session.state == SessionState::Active))
                                 span class="tt" {
                                     span class="t" { (display) " " span class="sec3" { (session.state.as_str()) } }
                                     @if let Some(outcome) = &session.outcome { span class="s wrap" { (outcome) } }
@@ -2071,7 +2086,6 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                     div class="panel" {
                         @if changes.is_empty() { div class="empty" { "No change names this task yet." } }
                         @for change in changes {
-                            @let (display, agent) = people.name(&change.owner);
                             a class="row need" href={ "/" (change.repo) "/changes/" (change.number) } {
                                 @match change.state {
                                     ChangeState::Open => { span class="chip acc" { (ic("changes", "")) "Open" } }
@@ -2083,7 +2097,7 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                     span class="t" { (change.title) }
                                     span class="s" { (change.repo) " #" (change.number) }
                                 }
-                                span class="avs" { (avatar(change.owner.as_str(), display, agent, false)) }
+                                span class="avs" { (people.avatar(&change.owner, false)) }
                                 span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
                             }
                         }
@@ -2607,6 +2621,10 @@ fn browser_family(agent: Option<&str>) -> &'static str {
 pub struct SettingsPage<'a> {
     pub theme: Theme,
     pub viewer: &'a Viewer,
+    /// What they say about themself.
+    pub profile: &'a ambolt_core::Profile,
+    /// Which six drawn marks the Account panel offers this time.
+    pub marks_page: u32,
     pub contact: &'a Contact,
     pub can_mail: bool,
     pub passkeys: Option<&'a [PasskeyRecord]>,
@@ -2622,6 +2640,8 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
     let SettingsPage {
         theme,
         viewer,
+        profile,
+        marks_page,
         contact,
         can_mail,
         passkeys,
@@ -2672,17 +2692,51 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
                 }
                 div class="panels" {
                     div class="panel" id="account" {
-                        div class="pref" {
+                        form class="pref" method="post" action="/you/settings/profile" {
                             h3 { "Account" }
-                            p class="what" { "Your username cannot be changed." }
                             div class="keyrow" {
                                 span class="k" { "Username" }
                                 code { (viewer.0.as_str()) }
                             }
-                            div class="keyrow" {
-                                span class="k" { "Display name" }
-                                span { (viewer.1.display) }
+                            p class="what" { "Your username cannot be changed." }
+                            div class="field" {
+                                label for="display" { "Shown as" }
+                                input id="display" class="input" name="display" type="text" value=(viewer.1.display) required maxlength="300";
                             }
+                            div class="field" {
+                                label { "Your mark" }
+                                div class="marks" {
+                                    @for seed in marks_offered(profile.mark, marks_page) {
+                                        label class="m" {
+                                            input type="radio" name="mark" value=(seed) checked[seed == profile.mark];
+                                            img class="av" alt="" src={ "/avatars/" (super::avatars::GENERATION) "/person/" (viewer.0.as_str()) @if seed != 0 { "." (seed) } ".svg" };
+                                        }
+                                    }
+                                    a class="ghost" href={ "/you/settings?marks=" (marks_page + 1) "#account" } { (ic("rerun", "sm")) "Six more" }
+                                }
+                            }
+                            div class="field" {
+                                label for="line" { "One line about you" }
+                                input id="line" class="input" name="line" type="text" value=[profile.line.as_deref()] maxlength="120" placeholder="What you work on";
+                            }
+                            div class="two" {
+                                div class="field" {
+                                    label for="zone" { "Time zone" }
+                                    input id="zone" class="input" name="zone" type="text" list="zones" value=[profile.zone.as_deref()] placeholder="Europe/London";
+                                    datalist id="zones" { @for zone in ZONES { option value=(zone) {} } }
+                                }
+                                div class="field" {
+                                    label for="pronouns" { "Pronouns" span class="optional" { "Optional" } }
+                                    input id="pronouns" class="input" name="pronouns" type="text" value=[profile.pronouns.as_deref()] maxlength="24";
+                                }
+                            }
+                            div class="field" {
+                                label for="link1" { "Links" span class="optional" { "Up to three" } }
+                                input id="link1" class="input" name="link1" type="url" value=[profile.links.first().map(String::as_str)] placeholder="https://";
+                                input id="link2" class="input" name="link2" type="url" value=[profile.links.get(1).map(String::as_str)] placeholder="https://";
+                                input id="link3" class="input" name="link3" type="url" value=[profile.links.get(2).map(String::as_str)] placeholder="https://";
+                            }
+                            div class="acts" { button class="btn" type="submit" { "Save" } }
                         }
                     }
                     div class="panel" id="email" {
@@ -2907,9 +2961,9 @@ pub fn teams(
                                     @if row.members.is_empty() { div class="s" { "Nobody yet." } }
                                     div class="line" {
                                         @for member in &row.members {
-                                            @let (display, agent) = people.name(member);
+                                            @let (display, _) = people.name(member);
                                             span class="chip" {
-                                                (avatar(member.as_str(), display, agent, false))
+                                                (people.avatar(member, false))
                                                 a href={ "/" (member.as_str()) } { (display) }
                                                 @if row.owners.contains(member) { span class="s" { "owner" } }
                                                 form method="post" action="/teams" {
@@ -3036,6 +3090,8 @@ pub fn owner(
     // The record: what the log says this person or agent did lately.
     // None for an organisation.
     record: Option<&ambolt_core::Record>,
+    // What they say about themself, and the facts read off it.
+    says: &Says,
     error: Option<&str>,
     // An owner just asked for more; say it was heard.
     asked: bool,
@@ -3065,14 +3121,19 @@ pub fn owner(
         html! {
             div class="pagehead" {
                 div class="who" {
-                    span class="av lg" { (avatar_of(owner.id.as_str(), &owner.display, owner.kind, false)) }
+                    span class="av lg" { (avatar_of_marked(owner.id.as_str(), &owner.display, owner.kind, false, says.profile.mark)) }
                     div {
                         h1 { (owner.display) }
+                        @if let Some(line) = &says.profile.line { p class="says" { (line) } }
                         div class="meta" {
                             @if organisation { span class="chip" { (ic("agents", "")) "Organisation" } }
                             @else if agent { span class="chip" { (ic("agents", "")) "Agent" } }
                             @else { span class="chip" { (ic("user", "")) "Person" } }
                             @if !owner.active { span class="chip bad" { "Deactivated" } }
+                        }
+                        @if !organisation && !agent {
+                            @let facts = says.facts();
+                            @if !facts.is_empty() { div class="facts" { (kv(&facts)) } }
                         }
                     }
                 }
@@ -3236,10 +3297,10 @@ pub fn owner(
                     div class="panel" {
                         @if members.is_empty() { div class="empty" { "Nobody yet." } }
                         @for (member, role) in members {
-                            @let (display, agent) = people.name(member);
+                            @let (display, _) = people.name(member);
                             @let is_owner = *role == ambolt_core::TeamRole::Owner;
                             div class="row member" {
-                                (avatar(member.as_str(), display, agent, false))
+                                (people.avatar(member, false))
                                 span class="tt" {
                                     a class="t" href={ "/" (member.as_str()) } { (display) }
                                     span class="s" { (member.as_str()) }
@@ -3627,7 +3688,7 @@ pub fn people(
                     @for row in people {
                         @let id = row.principal.id.as_str();
                         div class="row person" {
-                            (avatar(id, &row.principal.display, false, false))
+                            (avatar_marked(id, &row.principal.display, false, false, row.mark))
                             span class="tt" {
                                 span class="t" { (row.principal.display) }
                                 span class="s" { (id) }
@@ -4064,9 +4125,9 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
             header { h2 { "Open changes" } span class="n" { (sidebar.open_changes.len()) } }
             @if sidebar.open_changes.is_empty() { div class="empty" { "None open." } }
             @for change in &sidebar.open_changes {
-                @let (display, agent) = people.name(&change.owner);
+                @let (display, _) = people.name(&change.owner);
                 a class="ev-row" href={ "/" (name) "/changes/" (change.number) } {
-                    (avatar(change.owner.as_str(), display, agent, false))
+                    (people.avatar(&change.owner, false))
                     div {
                         div class="h" { b { "#" (change.number) " " (change.title) } }
                         div class="sub" { (kv(&[("By", html! { (display) }), ("Revision", html! { (change.latest_revision) })])) }
@@ -4092,9 +4153,9 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
             }
             @for session in &sidebar.sessions {
                 @let held = sidebar.leases.iter().find(|l| l.session == session.id);
-                @let (display, agent) = people.name(&session.agent);
+                @let (display, _) = people.name(&session.agent);
                 div class="ev-row" {
-                    (avatar(session.agent.as_str(), display, agent, true))
+                    (people.avatar(&session.agent, true))
                     div {
                         div class="h" { b { (display) } }
                         @match held {
@@ -4608,7 +4669,7 @@ pub fn community(
                         }
                     }
                     @for report in reports {
-                        @let (display, agent) = people.name(&report.by);
+                        @let (display, _) = people.name(&report.by);
                         a class="row report" href={ "/" (repo) "/community/" (report.number) } {
                             span class="chips" {
                                 (kind_chip(report.kind))
@@ -4641,7 +4702,7 @@ pub fn community(
                                 };
                                 (kv(&facts))
                             }
-                            span class="avs" { (avatar(report.by.as_str(), display, agent, false)) }
+                            span class="avs" { (people.avatar(&report.by, false)) }
                             span class="age" title=(report.at) { (ago(&report.at)) }
                         }
                     }
@@ -4663,7 +4724,7 @@ pub fn community_report(
     people: &People,
     error: Option<&str>,
 ) -> Markup {
-    let (display, agent) = people.name(&report.by);
+    let (display, _) = people.name(&report.by);
     let discarded = report.state == OriginState::Discarded;
     let action = format!("/{repo}/community/{}", report.number);
     layout_reading(
@@ -4687,7 +4748,7 @@ pub fn community_report(
                 div class="panel lift said" {
                     div class="thread" {
                         div class="h" {
-                            (avatar(report.by.as_str(), display, agent, false))
+                            (people.avatar(&report.by, false))
                             b { (display) }
                             span class="when" title=(report.at) { (ago(&report.at)) }
                         }
@@ -4725,9 +4786,9 @@ pub fn community_report(
                         }
                     }
                     @for reply in &report.replies {
-                        @let (display, agent) = people.name(&reply.by);
+                        @let (display, _) = people.name(&reply.by);
                         div class="reply" {
-                            (avatar(reply.by.as_str(), display, agent, false))
+                            (people.avatar(&reply.by, false))
                             span {
                                 b { (display) } span class="when" title=(reply.at) { (ago(&reply.at)) }
                                 p { (with_mentions(&reply.body)) }
@@ -4836,7 +4897,7 @@ pub fn changes(
                         }
                     }
                     @for change in changes {
-                        @let (display, agent) = people.name(&change.owner);
+                        @let (display, _) = people.name(&change.owner);
                         a class="row need" href={ "/" (repo) "/changes/" (change.number) } {
                             @match change.state {
                                 ChangeState::Open => { span class="chip acc" { (ic("changes", "")) "Open" } }
@@ -4852,7 +4913,7 @@ pub fn changes(
                                     ("Opened", html! { span title=(change.opened_at) { (short_day(&change.opened_at)) } }),
                                 ]))
                             }
-                            span class="avs" { (avatar(change.owner.as_str(), display, agent, false)) }
+                            span class="avs" { (people.avatar(&change.owner, false)) }
                             span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
                         }
                     }
@@ -5117,7 +5178,7 @@ pub fn change(page: ChangePage) -> Markup {
             }
             @for thread in threads {
                 a class="ev-row" href={ (base) "?r=" (thread.revision) "#" (thread.id.as_str()) } {
-                    (avatar(thread.by.as_str(), people.name(&thread.by).0, people.name(&thread.by).1, false))
+                    (people.avatar(&thread.by, false))
                     div {
                         div class="h" {
                             b { (people.name(&thread.by).0) }
@@ -5175,7 +5236,7 @@ pub fn change(page: ChangePage) -> Markup {
                             }
                         }
                         span class="by" {
-                            (avatar(change.owner.as_str(), people.name(&change.owner).0, people.name(&change.owner).1, false))
+                            (people.avatar(&change.owner, false))
                             b { (people.name(&change.owner).0) }
                         }
                         span { "opened " span title=(change.opened_at) { (ago(&change.opened_at)) } }
@@ -5257,7 +5318,7 @@ pub fn change(page: ChangePage) -> Markup {
                             @let chosen = change.preferred_revision == Some(revision.number);
                             div class={ "try" @if chosen { " chosen" } } {
                                 div class="h" {
-                                    (avatar(revision.by.as_str(), people.name(&revision.by).0, people.name(&revision.by).1, false))
+                                    (people.avatar(&revision.by, false))
                                     b { "Revision " (revision.number) } span class="sec3" { "by " (people.name(&revision.by).0) }
                                     @if chosen { span class="chip acc" { (ic("check", "")) "chosen" } }
                                     @else if revision.number == change.latest_revision { span class="chip" { "latest" } }
@@ -5444,17 +5505,135 @@ fn requirement_words(description: &str) -> String {
 /// Who people are on this page: display names and whether each is an
 /// agent, looked up once by the route.
 #[derive(Default)]
-pub struct People(pub HashMap<String, (String, bool)>);
+pub struct People(pub HashMap<String, (String, bool, u32)>);
 
 impl People {
     /// The display name and agent flag of a principal, or its id when
     /// the page was not told.
     pub fn name<'a>(&'a self, id: &'a PrincipalId) -> (&'a str, bool) {
         match self.0.get(id.as_str()) {
-            Some((display, agent)) => (display.as_str(), *agent),
+            Some((display, agent, _)) => (display.as_str(), *agent),
             None => (id.as_str(), false),
         }
     }
+
+    /// Which drawn mark is theirs; the first, when the page was not told.
+    pub fn mark(&self, id: &PrincipalId) -> u32 {
+        self.0.get(id.as_str()).map(|p| p.2).unwrap_or(0)
+    }
+
+    /// Their mark, drawn as the page knows them.
+    pub fn avatar(&self, id: &PrincipalId, live: bool) -> Markup {
+        let (display, agent) = self.name(id);
+        avatar_marked(id.as_str(), display, agent, live, self.mark(id))
+    }
+}
+
+/// What a person says about themself, with the facts a page reads off
+/// it: the time where they are, the city, when they arrived, and the
+/// organisations they are on.
+pub struct Says {
+    pub profile: ambolt_core::Profile,
+    /// The local time and the city, when a zone was given.
+    pub local: Option<(String, String)>,
+    /// The month they were registered.
+    pub since: Option<String>,
+    pub orgs: Vec<(String, ambolt_core::TeamRole)>,
+}
+
+impl Says {
+    /// The facts, each a label and a value, in the order the head shows.
+    pub fn facts(&self) -> Vec<(&str, Markup)> {
+        let mut facts: Vec<(&str, Markup)> = Vec::new();
+        if let Some((time, city)) = &self.local {
+            facts.push(("Local time", html! { (time) }));
+            facts.push(("Time zone", html! { (city) }));
+        }
+        if let Some(since) = &self.since {
+            facts.push(("Here since", html! { (since) }));
+        }
+        if let Some(pronouns) = &self.profile.pronouns {
+            facts.push(("Pronouns", html! { (pronouns) }));
+        }
+        for (org, role) in &self.orgs {
+            let what = match role {
+                ambolt_core::TeamRole::Owner => "Owner of",
+                _ => "Member of",
+            };
+            facts.push((what, html! { a href={ "/" (org) } { (org) } }));
+        }
+        for link in &self.profile.links {
+            let shown = link
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_end_matches('/');
+            facts.push((
+                "Link",
+                html! { a href=(link) rel="me nofollow" { (shown) } },
+            ));
+        }
+        facts
+    }
+}
+
+/// Time zones offered as the field is typed; any IANA name is accepted.
+const ZONES: &[&str] = &[
+    "UTC",
+    "Europe/London",
+    "Europe/Dublin",
+    "Europe/Lisbon",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Europe/Madrid",
+    "Europe/Rome",
+    "Europe/Amsterdam",
+    "Europe/Stockholm",
+    "Europe/Warsaw",
+    "Europe/Athens",
+    "Europe/Istanbul",
+    "Europe/Moscow",
+    "Africa/Lagos",
+    "Africa/Nairobi",
+    "Africa/Johannesburg",
+    "Africa/Cairo",
+    "Asia/Dubai",
+    "Asia/Karachi",
+    "Asia/Kolkata",
+    "Asia/Kathmandu",
+    "Asia/Dhaka",
+    "Asia/Bangkok",
+    "Asia/Singapore",
+    "Asia/Shanghai",
+    "Asia/Tokyo",
+    "Asia/Seoul",
+    "Australia/Sydney",
+    "Australia/Melbourne",
+    "Pacific/Auckland",
+    "America/Sao_Paulo",
+    "America/Argentina/Buenos_Aires",
+    "America/Bogota",
+    "America/Mexico_City",
+    "America/New_York",
+    "America/Toronto",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Vancouver",
+];
+
+/// Seven marks to pick from: the one they have, the first, and six more
+/// from the page asked for.
+fn marks_offered(chosen: u32, page: u32) -> Vec<u32> {
+    let mut offered = vec![chosen];
+    if chosen != 0 {
+        offered.push(0);
+    }
+    for seed in (page * 6 + 1)..=(page * 6 + 6) {
+        if !offered.contains(&seed) {
+            offered.push(seed);
+        }
+    }
+    offered
 }
 
 /// "2 h ago", "yesterday", "5 Sep": how long since a moment, the way a
@@ -5518,11 +5697,11 @@ fn disagreement(verdicts: &[Verdict], people: &People) -> Markup {
 }
 
 fn position(verdict: &Verdict, people: &People) -> Markup {
-    let (display, agent) = people.name(&verdict.by);
+    let (display, _) = people.name(&verdict.by);
     html! {
         div class="stance" {
             div class="who-line" {
-                (avatar(verdict.by.as_str(), display, agent, false))
+                (people.avatar(&verdict.by, false))
                 span class="nm" { (display) }
                 span class="sec3" { (verdict.domain.as_str()) }
             }
@@ -5581,9 +5760,9 @@ fn thread_block(
         ThreadKind::Note => "noted",
     };
     let id = thread.id.as_str();
-    let (display, agent) = people.name(&thread.by);
+    let (display, _) = people.name(&thread.by);
     let head = html! {
-        (avatar(thread.by.as_str(), display, agent, false))
+        (people.avatar(&thread.by, false))
         b { (display) }
         span class="sec2" {
             (verb) " on revision " (thread.revision)
@@ -5594,9 +5773,9 @@ fn thread_block(
     let exchange = html! {
         p class="body" { (with_mentions(&thread.body)) }
         @for reply in &thread.replies {
-            @let (display, agent) = people.name(&reply.by);
+            @let (display, _) = people.name(&reply.by);
             div class="reply" {
-                (avatar(reply.by.as_str(), display, agent, false))
+                (people.avatar(&reply.by, false))
                 span {
                     b { (display) } span class="when" title=(reply.at) { (ago(&reply.at)) }
                     p { (with_mentions(&reply.body)) }
@@ -5712,11 +5891,11 @@ fn claim_row(claim: &Claim, verifications: &[Verification], people: &People) -> 
         .filter(|v| v.claim == claim.id)
         .collect();
     let disputed = runs.iter().any(|v| !v.agrees);
-    let (display, agent) = people.name(&claim.by);
+    let (display, _) = people.name(&claim.by);
     let executed = claim.command.is_some();
     html! {
         div class="ev-row" {
-            (avatar(claim.by.as_str(), display, agent, false))
+            (people.avatar(&claim.by, false))
             div {
                 div class="h" {
                     b { (claim_kind_words(claim.kind, claim.passed)) }
@@ -5757,7 +5936,7 @@ fn verdict_row(verdict: &Verdict, people: &People) -> Markup {
     let (display, agent) = people.name(&verdict.by);
     html! {
         div class="ev-row" {
-            (avatar(verdict.by.as_str(), display, agent, false))
+            (people.avatar(&verdict.by, false))
             div {
                 div class="h" {
                     b { (display) }
@@ -5797,11 +5976,11 @@ pub fn landing(
             header { h2 { "At work here" } span class="n" { (data.sessions.len()) } }
             @if data.sessions.is_empty() { div class="empty" { "Nobody is working here right now." } }
             @for session in &data.sessions {
-                @let (display, agent) = people.name(&session.agent);
+                @let (display, _) = people.name(&session.agent);
                 @let paths: Vec<&str> = data.leases.iter().filter(|l| l.session == session.id).flat_map(|l| l.paths.iter().map(String::as_str)).collect();
                 @let shared = data.leases.iter().any(|l| l.session != session.id && l.paths.iter().any(|p| paths.iter().any(|q| p.starts_with(q) || q.starts_with(p.as_str()))));
                 div class="ev-row" {
-                    (avatar(session.agent.as_str(), display, agent, true))
+                    (people.avatar(&session.agent, true))
                     div {
                         div class="h" {
                             b { (display) }
@@ -5872,7 +6051,6 @@ pub fn landing(
                     }
                     @for item in &data.needs_you {
                         @let (chip, label) = attention_chip(item);
-                        @let (display, agent) = people.name(&item.change.owner);
                         a class="row need" href={ "/" (repo) "/changes/" (item.change.number) } title=(attention_evidence(item)) {
                             span class=(chip) { (label) }
                             span class="tt" {
@@ -5884,7 +6062,7 @@ pub fn landing(
                                     }
                                 }
                             }
-                            span class="avs" { (avatar(item.change.owner.as_str(), display, agent, false)) }
+                            span class="avs" { (people.avatar(&item.change.owner, false)) }
                             span class="age" title=(item.change.updated_at) { (ago(&item.change.updated_at)) }
                         }
                     }
@@ -5895,14 +6073,14 @@ pub fn landing(
                 div class="sh" { h2 { "Landing on " (branch) } span class="n" { @if brief.landed > 0 { (brief.landed) " lately" } } }
                 div class="panel" {
                     @for (index, entry) in data.queue.iter().enumerate() {
-                        @let (display, agent) = people.name(&entry.enqueued_by);
+                        @let (display, _) = people.name(&entry.enqueued_by);
                         div class="row need" {
                             span class={ "chip" @if index == 0 { " acc" } } { (ic("clock", "")) @if index == 0 { "landing" } @else { "queued" } }
                             span class="tt" {
                                 span class="t" { (change_ref(&numbers, entry.change.as_str())) }
                                 span class="s" { "sent by " (display) }
                             }
-                            span class="avs" { (avatar(entry.enqueued_by.as_str(), display, agent, false)) }
+                            span class="avs" { (people.avatar(&entry.enqueued_by, false)) }
                             span class="age" { (index + 1) }
                         }
                     }
@@ -5924,9 +6102,9 @@ pub fn landing(
                     }
                     div class="panel" {
                         @for lesson in &brief.failed_sessions {
-                            @let (display, agent) = people.name(&lesson.agent);
+                            @let (display, _) = people.name(&lesson.agent);
                             div class="row ls" {
-                                (avatar(lesson.agent.as_str(), display, agent, false))
+                                (people.avatar(&lesson.agent, false))
                                 span class="tt" {
                                     span class="t" { (lesson.task_title) }
                                     span class="s wrap" { (lesson.outcome) }
@@ -5979,7 +6157,7 @@ fn change_num(numbers: &Refs, id: &str) -> Markup {
 }
 
 fn outcome_row(numbers: &Refs, envelope: &Envelope, people: &People) -> Markup {
-    let (display, agent) = people.name(&envelope.actor);
+    let (_display, _agent) = people.name(&envelope.actor);
     match &envelope.event {
         Event::ChangeMerged {
             change, merged_as, ..
@@ -5993,7 +6171,7 @@ fn outcome_row(numbers: &Refs, envelope: &Envelope, people: &People) -> Markup {
                         @else { "receipt signed" }
                     }
                 }
-                span class="avs" { (avatar(envelope.actor.as_str(), display, agent, false)) }
+                span class="avs" { (people.avatar(&envelope.actor, false)) }
                 span class="age" title=(envelope.ts) { (ago(&envelope.ts)) }
             }
         },
@@ -6004,7 +6182,7 @@ fn outcome_row(numbers: &Refs, envelope: &Envelope, people: &People) -> Markup {
                     span class="t" { (change_ref(numbers, change.as_str())) }
                     span class="s" { (reason) }
                 }
-                span class="avs" { (avatar(envelope.actor.as_str(), display, agent, false)) }
+                span class="avs" { (people.avatar(&envelope.actor, false)) }
                 span class="age" title=(envelope.ts) { (ago(&envelope.ts)) }
             }
         },
@@ -6014,10 +6192,10 @@ fn outcome_row(numbers: &Refs, envelope: &Envelope, people: &People) -> Markup {
 
 fn event_row(numbers: &Refs, envelope: &Envelope, people: &People) -> Markup {
     let (_, text) = describe(numbers, envelope, people);
-    let (display, agent) = people.name(&envelope.actor);
+    let (_display, _agent) = people.name(&envelope.actor);
     html! {
         div class="ev-row" {
-            (avatar(envelope.actor.as_str(), display, agent, false))
+            (people.avatar(&envelope.actor, false))
             div {
                 div class="h said" { (text) }
                 div class="sub" title=(envelope.ts) { (ago(&envelope.ts)) }
@@ -6324,6 +6502,10 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
             "dot idle",
             html! { b { (actor) } " set the name " (principal) " is shown as to " b { (display) } },
         ),
+        Event::ProfileSet { principal, .. } => (
+            "dot idle",
+            html! { b { (actor) } " changed what " (people.name(principal).0) " says about themself" },
+        ),
         Event::RepoRenamed { repo, to } => (
             "dot idle",
             html! { b { (actor) } " renamed " (repo) " to " (to) },
@@ -6520,6 +6702,7 @@ pub fn named_in(envelope: &Envelope) -> Vec<&str> {
         | Event::PrincipalDeactivated { principal, .. }
         | Event::PrincipalReactivated { principal, .. }
         | Event::PrincipalDisplayChanged { principal, .. }
+        | Event::ProfileSet { principal, .. }
         | Event::PrincipalRegistered { principal, .. }
         | Event::TokenMinted { principal, .. } => ids.push(principal.as_str()),
         Event::RepoTransferOffered { to, .. } => ids.push(to.as_str()),
@@ -6583,9 +6766,8 @@ fn event_days(
                 div class="panel" {
                     @for envelope in group {
                         @let (_, text) = describe(refs, envelope, people);
-                        @let (display, agent) = people.name(&envelope.actor);
                         div class="row feed" {
-                            (avatar(envelope.actor.as_str(), display, agent, false))
+                            (people.avatar(&envelope.actor, false))
                             span class="s wrap" {
                                 @if let Some(Some(repo)) = scopes.and_then(|s| s.get(&envelope.seq.0)) { a class="chip" href={ "/" (repo) "/activity" } { (repo) } " " }
                                 (text)
@@ -6927,9 +7109,9 @@ pub fn debt(page: CoveragePage<'_>) -> Markup {
                 header { h2 { "Paid down" } }
                 @for paid in &map.paid_down {
                     @let id = ambolt_core::PrincipalId(paid.by.clone());
-                    @let (display, agent) = people.name(&id);
+                    @let (display, _) = people.name(&id);
                     div class="ev-row" {
-                        (avatar(&paid.by, display, agent, false))
+                        (people.avatar(&id, false))
                         div {
                             div class="h" { b { (display) } span class="sec2" { "paid down " (thousands(paid.lines)) " lines" } }
                             div class="sub good" { (ic("check", "sm")) (paid.claims) " covering claim(s) reproduced, over " (paid.files) " file(s)" }
@@ -7080,9 +7262,9 @@ pub fn lessons(
                         }
                     }
                     @for lesson in lessons {
-                        @let (display, agent) = people.name(&lesson.agent);
+                        @let (display, _) = people.name(&lesson.agent);
                         div class="row ls" {
-                            (avatar(lesson.agent.as_str(), display, agent, false))
+                            (people.avatar(&lesson.agent, false))
                             span class="tt" {
                                 span class="t" {
                                     (lesson.task_title) " "
@@ -7165,9 +7347,9 @@ pub fn org_team(
                 div class="panel" {
                     @if members.is_empty() { div class="empty" { "Nobody yet. Only the organisation's members can be on its teams." } }
                     @for member in members {
-                        @let (display, agent) = people.name(member);
+                        @let (display, _) = people.name(member);
                         div class="row member" {
-                            (avatar(member.as_str(), display, agent, false))
+                            (people.avatar(member, false))
                             span class="tt" {
                                 a class="t" href={ "/" (member.as_str()) } { (display) }
                                 span class="s" { (member.as_str()) }
@@ -7229,6 +7411,11 @@ mod tests {
         let person = avatar("mandip", "Mandip Adhikari", false, false).into_string();
         assert!(person.contains("/avatars/2/person/mandip.svg"), "{person}");
         assert!(!person.contains("agent"), "{person}");
+        let chosen = avatar_marked("mandip", "Mandip Adhikari", false, false, 4).into_string();
+        assert!(
+            chosen.contains("/avatars/2/person/mandip.4.svg"),
+            "{chosen}"
+        );
         let org = avatar_of("crew", "Crew", ambolt_core::PrincipalKind::Team, false).into_string();
         assert!(org.contains("av org") && org.contains(">CR<"), "{org}");
     }

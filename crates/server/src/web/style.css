@@ -829,6 +829,17 @@ details.alt .field { margin-bottom: 10px; }
 
 /* A repository's head, its first-push guide, and its files. */
 .pagehead .sub { color: var(--ink2); margin: 4px 0 0; font-size: 14.5px; max-width: 70ch; }
+.pagehead .says { color: var(--ink2); margin: 6px 0 0; font-size: 14.5px; max-width: 60ch; }
+.pagehead .facts { margin-top: 14px; }
+.marks { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.marks .m { width: 56px; height: 56px; border-radius: 50%; padding: 3px; border: 2px solid transparent; cursor: pointer; position: relative; display: block; }
+.marks .m input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.marks .m:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.marks .m:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.marks .m .av { width: 100%; height: 100%; }
+.pref .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 14px 18px; }
+.field label .optional { color: var(--ink3); font-weight: var(--wbody); margin-left: 6px; }
+.field .input + .input { margin-top: 8px; }
 .pagehead .chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .clone { position: relative; }
 .clone > summary { list-style: none; cursor: pointer; }

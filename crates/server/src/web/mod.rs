@@ -115,6 +115,7 @@ pub fn routes() -> Router<AppState> {
         .route("/you", get(you_page))
         .route("/you/settings", get(settings_page).post(change_password))
         .route("/you/settings/email", post(change_email))
+        .route("/you/settings/profile", post(set_profile_form))
         .route("/you/sessions", get(sessions_page).post(sessions_action))
         .route(
             "/passkeys/register/begin",
@@ -312,14 +313,22 @@ async fn avatar_image(
     Query(query): Query<AvatarQuery>,
 ) -> Response {
     const FOREVER: &str = "public, max-age=31536000, immutable";
-    let Some(id) = file.strip_suffix(".svg") else {
+    let Some(named) = file.strip_suffix(".svg") else {
         return not_found();
+    };
+    // `jane.4.svg` is jane's fourth drawing; ids never carry a dot.
+    let (id, mark) = match named.split_once('.') {
+        Some((id, mark)) => match mark.parse::<u32>() {
+            Ok(mark) => (id, mark),
+            Err(_) => return not_found(),
+        },
+        None => (named, 0),
     };
     if generation != avatars::GENERATION || id.is_empty() || id.len() > 64 {
         return not_found();
     }
     let svg = match kind.as_str() {
-        "person" => avatars::person(id),
+        "person" => avatars::person_marked(id, mark),
         "agent" => avatars::agent(id, query.live.is_some()),
         _ => return not_found(),
     };
@@ -678,11 +687,16 @@ fn people_named<'a>(app: &AppState, ids: impl IntoIterator<Item = &'a str>) -> v
                     .with_store(|s| s.principal(&PrincipalId(id.to_owned())))
                     .ok()
                     .flatten()?;
+                let mark = app
+                    .with_store(|s| s.profile_of(&PrincipalId(id.to_owned())))
+                    .map(|p| p.mark)
+                    .unwrap_or(0);
                 Some((
                     id.to_owned(),
                     (
                         found.display,
                         found.kind == ambolt_core::PrincipalKind::Agent,
+                        mark,
                     ),
                 ))
             })
@@ -752,6 +766,9 @@ struct Flash {
     /// The id of something parked to be shown exactly once.
     #[serde(default)]
     once: Option<String>,
+    /// Which six drawn marks the Account panel offers.
+    #[serde(default)]
+    marks: Option<u32>,
 }
 
 async fn settings_page(
@@ -780,9 +797,14 @@ async fn settings_page(
         .with_store(|s| s.sessions_of(&viewer.0, current.as_deref()))
         .unwrap_or_default();
     let once = take(&app, &viewer.0, flash.once.as_deref());
+    let profile = app
+        .with_store(|s| s.profile_of(&viewer.0))
+        .unwrap_or_default();
     views::settings(views::SettingsPage {
         theme,
         viewer: &viewer,
+        profile: &profile,
+        marks_page: flash.marks.unwrap_or(0).min(10_000),
         contact: &contact,
         can_mail: app.mailer().is_some(),
         passkeys: passkeys.as_deref(),
@@ -840,6 +862,60 @@ async fn sessions_action(
         Ok(()) => Redirect::to("/you/settings?done=1").into_response(),
         Err(err) => flash("/you/settings", &humane(&err)),
     }
+}
+
+#[derive(Deserialize)]
+struct ProfileForm {
+    #[serde(default)]
+    display: String,
+    #[serde(default)]
+    line: String,
+    #[serde(default)]
+    zone: String,
+    #[serde(default)]
+    pronouns: String,
+    #[serde(default)]
+    link1: String,
+    #[serde(default)]
+    link2: String,
+    #[serde(default)]
+    link3: String,
+    #[serde(default)]
+    mark: Option<u32>,
+}
+
+/// The Account panel: the name shown, the mark, and the strip a person
+/// writes. Every field is sent, so a cleared one clears.
+async fn set_profile_form(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    Form(form): Form<ProfileForm>,
+) -> Response {
+    let back = |what: &str| {
+        Redirect::to(&format!("/you/settings?error={}#account", urlencode(what))).into_response()
+    };
+    if let Err(err) = app.with_store(|s| s.set_display(&viewer.0, &viewer.0, &form.display)) {
+        return back(&humane(&err));
+    }
+    let links: Vec<String> = [&form.link1, &form.link2, &form.link3]
+        .into_iter()
+        .map(|l| l.trim().to_owned())
+        .filter(|l| !l.is_empty())
+        .collect();
+    let said = ambolt_core::ProfileChanges {
+        line: Some(form.line),
+        links: Some(links),
+        zone: Some(form.zone),
+        pronouns: Some(form.pronouns),
+        mark: form.mark,
+        welcomed: None,
+    };
+    match app.with_store(|s| s.set_profile(&viewer.0, &viewer.0, said)) {
+        Ok(Some(env)) => app.publish(&env),
+        Ok(None) => {}
+        Err(err) => return back(&humane(&err)),
+    }
+    Redirect::to("/you/settings?done=1#account").into_response()
 }
 
 #[derive(Deserialize)]
@@ -1420,6 +1496,8 @@ pub struct PersonRow {
     pub claimed: bool,
     /// The live agents they hold, which stop with them.
     pub agents: usize,
+    /// Which drawn mark is theirs.
+    pub mark: u32,
 }
 
 /// Who is here, and a way to bring somebody in. Running the forge is
@@ -1445,6 +1523,7 @@ async fn people_page(
                 contact: store.contact_of(&principal.id)?,
                 admin: store.is_admin(&principal.id),
                 claimed: store.is_claimed(&principal.id)?,
+                mark: store.profile_of(&principal.id)?.mark,
                 agents: store.active_agents_of(&principal.id)?.len(),
                 invitation: {
                     let now = jiff::Timestamp::now().to_string();
@@ -2047,6 +2126,7 @@ fn chrome_for(app: &AppState, who: &PrincipalId) -> Result<Chrome, ambolt_core::
 
         Ok(Chrome {
             display,
+            mark: store.profile_of(who)?.mark,
             repos,
             working,
             yours,
@@ -2134,6 +2214,8 @@ pub struct Working {
 pub struct Chrome {
     /// How the viewer is named on the page.
     pub display: String,
+    /// Which drawn mark is theirs.
+    pub mark: u32,
     pub repos: Vec<ChromeRepo>,
     pub working: Vec<Working>,
     pub yours: usize,
@@ -2229,6 +2311,7 @@ fn chrome_public(app: &AppState) -> Result<Chrome, ambolt_core::CoreError> {
         }
         Ok(Chrome {
             display: String::new(),
+            mark: 0,
             repos,
             working: Vec::new(),
             yours: 0,
@@ -2768,6 +2851,43 @@ async fn owner_page(
     } else {
         app.with_store(|s| s.record_of(&owner_id, 90)).ok()
     };
+    let profile = app
+        .with_store(|s| s.profile_of(&owner_id))
+        .unwrap_or_default();
+    let since = app
+        .with_store(|s| s.registered_at(&owner_id))
+        .ok()
+        .flatten()
+        .and_then(|ts| ts.parse::<jiff::Timestamp>().ok())
+        .map(|ts| {
+            ts.to_zoned(jiff::tz::TimeZone::UTC)
+                .strftime("%B %Y")
+                .to_string()
+        });
+    let local = profile
+        .zone
+        .as_deref()
+        .and_then(|zone| jiff::tz::TimeZone::get(zone).ok().map(|tz| (zone, tz)))
+        .map(|(zone, tz)| {
+            let now = jiff::Timestamp::now().to_zoned(tz);
+            let (hour, minute) = (now.hour(), now.minute());
+            let (twelve, half) = match hour {
+                0 => (12, "am"),
+                1..=11 => (hour, "am"),
+                12 => (12, "pm"),
+                _ => (hour - 12, "pm"),
+            };
+            let city = zone.rsplit('/').next().unwrap_or(zone).replace('_', " ");
+            (format!("{twelve}:{minute:02} {half}"), city)
+        });
+    let says = views::Says {
+        orgs: app
+            .with_store(|s| s.memberships_of(&owner_id))
+            .unwrap_or_default(),
+        profile,
+        since,
+        local,
+    };
     views::owner(
         theme,
         who.reading(),
@@ -2783,6 +2903,7 @@ async fn owner_page(
         may_manage,
         allowances,
         record.as_ref(),
+        &says,
         query.error.as_deref(),
         query.asked.is_some(),
         once.secret.as_deref(),
@@ -3351,11 +3472,16 @@ fn gather_home(app: &AppState, who: &PrincipalId) -> Result<HomeData, ambolt_cor
                         .principal(&PrincipalId(id.to_owned()))
                         .ok()
                         .flatten()?;
+                    let mark = store
+                        .profile_of(&PrincipalId(id.to_owned()))
+                        .map(|p| p.mark)
+                        .unwrap_or(0);
                     Some((
                         id.to_owned(),
                         (
                             found.display,
                             found.kind == ambolt_core::PrincipalKind::Agent,
+                            mark,
                         ),
                     ))
                 })
@@ -4662,11 +4788,16 @@ async fn change_page(
                     .with_store(|s| s.principal(&PrincipalId(id.to_owned())))
                     .ok()
                     .flatten()?;
+                let mark = app
+                    .with_store(|s| s.profile_of(&PrincipalId(id.to_owned())))
+                    .map(|p| p.mark)
+                    .unwrap_or(0);
                 Some((
                     id.to_owned(),
                     (
                         found.display,
                         found.kind == ambolt_core::PrincipalKind::Agent,
+                        mark,
                     ),
                 ))
             })
@@ -5454,11 +5585,16 @@ fn landing_data(
                     .with_store(|s| s.principal(&PrincipalId(id.to_owned())))
                     .ok()
                     .flatten()?;
+                let mark = app
+                    .with_store(|s| s.profile_of(&PrincipalId(id.to_owned())))
+                    .map(|p| p.mark)
+                    .unwrap_or(0);
                 Some((
                     id.to_owned(),
                     (
                         found.display,
                         found.kind == ambolt_core::PrincipalKind::Agent,
+                        mark,
                     ),
                 ))
             })

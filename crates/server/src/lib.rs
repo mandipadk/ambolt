@@ -297,6 +297,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/repos/{owner}/{name}/watch", post(routes::watch))
         .route("/api/repos/{owner}/{name}/unwatch", post(routes::unwatch))
         .route("/api/you/watches", get(routes::my_watches))
+        .route(
+            "/api/you/profile",
+            get(routes::my_profile).patch(routes::set_my_profile),
+        )
         .route("/api/repos/{owner}/{name}/bookmark", post(routes::bookmark))
         .route(
             "/api/repos/{owner}/{name}/unbookmark",

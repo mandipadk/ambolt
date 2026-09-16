@@ -57,9 +57,11 @@ const DISCS: [&str; 6] = [
     "#E8E3D9", "#D9E6DD", "#DCE4EE", "#EADADA", "#E6E1D0", "#DEE0E5",
 ];
 
-/// A person's mark: a Notionists face on a tinted disc.
-pub fn person(id: &str) -> String {
-    let h = hash(id);
+/// A person's mark: a Notionists face on a tinted disc. The number is
+/// the drawing they chose among those the id offers; it folds into the
+/// hash, and zero draws what every id starts with.
+pub fn person_marked(id: &str, mark: u32) -> String {
+    let h = hash(id) ^ mark.wrapping_mul(0x9E37_79B1);
     let mut r = Rng(h ^ 0x9e37_79b9);
     let parts = &*PARTS;
     let group = |name: &str| parts.get(name).map(Vec::as_slice).unwrap_or(&[]);
@@ -189,21 +191,30 @@ mod tests {
 
     #[test]
     fn a_mark_is_the_ids_own() {
-        assert_eq!(person("ada"), person("ada"));
-        assert_ne!(person("ada"), person("bee"));
+        assert_eq!(person_marked("ada", 0), person_marked("ada", 0));
+        assert_ne!(person_marked("ada", 0), person_marked("bee", 0));
         assert_eq!(agent("scout", false), agent("scout", false));
         assert_ne!(agent("scout", false), agent("arbiter", false));
         assert!(agent("scout", true).contains("@keyframes"));
         assert!(!agent("scout", false).contains("@keyframes"));
-        let face = person("ada");
+        let face = person_marked("ada", 0);
         assert!(face.starts_with("<svg xmlns"));
         assert!(face.contains("translate(531 487)"));
     }
 
     #[test]
+    fn a_chosen_drawing_differs_and_the_first_is_the_old_one() {
+        assert_ne!(person_marked("ada", 0), person_marked("bee", 0));
+        let chosen: std::collections::HashSet<String> =
+            (0..8).map(|mark| person_marked("ada", mark)).collect();
+        assert!(chosen.len() >= 7, "{}", chosen.len());
+    }
+
+    #[test]
     fn faces_vary_across_a_crowd() {
-        let faces: std::collections::HashSet<String> =
-            (0..40).map(|i| person(&format!("person-{i}"))).collect();
+        let faces: std::collections::HashSet<String> = (0..40)
+            .map(|i| person_marked(&format!("person-{i}"), 0))
+            .collect();
         assert!(faces.len() >= 39, "{}", faces.len());
     }
 }

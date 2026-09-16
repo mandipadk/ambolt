@@ -2527,6 +2527,57 @@ pub async fn my_watches(State(app): State<AppState>, actor: Actor) -> ApiResult<
     Ok(Json(json!({ "watches": watches })))
 }
 
+/// What the caller says about themself, with the name they are shown by.
+pub async fn my_profile(State(app): State<AppState>, actor: Actor) -> ApiResult<Json<Value>> {
+    let (principal, profile) = app.with_store(|s| {
+        Ok::<_, ambolt_core::CoreError>((s.principal(&actor.0)?, s.profile_of(&actor.0)?))
+    })?;
+    Ok(Json(json!({
+        "id": actor.0,
+        "display": principal.map(|p| p.display).unwrap_or_default(),
+        "line": profile.line,
+        "links": profile.links,
+        "zone": profile.zone,
+        "pronouns": profile.pronouns,
+        "mark": profile.mark,
+        "welcomed": profile.welcomed,
+    })))
+}
+
+#[derive(Deserialize)]
+pub struct ProfileBody {
+    #[serde(default)]
+    pub display: Option<String>,
+    #[serde(flatten)]
+    pub said: ambolt_core::ProfileChanges,
+}
+
+/// Set what the caller says about themself: only the fields sent change.
+/// The name shown is one of them; the username is not.
+pub async fn set_my_profile(
+    State(app): State<AppState>,
+    actor: Actor,
+    Json(body): Json<ProfileBody>,
+) -> ApiResult<Json<Value>> {
+    if let Some(display) = &body.display {
+        let env = app.with_store(|s| {
+            s.acting_as(actor.1.as_ref())
+                .set_display(&actor.0, &actor.0, display)
+        })?;
+        if let Some(env) = env {
+            app.publish(&env);
+        }
+    }
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref())
+            .set_profile(&actor.0, &actor.0, body.said.clone())
+    })?;
+    if let Some(env) = env {
+        app.publish(&env);
+    }
+    my_profile(State(app), actor).await
+}
+
 pub async fn bookmark(
     State(app): State<AppState>,
     actor: Actor,

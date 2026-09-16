@@ -104,6 +104,24 @@ pub enum Event {
         principal: PrincipalId,
         display: String,
     },
+    /// What somebody says about themself changes: only the fields
+    /// carried. An empty string clears a field; a list of links replaces
+    /// the list; the mark is which of the drawings they chose.
+    ProfileSet {
+        principal: PrincipalId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        line: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        links: Option<Vec<String>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        zone: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pronouns: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mark: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        welcomed: Option<bool>,
+    },
     PasswordSet {
         principal: PrincipalId,
         #[serde(default, skip_serializing)]
@@ -607,6 +625,7 @@ impl Event {
             Event::PasswordSet { .. } => "password_set",
             Event::PrincipalDeactivated { .. } => "principal_deactivated",
             Event::PrincipalDisplayChanged { .. } => "principal_display_changed",
+            Event::ProfileSet { .. } => "profile_set",
             Event::PrincipalReactivated { .. } => "principal_reactivated",
             Event::TokenMinted { .. } => "token_minted",
             Event::TokenRevoked { .. } => "token_revoked",

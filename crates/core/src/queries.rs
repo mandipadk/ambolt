@@ -1981,6 +1981,49 @@ impl Store {
         Ok(rows)
     }
 
+    /// What somebody says about themself; nothing, if they never said.
+    pub fn profile_of(&self, who: &PrincipalId) -> CoreResult<crate::Profile> {
+        let row = self
+            .conn
+            .prepare_cached(
+                "SELECT line, links, zone, pronouns, mark, welcomed FROM profiles WHERE principal = ?1",
+            )?
+            .query_row(params![who.as_str()], |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                ))
+            })
+            .optional()?;
+        Ok(match row {
+            Some((line, links, zone, pronouns, mark, welcomed)) => crate::Profile {
+                line,
+                links: serde_json::from_str(&links).unwrap_or_default(),
+                zone,
+                pronouns,
+                mark: u32::try_from(mark).unwrap_or(0),
+                welcomed: welcomed != 0,
+            },
+            None => crate::Profile::default(),
+        })
+    }
+
+    /// When somebody was registered: the log's first word of them.
+    pub fn registered_at(&self, who: &PrincipalId) -> CoreResult<Option<String>> {
+        Ok(self
+            .conn
+            .prepare_cached(
+                "SELECT ts FROM events WHERE kind = 'principal_registered'
+                   AND json_extract(payload, '$.principal') = ?1 ORDER BY seq LIMIT 1",
+            )?
+            .query_row(params![who.as_str()], |row| row.get(0))
+            .optional()?)
+    }
+
     /// What a repository once called `old` is called now, if it was renamed.
     pub fn current_name_for(&self, old: &str) -> CoreResult<Option<String>> {
         raw::current_name_for(&self.conn, old)

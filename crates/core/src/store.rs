@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Bump whenever a projection table changes shape. The log is never
 /// touched; projections are rebuilt from it.
-const SCHEMA_VERSION: i64 = 37;
+const SCHEMA_VERSION: i64 = 38;
 
 /// The log itself, which outlives every schema.
 const EVENT_SCHEMA: &str = "
@@ -328,6 +328,18 @@ CREATE TABLE IF NOT EXISTS watches (
   PRIMARY KEY (principal, repo)
 ) STRICT;
 
+-- What a person says about themself. A row appears with the first thing
+-- said; a field never said stays null. Filled from ProfileSet.
+CREATE TABLE IF NOT EXISTS profiles (
+  principal TEXT PRIMARY KEY,
+  line      TEXT,
+  links     TEXT NOT NULL DEFAULT '[]',
+  zone      TEXT,
+  pronouns  TEXT,
+  mark      INTEGER NOT NULL DEFAULT 0,
+  welcomed  INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS team_members (
   team   TEXT NOT NULL,
   member TEXT NOT NULL,
@@ -608,6 +620,7 @@ const PROJECTION_TABLES: &[&str] = &[
     "event_scope",
     "notices",
     "watches",
+    "profiles",
     "team_members",
     "team_settings",
     "org_teams",
@@ -1158,7 +1171,8 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         | WorkloadCredentialMinted { principal, .. }
         | PrincipalDeactivated { principal }
         | PrincipalReactivated { principal }
-        | PrincipalDisplayChanged { principal, .. } => (None, Some(principal.as_str().to_owned())),
+        | PrincipalDisplayChanged { principal, .. }
+        | ProfileSet { principal, .. } => (None, Some(principal.as_str().to_owned())),
         TokenMinted { principal, .. } => (None, Some(principal.as_str().to_owned())),
         TokenRevoked { token } => {
             let owner: Option<String> = tx
@@ -2289,6 +2303,65 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         Event::PrincipalDisplayChanged { principal, display } => {
             tx.prepare_cached("UPDATE principals SET display = ? WHERE id = ?")?
                 .execute(params![display, principal.as_str()])?;
+        }
+        Event::ProfileSet {
+            principal,
+            line,
+            links,
+            zone,
+            pronouns,
+            mark,
+            welcomed,
+        } => {
+            tx.execute(
+                "INSERT OR IGNORE INTO profiles (principal) VALUES (?)",
+                params![principal.as_str()],
+            )?;
+            // An empty string clears: the column goes back to null.
+            let said = |s: &String| {
+                let s = s.trim();
+                (!s.is_empty()).then(|| s.to_owned())
+            };
+            if let Some(line) = line {
+                tx.execute(
+                    "UPDATE profiles SET line = ? WHERE principal = ?",
+                    params![said(line), principal.as_str()],
+                )?;
+            }
+            if let Some(links) = links {
+                let links: Vec<String> = links.iter().filter_map(said).collect();
+                tx.execute(
+                    "UPDATE profiles SET links = ? WHERE principal = ?",
+                    params![
+                        serde_json::to_string(&links).unwrap_or_else(|_| "[]".to_owned()),
+                        principal.as_str()
+                    ],
+                )?;
+            }
+            if let Some(zone) = zone {
+                tx.execute(
+                    "UPDATE profiles SET zone = ? WHERE principal = ?",
+                    params![said(zone), principal.as_str()],
+                )?;
+            }
+            if let Some(pronouns) = pronouns {
+                tx.execute(
+                    "UPDATE profiles SET pronouns = ? WHERE principal = ?",
+                    params![said(pronouns), principal.as_str()],
+                )?;
+            }
+            if let Some(mark) = mark {
+                tx.execute(
+                    "UPDATE profiles SET mark = ? WHERE principal = ?",
+                    params![i64::from(*mark), principal.as_str()],
+                )?;
+            }
+            if let Some(welcomed) = welcomed {
+                tx.execute(
+                    "UPDATE profiles SET welcomed = ? WHERE principal = ?",
+                    params![i64::from(*welcomed), principal.as_str()],
+                )?;
+            }
         }
         Event::PrincipalDeactivated { principal } => {
             tx.execute(
@@ -3623,7 +3696,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                37,
+                38,
                 r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null,"proposals":false,"community":false}"#
             ),
             "the policy's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
@@ -3643,7 +3716,7 @@ mod projection_shape {
         let short: String = digest[..6].iter().map(|b| format!("{b:02x}")).collect();
         assert_eq!(
             (super::SCHEMA_VERSION, short.as_str()),
-            (37, "2aa5fc0e1ce7"),
+            (38, "d35b3321f09a"),
             "the projection schema changed: bump SCHEMA_VERSION and pin the new digest here"
         );
     }
@@ -3700,7 +3773,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                37,
+                38,
                 r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25,"open_proposals":3,"proposal_push":33554432,"open_reports":20}"#
             ),
             "the quota's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"

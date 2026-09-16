@@ -222,6 +222,10 @@ const MAX_PATHS: usize = 1_000;
 /// Agents one task may invite at once, at most.
 const MAX_ATTEMPTS: u32 = 8;
 const MAX_ITEMS: usize = 64;
+/// The one line a person says about themself, in characters.
+const MAX_LINE: usize = 120;
+const MAX_LINKS: usize = 3;
+const MAX_PRONOUNS: usize = 24;
 
 fn bounded(what: &str, value: &str, limit: usize) -> CoreResult<()> {
     require(value.len() <= limit, || {
@@ -6043,6 +6047,148 @@ impl Store {
 
     /// Mint an invitation: a token the sign-in page spends for a
     /// browser session, for a person who has no other way in yet.
+    /// What a person says about themself: theirs to set, in person and
+    /// under no scope; whoever runs the forge may set anyone's, since a
+    /// line can need taking down. Agents and organisations have no such
+    /// strip. Nothing is recorded when nothing was given.
+    pub fn set_profile(
+        &mut self,
+        actor: &PrincipalId,
+        subject: &PrincipalId,
+        said: crate::types::ProfileChanges,
+    ) -> CoreResult<Option<Envelope>> {
+        let crate::types::ProfileChanges {
+            line,
+            links,
+            zone,
+            pronouns,
+            mark,
+            welcomed,
+        } = said;
+        if line.is_none()
+            && links.is_none()
+            && zone.is_none()
+            && pronouns.is_none()
+            && mark.is_none()
+            && welcomed.is_none()
+        {
+            return Ok(None);
+        }
+        if let Some(line) = &line {
+            require(line.chars().count() <= MAX_LINE, || {
+                format!("the line is longer than {MAX_LINE} characters")
+            })?;
+        }
+        if let Some(links) = &links {
+            require(links.len() <= MAX_LINKS, || {
+                format!("more than {MAX_LINKS} links")
+            })?;
+            for link in links.iter().filter(|l| !l.trim().is_empty()) {
+                bounded("link", link, MAX_TITLE)?;
+                require(
+                    (link.starts_with("https://") || link.starts_with("http://"))
+                        && !link.chars().any(char::is_whitespace),
+                    || format!("{link} is not a web address"),
+                )?;
+            }
+        }
+        if let Some(zone) = &zone {
+            require(
+                zone.trim().is_empty() || jiff::tz::TimeZone::get(zone.trim()).is_ok(),
+                || format!("{zone} is not the name of a time zone"),
+            )?;
+        }
+        if let Some(pronouns) = &pronouns {
+            require(pronouns.chars().count() <= MAX_PRONOUNS, || {
+                format!("pronouns are longer than {MAX_PRONOUNS} characters")
+            })?;
+        }
+        let tx = self.conn.transaction()?;
+        not_under_a_scope(
+            Acting::of(&self.scope, self.admin_elsewhere),
+            "say something about yourself",
+        )?;
+        let acting = ensure_actor(&tx, actor)?;
+        let target = raw::principal(&tx, subject.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("principal {subject}")))?;
+        require(target.kind == PrincipalKind::Human, || {
+            format!("{subject} is not a person; only people say things about themselves")
+        })?;
+        if acting.id != target.id {
+            authorize(
+                &tx,
+                Acting::of(&self.scope, self.admin_elsewhere),
+                actor,
+                Capability::Admin,
+                None,
+            )?;
+        }
+        let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
+        let env = append(
+            &tx,
+            actor,
+            via,
+            Event::ProfileSet {
+                principal: subject.clone(),
+                line,
+                links,
+                zone,
+                pronouns,
+                mark,
+                welcomed,
+            },
+        )?;
+        tx.commit()?;
+        Ok(Some(env))
+    }
+
+    /// The name somebody is shown by, set by themself, by whoever holds
+    /// them when they are an agent, or by whoever runs the forge. The
+    /// username never changes. Nothing is recorded when nothing changed.
+    pub fn set_display(
+        &mut self,
+        actor: &PrincipalId,
+        subject: &PrincipalId,
+        display: &str,
+    ) -> CoreResult<Option<Envelope>> {
+        let display = display.trim();
+        require(!display.is_empty(), || "a name is needed".to_owned())?;
+        bounded("display name", display, MAX_TITLE)?;
+        let tx = self.conn.transaction()?;
+        not_under_a_scope(
+            Acting::of(&self.scope, self.admin_elsewhere),
+            "change the name shown",
+        )?;
+        let acting = ensure_actor(&tx, actor)?;
+        let target = raw::principal(&tx, subject.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("principal {subject}")))?;
+        let holds = target.owner.as_ref() == Some(&acting.id);
+        if acting.id != target.id && !holds {
+            authorize(
+                &tx,
+                Acting::of(&self.scope, self.admin_elsewhere),
+                actor,
+                Capability::Admin,
+                None,
+            )?;
+        }
+        if target.display == display {
+            return Ok(None);
+        }
+        let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
+        let env = append(
+            &tx,
+            actor,
+            via,
+            Event::PrincipalDisplayChanged {
+                principal: subject.clone(),
+                display: display.to_owned(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(Some(env))
+    }
+
     /// Whoever runs the forge does this, in person; `mailed` marks one
     /// that went to the person's address, so following it proves the
     /// address. Not a credential, and not counted as one.

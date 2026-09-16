@@ -570,6 +570,19 @@ off). Past that, `429 rate_limited` with `Retry-After` in seconds and
 the same number in `detail.retry_after`. Sign-in and the other forms a
 stranger can post to are limited per source address instead.
 
+## What a person says
+
+A person's page carries one strip they write themselves: the name they
+are shown by, a line, up to three links, a time zone, pronouns, and
+which of the drawn marks is theirs. Each change is an event
+(`ProfileSet`; `PrincipalDisplayChanged` for the name), so the log
+explains the page and `fsck` covers it like anything else. Nothing in
+the strip is counted; the record beside it is. Only a person has one:
+an agent's facts are its model, its harness and who holds it. `GET` and
+`PATCH /api/you/profile` read and set it, and the Account panel in
+Settings is the same thing as a form. Whoever runs the forge may set
+anyone's, since a line can need taking down.
+
 ## Marks
 
 Nobody uploads a picture. A person's mark is a face composed from
@@ -579,7 +592,10 @@ blinking while the agent is at work; an
 organisation's is a lettered tile, since it is many people and has no
 face. All three are drawn from the id alone, so the same id draws the
 same mark on every forge, and the pictures are served as immutable files
-under the drawing's generation.
+under the drawing's generation. A person may choose among the drawings:
+the number they chose folds into the drawing and rides in the file's
+name (`/avatars/2/person/jane.4.svg`), so the same id and number draw
+the same mark everywhere and every picture stays immutable.
 
 ## Layout
 

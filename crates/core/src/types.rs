@@ -275,6 +275,46 @@ pub enum Anchor {
     Verdict { verdict: VerdictId },
 }
 
+/// What a person says about themself: the one strip of their page that
+/// is theirs to write, never counted. A field never said is absent.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Profile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<String>,
+    #[serde(default)]
+    pub links: Vec<String>,
+    /// An IANA time zone name, so pages can say what time it is for them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zone: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pronouns: Option<String>,
+    /// Which of the drawn marks is theirs; zero is the one every id
+    /// starts with.
+    #[serde(default)]
+    pub mark: u32,
+    /// Whether the welcome page has had its say, so it never asks twice.
+    #[serde(default)]
+    pub welcomed: bool,
+}
+
+/// What one `set_profile` changes: only the fields given. An empty
+/// string clears a field; a list of links replaces the list.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ProfileChanges {
+    #[serde(default)]
+    pub line: Option<String>,
+    #[serde(default)]
+    pub links: Option<Vec<String>>,
+    #[serde(default)]
+    pub zone: Option<String>,
+    #[serde(default)]
+    pub pronouns: Option<String>,
+    #[serde(default)]
+    pub mark: Option<u32>,
+    #[serde(default)]
+    pub welcomed: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Principal {
     pub id: PrincipalId,
