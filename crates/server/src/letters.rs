@@ -371,7 +371,8 @@ mod tests {
     #[ignore]
     fn every_letter_is_written_out_to_look_at() {
         let out = std::env::var("AMBOLT_LETTERS_OUT").unwrap_or_else(|_| "/tmp".into());
-        let link = "https://ambolt.sh/join?token=ambolt_examplelinkfromthedocsnotarealtoken0000000000000";
+        let link =
+            "https://ambolt.sh/join?token=ambolt_examplelinkfromthedocsnotarealtoken0000000000000";
         let all = [
             ("invitation", invitation("mandip", "jane", None, link, 7)),
             (
