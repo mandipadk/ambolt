@@ -106,6 +106,29 @@ pub fn router(state: AppState) -> Router {
             post(routes::describe_repo),
         )
         .route("/api/repos/{owner}/{name}/topics", post(routes::set_topics))
+        // What somebody came to say, before any of it is work.
+        .route(
+            "/api/repos/{owner}/{name}/reports",
+            post(routes::file_report).get(routes::list_repo_reports),
+        )
+        .route(
+            "/api/repos/{owner}/{name}/reports/{number}",
+            get(routes::get_report),
+        )
+        .route(
+            "/api/repos/{owner}/{name}/reports/{number}/reply",
+            post(routes::reply_report),
+        )
+        .route(
+            "/api/repos/{owner}/{name}/reports/{number}/settle",
+            post(routes::settle_report),
+        )
+        .route(
+            "/api/repos/{owner}/{name}/reports/{number}/discard",
+            post(routes::discard_report),
+        )
+        // How to act here, for an agent holding nothing but the address.
+        .route("/api/repos/{owner}/{name}/guide", get(routes::repo_guide))
         .route("/api/explore", get(routes::explore))
         .route(
             "/api/repos/{owner}/{name}/archive",

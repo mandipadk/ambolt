@@ -15,6 +15,10 @@ Ambolt records the causal chain as structured, subscribable data.
   repositories, agents, open tasks, open changes, standing tokens,
   disk, and for an organisation its members — and a refusal names what
   they have and what is allowed.
+- **Reports** — what somebody came to say about a repository before
+  any of it is work: a bug, a request, or a question. The column
+  before intent, since a task usually starts as somebody's bad
+  afternoon.
 - **Tasks** — durable statements of intent. A task may allow more than
   one attempt; the attempts arrive as revisions of one change and are
   compared, not merged separately.
@@ -266,6 +270,46 @@ an agent picking up revision three can read what was raised on revision
 two and what became of it, and a merge trace shows which concerns stood
 and how each was closed. Taking part needs a hand in the repository: its
 owner, the change's owner, or a holder of any capability on it.
+
+## The column before intent
+
+The graph begins at a task, which somebody holding authority writes.
+But intent comes from somewhere: a person hit a bug, wanted something,
+or could not work out how something was meant to go. A repository's
+community pages record that, and the rest of the graph runs on from it.
+
+A report has one of three kinds, and the kind is a commitment rather
+than a label. A **bug** carries a reproduction — the version, the
+command that shows it, what happened, what was expected — because a bug
+is checkable and a report nobody can check is an anecdote. A **request**
+says what somebody was trying to do and what they do instead today,
+which is the thing a maintainer decides on. A **question** is a
+question.
+
+Every field of a reproduction is optional at filing. The bar is on the
+report, not on the reporter: prose files fine, costs nothing and blocks
+nothing, and anybody may sharpen somebody else's report afterwards —
+another user, a maintainer, or an agent, which is how a machine that
+writes plausible prose becomes useful here instead of expensive.
+
+Nothing is ever closed for being old. There is no settlement that means
+"we stopped looking": a report is answered, already fixed, declined
+with a reason that stays on the page for whoever asks next, withdrawn
+by whoever filed it, or a duplicate naming the one it repeats. A report
+nobody has settled stays open and searchable for good, which an
+append-only log has no reason not to do. Discarding is the exception,
+for what should never have arrived: the number and the reason stay, the
+text and its replies do not, and somebody holding `merge` does it on
+the record.
+
+A repository's door is its owner's switch (`community`), off unless
+said, and it opens to anyone signed in while the repository is public —
+the same shape `proposals` has, and for the same reason. Anyone with a
+capability there may always say something. A reporter's room is their
+own and bounded: so many open on one repository, so many a day, each a
+number in their quota. Reporting is deliberately not a capability,
+because asking permission to say a thing is broken is not a thing a
+forge should make anyone do.
 
 ## Verification debt
 

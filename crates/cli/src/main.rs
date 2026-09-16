@@ -1,7 +1,7 @@
 mod hook;
 mod watch;
 
-use ambolt_client::{mcp, verify};
+use ambolt_client::{mcp, report, verify};
 
 use ambolt_core::{PrincipalId, PrincipalKind, Store};
 use ambolt_git::GitStore;
@@ -154,6 +154,12 @@ enum Command {
         /// Megabytes one push of a proposal may carry; `none` for no limit.
         #[arg(long)]
         quota_proposal_push_mb: Option<String>,
+        /// Reports one person may have open on one repository; `none` for no limit.
+        #[arg(long)]
+        quota_open_reports: Option<String>,
+        /// Reports one person may file in a day; `none` for no limit.
+        #[arg(long)]
+        quota_reports_a_day: Option<String>,
         /// The Ed25519 key that signs merge receipts; generated there when
         /// absent. Beside the database when unset.
         #[arg(long)]
@@ -203,6 +209,67 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Say something about a repository that is not work yet: a bug,
+    /// a request, or a question. Run inside a clone and it works out
+    /// which forge and which repository from the remote.
+    ///
+    /// For a bug, --command is the field that matters: a report
+    /// carrying the command that shows the failure gets re-run by a
+    /// runner and reaches a maintainer with evidence behind it. One
+    /// without it waits for somebody to add one.
+    Report {
+        /// What this is: bug, request, or question.
+        #[arg(value_parser = ["bug", "request", "question"])]
+        kind: String,
+        /// One line saying what this is about.
+        #[arg(long)]
+        title: String,
+        /// What happened, or what you were trying to do. `-` reads stdin.
+        #[arg(long)]
+        body: String,
+        /// Repository as owner/name. Taken from the git remote if omitted.
+        #[arg(long)]
+        repo: Option<String>,
+        /// Base URL of the forge. Taken from the git remote if omitted.
+        #[arg(long)]
+        server: Option<String>,
+        /// API token. Also read from AMBOLT_TOKEN.
+        #[arg(long)]
+        token: Option<String>,
+        /// The git remote to read, when server and repo are not given.
+        #[arg(long, default_value = "origin")]
+        remote: String,
+        /// What you were running, for a bug.
+        #[arg(long)]
+        version: Option<String>,
+        /// The exact command that shows it.
+        #[arg(long)]
+        command: Option<String>,
+        /// What actually happened.
+        #[arg(long)]
+        observed: Option<String>,
+        /// What should have happened instead.
+        #[arg(long)]
+        expected: Option<String>,
+    },
+    /// Print how to act on a repository: whether it takes reports and
+    /// from whom, how to propose a change, whether a runner re-runs
+    /// claims here. Needs no token — this is the question somebody asks
+    /// before they have one.
+    Guide {
+        /// Repository as owner/name. Taken from the git remote if omitted.
+        #[arg(long)]
+        repo: Option<String>,
+        /// Base URL of the forge. Taken from the git remote if omitted.
+        #[arg(long)]
+        server: Option<String>,
+        /// The git remote to read, when server and repo are not given.
+        #[arg(long, default_value = "origin")]
+        remote: String,
+        /// Print the forge's answer as JSON rather than as lines.
+        #[arg(long)]
+        json: bool,
+    },
     /// Expose a running forge as MCP tools over stdio for an AI agent.
     Mcp {
         /// Base URL of the forge server to proxy to.
@@ -232,6 +299,9 @@ enum ReceiptCommand {
 }
 
 #[derive(Subcommand)]
+// Clap's subcommands are parsed once at startup and dropped; the size
+// of the widest variant costs nothing worth boxing every field for.
+#[allow(clippy::large_enum_variant)]
 enum AdminCommand {
     /// First-run setup: register the first human and print their token.
     Bootstrap {
@@ -340,6 +410,12 @@ enum AdminCommand {
         /// Megabytes one push of theirs may carry as a proposal; `none` for no limit.
         #[arg(long)]
         proposal_push_mb: Option<String>,
+        /// Reports they may have open on one repository; `none` for no limit.
+        #[arg(long)]
+        open_reports: Option<String>,
+        /// Reports they may file in a day; `none` for no limit.
+        #[arg(long)]
+        reports_a_day: Option<String>,
     },
     /// Reclaim disk that nothing refers to, in one repository or every
     /// one, and measure again. Git prunes on its own only after two
@@ -482,6 +558,8 @@ async fn main() -> anyhow::Result<()> {
             quota_members,
             quota_open_proposals,
             quota_proposals_a_day,
+            quota_open_reports,
+            quota_reports_a_day,
             quota_proposal_push_mb,
             signing_key_file,
             operator_listen,
@@ -542,6 +620,12 @@ async fn main() -> anyhow::Result<()> {
             }
             if let Some(value) = said(quota_proposal_push_mb, "quota-proposal-push-mb")? {
                 quota.proposal_push = value.map(|mb| mb.saturating_mul(1024 * 1024));
+            }
+            if let Some(value) = narrow(said(quota_open_reports, "quota-open-reports")?)? {
+                quota.open_reports = value;
+            }
+            if let Some(value) = narrow(said(quota_reports_a_day, "quota-reports-a-day")?)? {
+                quota.reports_a_day = value;
             }
             let store = Store::open(&db)
                 .with_context(|| format!("opening forge database at {}", db.display()))?
@@ -833,6 +917,8 @@ async fn main() -> anyhow::Result<()> {
                 open_proposals,
                 proposals_a_day,
                 proposal_push_mb,
+                open_reports,
+                reports_a_day,
             } => {
                 let mut store = Store::open(&db)
                     .with_context(|| format!("opening forge database at {}", db.display()))?;
@@ -882,6 +968,8 @@ async fn main() -> anyhow::Result<()> {
                     proposals_a_day: narrow(said(proposals_a_day.as_ref())?)?,
                     proposal_push: said(proposal_push_mb.as_ref())?
                         .map(|mb| mb.map(|mb| mb.saturating_mul(1024 * 1024))),
+                    open_reports: narrow(said(open_reports.as_ref())?)?,
+                    reports_a_day: narrow(said(reports_a_day.as_ref())?)?,
                 };
                 if !patch.is_empty() {
                     let actor = PrincipalId::new(r#as.as_deref().unwrap_or(""))
@@ -1252,6 +1340,66 @@ async fn main() -> anyhow::Result<()> {
             let summary = ambolt_client::receipt::verify(&document, key.as_deref())?;
             println!("{summary}");
         }
+        Command::Report {
+            kind,
+            title,
+            body,
+            repo,
+            server,
+            token,
+            remote,
+            version,
+            command,
+            observed,
+            expected,
+        } => {
+            let (server, repo) = whereabouts(server, repo, &remote)?;
+            let token = token
+                .or_else(|| setting("TOKEN"))
+                .context("pass --token, or set AMBOLT_TOKEN")?;
+            let body = match body.as_str() {
+                "-" => std::io::read_to_string(std::io::stdin()).context("reading stdin")?,
+                said => said.to_owned(),
+            };
+            if kind == "bug" && command.is_none() {
+                // Said, not refused. The bar is on the report, never on
+                // the reporter: prose files fine, and anybody — you,
+                // later — may add the command afterwards.
+                eprintln!(
+                    "ambolt: filing without --command. Nobody can re-run this yet, so it \
+                     waits for somebody to add the command that shows it."
+                );
+            }
+            let number = report::file(
+                &server,
+                &token,
+                &repo,
+                &report::Filing {
+                    kind: &kind,
+                    title: &title,
+                    body: &body,
+                    version: version.as_deref(),
+                    command: command.as_deref(),
+                    observed: observed.as_deref(),
+                    expected: expected.as_deref(),
+                },
+            )?;
+            println!("{server}/{repo}/community/{number}");
+        }
+        Command::Guide {
+            repo,
+            server,
+            remote,
+            json,
+        } => {
+            let (server, repo) = whereabouts(server, repo, &remote)?;
+            let guide = report::guide(&server, &repo)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&guide)?);
+            } else {
+                print_guide(&guide);
+            }
+        }
         Command::Mcp {
             server,
             token,
@@ -1265,6 +1413,61 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Which forge and which repository a command is about: what was said,
+/// and otherwise what the clone we are standing in says.
+fn whereabouts(
+    server: Option<String>,
+    repo: Option<String>,
+    remote: &str,
+) -> anyhow::Result<(String, String)> {
+    if let (Some(server), Some(repo)) = (&server, &repo) {
+        return Ok((server.trim_end_matches('/').to_owned(), repo.clone()));
+    }
+    let here = report::from_remote(std::path::Path::new("."), remote)?;
+    Ok((
+        server
+            .unwrap_or(here.server)
+            .trim_end_matches('/')
+            .to_owned(),
+        repo.unwrap_or(here.repo),
+    ))
+}
+
+/// The guide as lines rather than JSON, for the person reading it.
+fn print_guide(guide: &serde_json::Value) {
+    let say = |key: &str| guide[key].as_str().unwrap_or("");
+    println!("{}  {}", say("repo"), say("description"));
+    println!("  pages    {}", say("web"));
+    println!("  git      {}", say("git"));
+    let reports = &guide["reports"];
+    match reports["open"].as_bool() {
+        Some(true) => {
+            println!(
+                "  reports  open to {}",
+                reports["who"].as_str().unwrap_or("")
+            );
+            println!("           {}", reports["cli"].as_str().unwrap_or(""));
+        }
+        _ => println!(
+            "  reports  closed — {}",
+            reports["who"].as_str().unwrap_or("")
+        ),
+    }
+    let changes = &guide["changes"];
+    println!(
+        "  changes  {}",
+        match changes["proposals_open"].as_bool() {
+            Some(true) => "anyone signed in may propose, no fork needed",
+            _ => "proposing needs a grant here",
+        }
+    );
+    println!("           {}", changes["how"].as_str().unwrap_or(""));
+    println!(
+        "  runner   {}",
+        guide["verification"]["note"].as_str().unwrap_or("")
+    );
 }
 
 /// A setting from the environment, as `AMBOLT_<name>`.

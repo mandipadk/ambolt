@@ -20,6 +20,7 @@ mod burndown_flow;
 mod claim_form_flow;
 mod code_flow;
 mod common;
+mod community_flow;
 mod concurrency_flow;
 mod credential_flow;
 mod csrf_flow;

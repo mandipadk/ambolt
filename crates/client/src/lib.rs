@@ -5,4 +5,5 @@
 
 pub mod mcp;
 pub mod receipt;
+pub mod report;
 pub mod verify;

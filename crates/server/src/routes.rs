@@ -11,12 +11,13 @@ use crate::error::{ApiError, ApiResult};
 use crate::error::{Path, Query};
 use crate::repo_path::RepoName;
 use crate::state::AppState;
-use ambolt_core::{Anchor, Resolution, ThreadId, ThreadKind};
+use ambolt_core::{Anchor, OriginKind, OriginState, Repro, Resolution, Settlement};
 use ambolt_core::{
     Capability, Change, ChangeId, ChangeSpec, ChangeState, ClaimId, ClaimSpec, CoreError,
     Disposition, Envelope, EventSeq, GrantId, ObjectFormat, PrincipalId, PrincipalKind, Repo,
     ReviewDomain, SessionId, SessionState, Task, TaskId, TaskState, TokenId,
 };
+use ambolt_core::{ThreadId, ThreadKind};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -1554,6 +1555,306 @@ pub struct VerifyClaim {
 }
 
 /// Record an independent re-execution of a claim. Runners call this;
+/// What somebody came to say about a repository, before any of it is
+/// work. `kind` decides what the rest means: a bug's `command` is the
+/// field that makes it checkable, and a request or a question carries
+/// none of them.
+#[derive(Deserialize)]
+pub struct FileReport {
+    pub kind: OriginKind,
+    pub title: String,
+    pub body: String,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub observed: Option<String>,
+    #[serde(default)]
+    pub expected: Option<String>,
+}
+
+pub async fn file_report(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+    Json(body): Json<FileReport>,
+) -> ApiResult<Json<Value>> {
+    let (origin, number, env) = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref());
+        s.open_origin(
+            &actor.0,
+            &name,
+            body.kind,
+            &body.title,
+            &body.body,
+            Repro {
+                version: body.version,
+                command: body.command,
+                observed: body.observed,
+                expected: body.expected,
+            },
+        )
+    })?;
+    app.publish(&env);
+    let mut answer = committed(Some(origin.0), &env);
+    answer.0["number"] = json!(number);
+    Ok(answer)
+}
+
+#[derive(Deserialize)]
+pub struct ReportQuery {
+    /// `bug`, `request` or `question`; anything else lists all three.
+    pub kind: Option<String>,
+    /// `open` or `settled`; anything else lists both.
+    pub state: Option<String>,
+    pub limit: Option<u32>,
+}
+
+pub async fn list_repo_reports(
+    State(app): State<AppState>,
+    who: MaybeActor,
+    RepoName(name): RepoName,
+    Query(query): Query<ReportQuery>,
+) -> ApiResult<Json<Value>> {
+    readable_repo_by(&app, &who, &name)?;
+    let mut reports =
+        app.with_store(|s| s.origins_in(&name, query.limit.map(|n| n.clamp(1, 200))))?;
+    if let Some(kind) = query.kind.as_deref().and_then(OriginKind::parse) {
+        reports.retain(|o| o.kind == kind);
+    }
+    match query.state.as_deref() {
+        Some("open") => reports.retain(|o| o.state == OriginState::Open),
+        Some("settled") => reports.retain(|o| o.state != OriginState::Open),
+        _ => {}
+    }
+    Ok(Json(json!(reports)))
+}
+
+pub async fn get_report(
+    State(app): State<AppState>,
+    who: MaybeActor,
+    RepoName(name): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+) -> ApiResult<Json<Value>> {
+    readable_repo_by(&app, &who, &name)?;
+    let report = found(
+        app.with_store(|s| s.origin_numbered(&name, number))?,
+        "report",
+    )?;
+    Ok(Json(json!(report)))
+}
+
+#[derive(Deserialize)]
+pub struct ReplyReport {
+    pub body: String,
+}
+
+pub async fn reply_report(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+    Json(body): Json<ReplyReport>,
+) -> ApiResult<Json<Value>> {
+    let report = found(
+        app.with_store(|s| s.origin_numbered(&name, number))?,
+        "report",
+    )?;
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref());
+        s.reply_origin(&actor.0, &report.id, &body.body)
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+#[derive(Deserialize)]
+pub struct SettleReport {
+    pub how: Settlement,
+    pub note: String,
+    /// The report this repeats, when `how` is `duplicate`.
+    #[serde(default)]
+    pub duplicate_of: Option<i64>,
+}
+
+pub async fn settle_report(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+    Json(body): Json<SettleReport>,
+) -> ApiResult<Json<Value>> {
+    let report = found(
+        app.with_store(|s| s.origin_numbered(&name, number))?,
+        "report",
+    )?;
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref());
+        s.settle_origin(
+            &actor.0,
+            &report.id,
+            body.how,
+            &body.note,
+            body.duplicate_of,
+        )
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+#[derive(Deserialize)]
+pub struct DiscardReport {
+    pub reason: String,
+}
+
+pub async fn discard_report(
+    State(app): State<AppState>,
+    actor: Actor,
+    RepoName(name): RepoName,
+    Path((_, _, number)): Path<(String, String, i64)>,
+    Json(body): Json<DiscardReport>,
+) -> ApiResult<Json<Value>> {
+    let report = found(
+        app.with_store(|s| s.origin_numbered(&name, number))?,
+        "report",
+    )?;
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref());
+        s.discard_origin(&actor.0, &report.id, &body.reason)
+    })?;
+    app.publish(&env);
+    Ok(committed(None, &env))
+}
+
+/// The block a repository puts in its `AGENTS.md`, written from what
+/// is actually true of it right now.
+///
+/// Every coding agent in use reads `AGENTS.md` from the root of the
+/// working copy, which makes it the one place that reaches an agent
+/// nobody has connected to this forge and nobody has told it exists.
+/// The forge writes the block rather than the owner, so it cannot drift
+/// from the policy it describes.
+fn agents_block(record: &Repo, public: &str, runner: bool) -> String {
+    let name = &record.name;
+    let mut out = String::new();
+    out.push_str("## Reporting, requests and questions\n\n");
+    out.push_str(&format!(
+        "This repository lives on Ambolt: {public}/{name}\n\
+         Issues opened on any mirror of it are not read.\n\n"
+    ));
+    if record.policy.community {
+        out.push_str(
+            "Something is broken:\n\
+             ```\n\
+             ambolt report bug --title \"...\" --body \"...\" \\\n\
+             \x20 --version <what you ran> --command <the command that shows it> \\\n\
+             \x20 --observed <what happened> --expected <what should have>\n\
+             ```\n\
+             Run it inside a clone and it finds the forge and the repository itself.\n\
+             A report carrying the command gets re-run and reaches a maintainer with\n\
+             evidence behind it; one without waits for somebody to add one. File in\n\
+             prose anyway if that is all you have — somebody else can sharpen it.\n\n\
+             Something is missing: `ambolt report request --title \"...\" --body \"...\"`,\n\
+             saying what you were trying to do and what you do instead today.\n\n\
+             How something works: `ambolt report question --title \"...\" --body \"...\"`.\n\n",
+        );
+    } else {
+        out.push_str(&format!(
+            "This repository does not take reports from outside. Ask whoever runs it.\n\
+             `ambolt guide --repo {name}` says what it does take.\n\n"
+        ));
+    }
+    out.push_str("## Changes\n\n");
+    out.push_str(&format!(
+        "```\n\
+         git clone {public}/git/{name}\n\
+         git commit -s -m \"...\"   # with a Change-Id: trailer\n\
+         git push origin HEAD:refs/for/{}\n\
+         ```\n",
+        record.default_branch
+    ));
+    if record.policy.proposals {
+        out.push_str(
+            "Anyone signed in may propose here. No fork, no branch: push to \
+             `refs/for/<branch>` and a change opens.\n",
+        );
+    }
+    out.push_str("Branches move only by merge; a direct push is refused with the reason.\n");
+    if runner {
+        out.push_str(
+            "A runner re-runs claims here, so a command you attach is usually tried \
+             without anyone asking.\n",
+        );
+    }
+    out.push_str(&format!(
+        "\n`ambolt guide --repo {name}` prints all of this from the forge, and needs no token.\n"
+    ));
+    out
+}
+
+/// What an agent needs to know to act here, answered without a token.
+///
+/// People do not read documentation; they ask the agent in their
+/// editor, and the agent answers from whatever it can find. An agent
+/// that finds only a git remote it does not recognise assumes GitHub
+/// and files on the mirror, where nobody is looking. This is the
+/// document that stops that, for any agent holding nothing but the
+/// repository's address.
+pub async fn repo_guide(
+    State(app): State<AppState>,
+    who: MaybeActor,
+    RepoName(name): RepoName,
+) -> ApiResult<Json<Value>> {
+    let record = readable_repo_by(&app, &who, &name)?;
+    let public = app.public_url().unwrap_or("").to_owned();
+    let runner = app.with_store(|s| s.has_runner(&name))?;
+    Ok(Json(json!({
+        "repo": record.name,
+        "description": record.description,
+        "archived": record.archived,
+        "web": format!("{public}/{}", record.name),
+        "git": format!("{public}/git/{}", record.name),
+        "reports": {
+            "open": record.policy.community,
+            "who": match record.policy.community {
+                true => "anyone signed in",
+                false => "people with a capability on this repository",
+            },
+            "how": format!("POST {public}/api/repos/{}/reports", record.name),
+            "cli": format!("ambolt report bug --repo {}", record.name),
+            "kinds": {
+                "bug": "Something is wrong. Send version, command, observed, expected. \
+                        A bug carrying a command someone else can run gets reproduced; \
+                        one without it waits for somebody to add one.",
+                "request": "Something is missing. Say what you were trying to do and \
+                            what you do instead today.",
+                "question": "How something is meant to work.",
+            },
+        },
+        "changes": {
+            "proposals_open": record.policy.proposals,
+            "how": format!(
+                "git push {public}/git/{} HEAD:refs/for/{}",
+                record.name, record.default_branch
+            ),
+            "note": "A change needs a Change-Id trailer. Branches move only by merge.",
+        },
+        "verification": {
+            "runner": runner,
+            "note": match runner {
+                true => "A runner re-runs claims here, so a command in a report is \
+                         usually tried without anyone asking.",
+                false => "No runner re-runs claims here yet; a person confirms by hand.",
+            },
+        },
+        "policy": record.policy,
+        // Ready to paste into the repository's AGENTS.md, which is
+        // where an agent that has never heard of this forge will look.
+        "agents_md": agents_block(&record, &public, runner),
+    })))
+}
+
 /// a disputed claim blocks the landing until it is resolved.
 #[derive(Deserialize)]
 pub struct OpenThread {

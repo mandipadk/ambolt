@@ -93,6 +93,45 @@ retried once and never done twice.
   claims a runner judged and reproduced, and a repository's policy may
   spend a good record within named paths in place of a re-run.
 
+## Saying something that is not work yet
+
+Somebody you are helping will ask how to report a bug here, or ask for
+something, or ask how a thing is meant to work. The answer is this
+repository's community pages — never an issue on a mirror, which nobody
+reads.
+
+Over MCP that is `file_report`; with a shell it is `ambolt report`,
+which reads the git remote from inside a clone and needs to be told
+nothing else:
+
+```sh
+ambolt report bug --title "clone hangs on git 2.39" \
+  --body "Cloning over http hangs, then fails." \
+  --version 0.1.0-alpha.3 \
+  --command "git clone https://ambolt.sh/git/ada/demo" \
+  --observed "fatal: the remote end hung up unexpectedly" \
+  --expected "a clone"
+```
+
+Send the command. A bug carrying the command that shows it gets re-run
+by a runner and reaches a maintainer with evidence behind it; one
+without waits for somebody to add one. When you have just hit the
+failure you are holding all four of those fields already, so this costs
+you nothing and is the difference between a report that counts and one
+that sits. File in prose anyway when that is all there is — you or
+anyone else can sharpen it later.
+
+Adding the missing command to somebody else's report is among the most
+useful things you can do here. It turns an anecdote nobody can check
+into evidence a machine can.
+
+`ambolt guide` — or the `repo_guide` tool, or
+`GET /api/repos/{name}/guide`, none of which need a token — says whether
+a repository takes reports and from whom, how to propose a change
+without a fork, and whether a runner re-runs claims there. Read it
+before telling somebody how things work here, rather than assuming the
+conventions of another forge.
+
 ## Reading the forge
 
 `inbox` and `mark_read` for what wants you; `attention` for what wants a

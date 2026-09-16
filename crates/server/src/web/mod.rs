@@ -5487,6 +5487,7 @@ struct PolicyForm {
     require_concerns_resolved: Option<String>,
     #[serde(default)]
     agents_act_in_sessions: Option<String>,
+    community: Option<String>,
     #[serde(default)]
     proposals: Option<String>,
     #[serde(default)]
@@ -5525,6 +5526,7 @@ fn parse_policy_form(body: &str) -> Option<PolicyForm> {
         require_runner_verification: None,
         require_concerns_resolved: None,
         agents_act_in_sessions: None,
+        community: None,
         proposals: None,
         runner_quorum: String::new(),
         trust_waives: Vec::new(),
@@ -5548,6 +5550,7 @@ fn parse_policy_form(body: &str) -> Option<PolicyForm> {
             "require_runner_verification" => form.require_runner_verification = Some(value),
             "require_concerns_resolved" => form.require_concerns_resolved = Some(value),
             "agents_act_in_sessions" => form.agents_act_in_sessions = Some(value),
+            "community" => form.community = Some(value),
             "proposals" => form.proposals = Some(value),
             "runner_quorum" => form.runner_quorum = value,
             "trust_waives" => form.trust_waives.push(value),
@@ -5681,6 +5684,7 @@ fn policy_from(form: &PolicyForm) -> Result<ambolt_core::Policy, &'static str> {
         agents_act_in_sessions: form.agents_act_in_sessions.is_some(),
         trust,
         proposals: form.proposals.is_some(),
+        community: form.community.is_some(),
     })
 }
 

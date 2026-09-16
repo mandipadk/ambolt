@@ -105,6 +105,9 @@ random_id!(
     /// One discussion thread on a change.
     ThreadId, "th");
 random_id!(
+    /// One thing somebody came to say about a repository.
+    OriginId, "og");
+random_id!(
     /// An API token's public identity (never the secret).
     TokenId, "tok");
 random_id!(

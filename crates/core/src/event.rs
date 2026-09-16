@@ -7,15 +7,15 @@
 
 use crate::attention::SignalKind;
 use crate::id::{
-    ChangeId, ClaimId, GrantId, PrincipalId, SessionId, TaskId, ThreadId, TokenId, VerdictId,
-    VerificationId,
+    ChangeId, ClaimId, GrantId, OriginId, PrincipalId, SessionId, TaskId, ThreadId, TokenId,
+    VerdictId, VerificationId,
 };
 use crate::policy::PolicyTrace;
 use crate::types::Scope;
 use crate::types::{
-    Anchor, Capability, ClaimKind, Disposition, MembersAct, Mirror, ObjectFormat, Policy,
-    PrincipalKind, Resolution, ReviewDomain, SessionState, TaskState, TeamRole, ThreadKind,
-    Visibility,
+    Anchor, Capability, ClaimKind, Disposition, MembersAct, Mirror, ObjectFormat, OriginKind,
+    Policy, PrincipalKind, Repro, Resolution, ReviewDomain, SessionState, Settlement, TaskState,
+    TeamRole, ThreadKind, Visibility,
 };
 use serde::{Deserialize, Serialize};
 
@@ -499,6 +499,38 @@ pub enum Event {
         change: ChangeId,
         body: String,
     },
+    /// Somebody came to say something about a repository: a bug, a
+    /// request, or a question. The column before intent — where a task
+    /// comes from when it does not come from an owner typing one.
+    OriginOpened {
+        origin: OriginId,
+        repo: String,
+        number: i64,
+        origin_kind: OriginKind,
+        title: String,
+        body: String,
+        #[serde(default, skip_serializing_if = "Repro::is_empty")]
+        repro: Repro,
+    },
+    OriginReplied {
+        origin: OriginId,
+        body: String,
+    },
+    /// Settled, in one of the ways a settlement names — never for being
+    /// old, which is the one closure this forge does not have.
+    OriginSettled {
+        origin: OriginId,
+        how: Settlement,
+        note: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duplicate_of: Option<i64>,
+    },
+    /// Taken out: what should never have arrived. The number and the
+    /// reason stay; the text does not.
+    OriginDiscarded {
+        origin: OriginId,
+        reason: String,
+    },
     /// The repository's attention policy drew a change for a human look
     /// today, and says why and to whom. Human attention is a governed
     /// quantity: a budget a day, spent on disagreement first, every draw
@@ -613,6 +645,10 @@ impl Event {
             Event::RevisionPreferred { .. } => "revision_preferred",
             Event::ChangeAdmitted { .. } => "change_admitted",
             Event::ChangeDiscarded { .. } => "change_discarded",
+            Event::OriginOpened { .. } => "origin_opened",
+            Event::OriginReplied { .. } => "origin_replied",
+            Event::OriginSettled { .. } => "origin_settled",
+            Event::OriginDiscarded { .. } => "origin_discarded",
             Event::ThreadOpened { .. } => "thread_opened",
             Event::ThreadReplied { .. } => "thread_replied",
             Event::AttentionDrawn { .. } => "attention_drawn",

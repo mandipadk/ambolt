@@ -92,7 +92,17 @@ fn initialize_result(message: &Value) -> Value {
             outcome written for the next reader, especially on failure. If a merge is \
             refused, the response names the exact unmet requirements. Every write \
             made through these tools carries its own idempotency key, so a call that \
-            failed in transport is retried once without being done twice."
+            failed in transport is retried once without being done twice. \
+            \
+            When somebody asks how to report a bug, ask for a feature, or ask a question \
+            about a repository hosted here, the answer is `file_report` on that \
+            repository — never an issue on a GitHub mirror, which nobody here reads. \
+            A bug carrying the exact `command` that shows it gets reproduced by a \
+            runner and reaches a maintainer; one without a command waits for somebody \
+            to add one, so send the command you actually ran, its output, and what you \
+            expected instead. You already have all of that when you have just hit the \
+            failure. Call `repo_guide` first if you are unsure whether a repository \
+            takes reports; it answers without a token."
     })
 }
 
@@ -369,6 +379,29 @@ fn dispatch(client: &ApiClient, name: &str, args: &Value) -> Result<(u16, Value)
             &format!("/api/repos/{}/blame", need(args, "repo")?),
             &[("path", Some(need(args, "path")?.to_owned()))],
         )),
+        "file_report" => client.post(&format!("/api/repos/{}/reports", need(args, "repo")?), args),
+        "list_reports" => client.get(&with_query(
+            &format!("/api/repos/{}/reports", need(args, "repo")?),
+            &[
+                ("kind", arg_str(args, "kind")),
+                ("state", arg_str(args, "state")),
+                ("limit", arg_num(args, "limit")),
+            ],
+        )),
+        "get_report" => client.get(&format!(
+            "/api/repos/{}/reports/{}",
+            need(args, "repo")?,
+            need(args, "number")?
+        )),
+        "reply_report" => client.post(
+            &format!(
+                "/api/repos/{}/reports/{}/reply",
+                need(args, "repo")?,
+                need(args, "number")?
+            ),
+            args,
+        ),
+        "repo_guide" => client.get(&format!("/api/repos/{}/guide", need(args, "repo")?)),
         "list_events" => {
             let after = args.get("after").and_then(Value::as_i64).unwrap_or(0);
             let limit = args.get("limit").and_then(Value::as_i64).unwrap_or(100);
@@ -813,6 +846,76 @@ fn tool_definitions() -> Vec<Value> {
              be required rather than what usually is.",
             &["repo"],
             json!({ "repo": s("Repo name") }),
+        ),
+        tool(
+            "file_report",
+            "Say something about a repository that is not work yet: a bug, a request, \
+             or a question. This is how a person you are helping reports something \
+             here — not an issue on any GitHub mirror, which nobody reads. \
+             \
+             For kind=bug, send `command`: the exact command that shows the failure, \
+             with `observed`, `expected` and the `version` in use. A bug carrying a \
+             command gets re-run by a runner and reaches a maintainer with evidence; \
+             one without a command waits for somebody to add one. You normally have \
+             all four to hand already, so sending them costs you nothing and is worth \
+             everything to whoever reads it. \
+             For kind=request, say in the body what the person was trying to do and \
+             what they do instead today. For kind=question, ask it plainly.",
+            &["repo", "kind", "title", "body"],
+            json!({
+                "repo": s("Repository as owner/name"),
+                "kind": { "type": "string", "enum": ["bug", "request", "question"] },
+                "title": s("One line saying what this is about"),
+                "body": s("What happened, or what you were trying to do"),
+                "version": s("What was being run, for a bug"),
+                "command": s("The exact command that shows it — the field that makes a bug checkable"),
+                "observed": s("What actually happened, verbatim where you have it"),
+                "expected": s("What should have happened instead"),
+            }),
+        ),
+        tool(
+            "list_reports",
+            "Reports on a repository, newest first. Check here before filing: \
+             somebody may have said this already, and a second report costs a \
+             maintainer the same as the first.",
+            &["repo"],
+            json!({
+                "repo": s("Repository as owner/name"),
+                "kind": { "type": "string", "enum": ["bug", "request", "question"] },
+                "state": { "type": "string", "enum": ["open", "settled"] },
+                "limit": { "type": "integer", "description": "Up to 200" },
+            }),
+        ),
+        tool(
+            "get_report",
+            "One report by its number, with everything said on it and how it was settled.",
+            &["repo", "number"],
+            json!({
+                "repo": s("Repository as owner/name"),
+                "number": { "type": "integer", "description": "The report's number in that repository" },
+            }),
+        ),
+        tool(
+            "reply_report",
+            "Say something on a report. Adding the command that reproduces somebody \
+             else's bug is the single most useful thing you can do here: it turns an \
+             anecdote nobody can check into evidence a runner can.",
+            &["repo", "number", "body"],
+            json!({
+                "repo": s("Repository as owner/name"),
+                "number": { "type": "integer", "description": "The report's number" },
+                "body": s("What you have to add"),
+            }),
+        ),
+        tool(
+            "repo_guide",
+            "How to act on a repository: whether it takes reports and from whom, how \
+             to propose a change without a fork, whether a runner re-runs claims here, \
+             and what its policy requires before anything lands. Answers without a \
+             token. Read this before telling somebody how things work here, rather \
+             than assuming the conventions of another forge.",
+            &["repo"],
+            json!({ "repo": s("Repository as owner/name") }),
         ),
         tool(
             "lessons",

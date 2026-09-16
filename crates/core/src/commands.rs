@@ -9,8 +9,8 @@
 use crate::error::{CoreError, CoreResult};
 use crate::event::{Envelope, Event};
 use crate::id::{
-    ChangeId, ClaimId, GrantId, PrincipalId, SessionId, TaskId, ThreadId, TokenId, VerdictId,
-    VerificationId, random_token_secret, validate_slug,
+    ChangeId, ClaimId, GrantId, OriginId, PrincipalId, SessionId, TaskId, ThreadId, TokenId,
+    VerdictId, VerificationId, random_token_secret, validate_slug,
 };
 use crate::leases::{self, Overlap};
 use crate::policy::{self, PolicyTrace};
@@ -21,9 +21,9 @@ use crate::types::ExploreSort;
 use crate::types::ReportKind;
 use crate::types::{
     Anchor, BrowserSession, Capability, Change, ChangeSpec, ChangeState, ClaimSpec, Contact,
-    Disposition, Mirror, ObjectFormat, PasskeyRecord, Policy, Principal, PrincipalKind, Quota,
-    Replay, Resolution, ReviewDomain, Scope, SessionState, TaskState, ThreadKind, Usage,
-    Visibility,
+    Disposition, Mirror, ObjectFormat, OriginKind, OriginState, PasskeyRecord, Policy, Principal,
+    PrincipalKind, Quota, Replay, Repro, Resolution, ReviewDomain, Scope, SessionState, Settlement,
+    TaskState, ThreadKind, Usage, Visibility,
 };
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
@@ -514,6 +514,78 @@ pub(crate) fn may_propose(
     record.visibility == Visibility::Public && record.policy.proposals
 }
 
+/// Whether `actor` may say something on `repo`'s community pages: a
+/// bug, a request, a question. Anyone with a hand in the repository
+/// always may; beyond that it is the owner's switch, on a public
+/// repository, for anyone signed in.
+///
+/// Deliberately not a capability. Reporting is not authority — nothing
+/// it produces decides anything, and a report is worth exactly what
+/// somebody else can reproduce of it. Making it a grant would mean
+/// asking permission to say a thing is broken.
+pub(crate) fn may_report(
+    tx: &Transaction,
+    acting: Acting<'_>,
+    actor: &PrincipalId,
+    repo: &str,
+) -> bool {
+    let Ok(principal) = ensure_actor(tx, actor) else {
+        return false;
+    };
+    let Ok(Some(record)) = raw::repo(tx, repo) else {
+        return false;
+    };
+    // A credential drawn for one repository's work says nothing about
+    // another's community, whoever holds it.
+    if let Some(scope) = acting.scope
+        && let Some(mine) = &scope.repo
+        && mine != repo
+    {
+        return false;
+    }
+    if raw::owns(tx, actor.as_str(), record.owner.as_str()).unwrap_or(false)
+        || raw::is_team_member(tx, record.owner.as_str(), actor.as_str()).unwrap_or(false)
+    {
+        return true;
+    }
+    let any = [
+        Capability::Task,
+        Capability::Push,
+        Capability::Review,
+        Capability::Merge,
+        Capability::Verify,
+        Capability::Propose,
+    ];
+    if any
+        .iter()
+        .any(|&c| authorize(tx, acting, actor, c, Some(repo)).is_ok())
+    {
+        return true;
+    }
+    principal.active && record.visibility == Visibility::Public && record.policy.community
+}
+
+/// Whoever may act on somebody else's report: settle it, or discard it.
+/// The repository's own people, in other words — reporting is open,
+/// answering is not.
+fn may_answer(
+    tx: &Transaction,
+    acting: Acting<'_>,
+    actor: &PrincipalId,
+    repo: &str,
+) -> CoreResult<Principal> {
+    for verb in [Capability::Task, Capability::Merge] {
+        if let Ok(principal) = authorize(tx, acting, actor, verb, Some(repo)) {
+            return Ok(principal);
+        }
+    }
+    Err(CoreError::Forbidden(format!(
+        "{actor} may not answer for {repo}: that needs task or merge there. \
+         POST /api/grants {{\"grantee\": \"{actor}\", \"repo\": \"{repo}\", \
+         \"actions\": [\"task\"]}}"
+    )))
+}
+
 /// How somebody comes to act on a change: with `push` on the repository,
 /// which reaches every change there, or with `propose`, which reaches
 /// the changes they opened and no other. Says which it was, since a
@@ -791,6 +863,20 @@ impl Store {
 
     /// Whether `actor` may propose a change to `repo` without holding
     /// push there. See [`may_propose`].
+    /// Whether this actor may say something on the repository's
+    /// community pages. See [`may_report`].
+    pub fn may_report(&self, actor: &PrincipalId, repo: &str) -> bool {
+        let Ok(tx) = self.conn.unchecked_transaction() else {
+            return false;
+        };
+        may_report(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            repo,
+        )
+    }
+
     pub fn may_propose(&self, actor: &PrincipalId, repo: &str) -> bool {
         let Ok(tx) = self.conn.unchecked_transaction() else {
             return false;
@@ -3980,13 +4066,21 @@ impl Store {
         attempts: u32,
     ) -> CoreResult<(TaskId, Envelope)> {
         let tx = self.conn.transaction()?;
-        authorize(
-            &tx,
-            Acting::of(&self.scope, self.admin_elsewhere),
-            actor,
-            Capability::Task,
-            repo,
-        )?;
+        let acting = Acting::of(&self.scope, self.admin_elsewhere);
+        if let Err(refused) = authorize(&tx, acting, actor, Capability::Task, repo) {
+            // The correction arrives at the moment somebody reached for
+            // the wrong verb, which is the only moment it is certain to
+            // be read. Somebody who may not write intent here can still
+            // say what they came to say.
+            return Err(match repo {
+                Some(repo) if may_report(&tx, acting, actor, repo) => {
+                    CoreError::Forbidden(format!(
+                        "{refused}. To say this rather than task it: POST /api/repos/{repo}/reports {{\"kind\": \"request\", \"title\": \"…\", \"body\": \"…\"}}"
+                    ))
+                }
+                _ => refused,
+            });
+        }
         require((1..=MAX_ATTEMPTS).contains(&attempts), || {
             format!("a task invites between 1 and {MAX_ATTEMPTS} attempts, not {attempts}")
         })?;
@@ -4850,6 +4944,267 @@ impl Store {
     /// diff, a claim, a verdict, or the change itself. A claim or verdict
     /// anchor pins the revision it was made on; otherwise the thread is
     /// on the revision given, or the latest.
+    /// File a report: a bug, a request, or a question.
+    ///
+    /// Everything but the title and the body is optional, on purpose.
+    /// Prose costs nothing and blocks nothing; what prose cannot do is
+    /// reach the attention budget on its own, and anyone — including an
+    /// agent — may sharpen somebody else's report afterwards.
+    pub fn open_origin(
+        &mut self,
+        actor: &PrincipalId,
+        repo: &str,
+        kind: OriginKind,
+        title: &str,
+        body: &str,
+        repro: Repro,
+    ) -> CoreResult<(OriginId, i64, Envelope)> {
+        let tx = self.conn.transaction()?;
+        let record =
+            raw::repo(&tx, repo)?.ok_or_else(|| CoreError::NotFound(format!("repo {repo}")))?;
+        if !may_report(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            repo,
+        ) {
+            return Err(CoreError::Forbidden(match record.policy.community {
+                true => format!("{actor} may not report on {repo}"),
+                false => format!(
+                    "{repo} does not take reports. Its owner opens them in Settings, or \
+                     with POST /api/repos/{repo}/policy {{\"community\": true}}"
+                ),
+            }));
+        }
+        ensure_writable(&tx, repo)?;
+        require(!title.trim().is_empty(), || {
+            "a report needs a title: one line saying what this is about".into()
+        })?;
+        bounded("report title", title, MAX_TITLE)?;
+        require(!body.trim().is_empty(), || {
+            "a report needs a body: what happened, or what you were trying to do".into()
+        })?;
+        bounded("report", body, MAX_TEXT)?;
+        for (what, text) in [
+            ("version", &repro.version),
+            ("command", &repro.command),
+            ("observed", &repro.observed),
+            ("expected", &repro.expected),
+        ] {
+            if let Some(text) = text {
+                bounded(what, text, MAX_TEXT)?;
+            }
+        }
+        // A reporter's room is their own and small: so many open on one
+        // repository, so many a day anywhere. The same shape proposals
+        // have, and for the same reason — an open door needs a sill.
+        let quota = self
+            .default_quota
+            .under(&raw::quota(&tx, actor.as_str())?.unwrap_or_default());
+        if let Some(limit) = quota.open_reports {
+            let have = raw::open_reports_in(&tx, actor.as_str(), repo)?;
+            if have >= limit {
+                return Err(CoreError::OverQuota(format!(
+                    "{actor} has {have} reports open on {repo}, and this forge allows {limit}"
+                )));
+            }
+        }
+        if let Some(limit) = quota.reports_a_day {
+            let since =
+                (jiff::Timestamp::now() - std::time::Duration::from_secs(24 * 60 * 60)).to_string();
+            let have = raw::reports_since(&tx, actor.as_str(), &since)?;
+            if have >= limit {
+                return Err(CoreError::OverQuota(format!(
+                    "{actor} filed {have} reports in the last day, and this forge allows {limit}"
+                )));
+            }
+        }
+        let number = raw::next_origin_number(&tx, repo)?;
+        let origin = OriginId::generate();
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::OriginOpened {
+                origin: origin.clone(),
+                repo: repo.to_owned(),
+                number,
+                origin_kind: kind,
+                title: title.trim().to_owned(),
+                body: body.to_owned(),
+                repro: match kind {
+                    // Only a bug has a reproduction. A request or a
+                    // question carrying one would be a field nobody
+                    // reads pretending to be evidence.
+                    OriginKind::Bug => repro,
+                    _ => Repro::default(),
+                },
+            },
+        )?;
+        tx.commit()?;
+        Ok((origin, number, env))
+    }
+
+    /// Say something on a report. Whoever filed it may always reply;
+    /// anyone else needs the door open to them as it was to the filer.
+    pub fn reply_origin(
+        &mut self,
+        actor: &PrincipalId,
+        origin: &OriginId,
+        body: &str,
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        require(!body.trim().is_empty(), || {
+            "a reply needs something to say".into()
+        })?;
+        bounded("reply", body, MAX_TEXT)?;
+        let current = raw::origin(&tx, origin.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("report {origin}")))?;
+        if current.state == OriginState::Discarded {
+            return Err(CoreError::Conflict(format!(
+                "report #{} was discarded",
+                current.number
+            )));
+        }
+        let acting = Acting::of(&self.scope, self.admin_elsewhere);
+        if current.by != *actor && !may_report(&tx, acting, actor, &current.repo) {
+            return Err(CoreError::Forbidden(format!(
+                "{actor} may not reply on {}",
+                current.repo
+            )));
+        }
+        ensure_actor(&tx, actor)?;
+        ensure_writable(&tx, &current.repo)?;
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::OriginReplied {
+                origin: origin.clone(),
+                body: body.to_owned(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
+    /// Settle a report, saying which kind of closure it is. Never for
+    /// being old: there is no settlement that means "we stopped
+    /// looking", because that is the one thing this surface refuses to
+    /// do to somebody who took the trouble to tell us.
+    pub fn settle_origin(
+        &mut self,
+        actor: &PrincipalId,
+        origin: &OriginId,
+        how: Settlement,
+        note: &str,
+        duplicate_of: Option<i64>,
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        let current = raw::origin(&tx, origin.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("report {origin}")))?;
+        if current.state != OriginState::Open {
+            return Err(CoreError::Conflict(format!(
+                "report #{} is {}, not open",
+                current.number,
+                current.state.as_str()
+            )));
+        }
+        let acting = Acting::of(&self.scope, self.admin_elsewhere);
+        // Taking your own report back is yours to do; every other
+        // settlement speaks for the repository.
+        match how {
+            Settlement::Withdrawn if current.by == *actor => {
+                ensure_actor(&tx, actor)?;
+            }
+            Settlement::Withdrawn => {
+                return Err(CoreError::Forbidden(format!(
+                    "only {} may withdraw report #{}",
+                    current.by, current.number
+                )));
+            }
+            _ => {
+                may_answer(&tx, acting, actor, &current.repo)?;
+            }
+        }
+        ensure_writable(&tx, &current.repo)?;
+        require(!note.trim().is_empty(), || {
+            "a settlement says why, in a line the next person to ask can read".into()
+        })?;
+        bounded("settlement", note, MAX_TEXT)?;
+        let duplicate_of = match how {
+            Settlement::Duplicate => {
+                let of = duplicate_of.ok_or_else(|| {
+                    CoreError::Invalid("a duplicate names the report it repeats".into())
+                })?;
+                require(of != current.number, || {
+                    "a report does not repeat itself".into()
+                })?;
+                raw::origin_numbered(&tx, &current.repo, of)?.ok_or_else(|| {
+                    CoreError::NotFound(format!("report #{of} in {}", current.repo))
+                })?;
+                Some(of)
+            }
+            _ => None,
+        };
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::OriginSettled {
+                origin: origin.clone(),
+                how,
+                note: note.to_owned(),
+                duplicate_of,
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
+    /// Take a report out: what should never have arrived. The number
+    /// and the reason stay on the record; the text does not. The
+    /// exception, not the tool — settling is how an ordinary report
+    /// ends.
+    pub fn discard_origin(
+        &mut self,
+        actor: &PrincipalId,
+        origin: &OriginId,
+        reason: &str,
+    ) -> CoreResult<Envelope> {
+        let tx = self.conn.transaction()?;
+        let current = raw::origin(&tx, origin.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("report {origin}")))?;
+        if current.state == OriginState::Discarded {
+            return Err(CoreError::Conflict(format!(
+                "report #{} was already discarded",
+                current.number
+            )));
+        }
+        authorize(
+            &tx,
+            Acting::of(&self.scope, self.admin_elsewhere),
+            actor,
+            Capability::Merge,
+            Some(&current.repo),
+        )?;
+        require(!reason.trim().is_empty(), || {
+            "discarding says why: the reason outlives the text".into()
+        })?;
+        bounded("reason", reason, MAX_TITLE)?;
+        let env = append(
+            &tx,
+            actor,
+            self.scope.as_ref().and_then(|s| s.session.as_ref()),
+            Event::OriginDiscarded {
+                origin: origin.clone(),
+                reason: reason.to_owned(),
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
+    }
+
     pub fn open_thread(
         &mut self,
         actor: &PrincipalId,

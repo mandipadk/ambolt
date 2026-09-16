@@ -1616,6 +1616,7 @@ fn a_repo_chooses_the_rules_its_work_must_meet() {
                 attention_budget: None,
                 agents_act_in_sessions: false,
                 proposals: false,
+                community: false,
                 trust: None,
             },
         )

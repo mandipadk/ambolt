@@ -5,13 +5,14 @@
 //! `Connection`), keeping validation and public reads on one code path.
 
 use crate::error::{CoreError, CoreResult};
-use crate::id::{ChangeId, PrincipalId, SessionId, TaskId, ThreadId};
+use crate::id::{ChangeId, OriginId, PrincipalId, SessionId, TaskId, ThreadId};
 use crate::store::Store;
 use crate::types::{
     Capability, Change, ChangeState, Claim, ClaimKind, Disposition, Grant, Lease, Lesson,
-    MembersAct, Mirror, Notice, ObjectFormat, Policy, Principal, PrincipalKind, Provenance,
-    QueueEntry, Repo, ReviewDomain, Revision, Session, SessionState, Task, TaskState, TokenInfo,
-    Verdict, Verification, Visibility,
+    MembersAct, Mirror, Notice, ObjectFormat, Origin, OriginKind, OriginState, Policy, Principal,
+    PrincipalKind, Provenance, QueueEntry, Repo, Repro, ReviewDomain, Revision, Session,
+    SessionState, SettledReport, Settlement, Task, TaskState, TokenInfo, Verdict, Verification,
+    Visibility,
 };
 use crate::types::{Reply, Resolution, Resolved, Thread, ThreadKind};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -1040,6 +1041,165 @@ pub(crate) mod raw {
             .collect()
     }
 
+    /// Reports matching a where-clause, newest first, with their
+    /// replies. Discarded ones keep their row: the number stays, so a
+    /// gap in the numbering never has to be explained.
+    fn origins_where(
+        conn: &Connection,
+        clause: &str,
+        args: &[&dyn rusqlite::ToSql],
+        limit: Option<u32>,
+    ) -> CoreResult<Vec<Origin>> {
+        let sql = format!(
+            "SELECT id, repo, number, kind, title, body, by, at, seq, state,
+                    version, command, observed, expected,
+                    settled_how, settled_note, settled_of, settled_by, settled_at
+               FROM origins WHERE {clause} ORDER BY seq DESC LIMIT {}",
+            limit.unwrap_or(500)
+        );
+        let rows = conn
+            .prepare(&sql)?
+            .query_map(args, |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, i64>(8)?,
+                    row.get::<_, String>(9)?,
+                    (
+                        row.get::<_, Option<String>>(10)?,
+                        row.get::<_, Option<String>>(11)?,
+                        row.get::<_, Option<String>>(12)?,
+                        row.get::<_, Option<String>>(13)?,
+                    ),
+                    (
+                        row.get::<_, Option<String>>(14)?,
+                        row.get::<_, Option<String>>(15)?,
+                        row.get::<_, Option<i64>>(16)?,
+                        row.get::<_, Option<String>>(17)?,
+                        row.get::<_, Option<String>>(18)?,
+                    ),
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        rows.into_iter()
+            .map(
+                |(
+                    id,
+                    repo,
+                    number,
+                    kind,
+                    title,
+                    body,
+                    by,
+                    at,
+                    seq,
+                    state,
+                    (version, command, observed, expected),
+                    (how, note, of, sby, sat),
+                )| {
+                    let where_ = format!("report {id}");
+                    let replies = conn
+                        .prepare_cached(
+                            "SELECT by, body, at FROM origin_replies
+                               WHERE origin_id = ? ORDER BY seq",
+                        )?
+                        .query_map(params![id], |row| {
+                            Ok(Reply {
+                                by: PrincipalId(row.get(0)?),
+                                body: row.get(1)?,
+                                at: row.get(2)?,
+                            })
+                        })?
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let settled = match how {
+                        Some(how) => Some(SettledReport {
+                            how: parsed(&where_, &how, Settlement::parse)?,
+                            note: note.unwrap_or_default(),
+                            duplicate_of: of,
+                            by: PrincipalId(sby.unwrap_or_default()),
+                            at: sat.unwrap_or_default(),
+                        }),
+                        None => None,
+                    };
+                    Ok(Origin {
+                        kind: parsed(&where_, &kind, OriginKind::parse)?,
+                        state: parsed(&where_, &state, OriginState::parse)?,
+                        id: OriginId(id),
+                        repo,
+                        number,
+                        title,
+                        body,
+                        by: PrincipalId(by),
+                        at,
+                        seq,
+                        repro: Repro {
+                            version,
+                            command,
+                            observed,
+                            expected,
+                        },
+                        replies,
+                        settled,
+                    })
+                },
+            )
+            .collect()
+    }
+
+    pub fn origins_in(
+        conn: &Connection,
+        repo: &str,
+        limit: Option<u32>,
+    ) -> CoreResult<Vec<Origin>> {
+        origins_where(conn, "repo = ?", &[&repo], limit)
+    }
+
+    pub fn origin(conn: &Connection, id: &str) -> CoreResult<Option<Origin>> {
+        Ok(origins_where(conn, "id = ?", &[&id], Some(1))?.pop())
+    }
+
+    pub fn origin_numbered(
+        conn: &Connection,
+        repo: &str,
+        number: i64,
+    ) -> CoreResult<Option<Origin>> {
+        Ok(origins_where(conn, "repo = ? AND number = ?", &[&repo, &number], Some(1))?.pop())
+    }
+
+    /// The number a repository's next report takes.
+    pub fn next_origin_number(conn: &Connection, repo: &str) -> CoreResult<i64> {
+        Ok(conn.query_row(
+            "SELECT COALESCE(MAX(number), 0) + 1 FROM origins WHERE repo = ?",
+            params![repo],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Reports `who` has open on one repository, which is the room a
+    /// reporter takes up there.
+    pub fn open_reports_in(conn: &Connection, who: &str, repo: &str) -> CoreResult<u32> {
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM origins WHERE repo = ? AND by = ? AND state = 'open'",
+            params![repo, who],
+            |row| row.get::<_, i64>(0),
+        )? as u32)
+    }
+
+    /// Reports `who` filed anywhere since `since` (RFC 3339, UTC).
+    pub fn reports_since(conn: &Connection, who: &str, since: &str) -> CoreResult<u32> {
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM origins WHERE by = ? AND at >= ?",
+            params![who, since],
+            |row| row.get::<_, i64>(0),
+        )? as u32)
+    }
+
     /// Every thread on a change, whatever revision it was opened on,
     /// oldest first.
     pub fn threads_on(conn: &Connection, change: &str) -> CoreResult<Vec<Thread>> {
@@ -1374,6 +1534,35 @@ pub(crate) mod raw {
             }
         }
         Ok(grants)
+    }
+
+    /// Whether anybody holds live `verify` reaching this repository:
+    /// whether, in other words, a command in a report here stands any
+    /// chance of being tried without a person asking. A reporter is
+    /// owed that answer before they spend time on a reproduction.
+    pub fn has_runner(conn: &Connection, repo: &str) -> CoreResult<bool> {
+        let now = jiff::Timestamp::now().to_string();
+        let grantees: Vec<String> = conn
+            .prepare_cached(
+                "SELECT DISTINCT grantee FROM grants
+                   WHERE revoked = 0 AND (repo IS NULL OR repo = ?)",
+            )?
+            .query_map(params![repo], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        for grantee in grantees {
+            if principal(conn, &grantee)?.is_none_or(|p| !p.active) {
+                continue;
+            }
+            for grant in grants_of(conn, &grantee)? {
+                if grant.actions.contains(&Capability::Verify)
+                    && grant.repo.as_deref().is_none_or(|r| r == repo)
+                    && grant.until.as_deref().is_none_or(|u| u > now.as_str())
+                {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     /// Everyone holding the unscoped admin grant that running the forge
@@ -2633,6 +2822,27 @@ impl Store {
 
     pub fn draw_of(&self, change: &ChangeId) -> CoreResult<Option<crate::attention::Draw>> {
         raw::draw_of(&self.conn, change.as_str())
+    }
+
+    /// Every report on a repository, newest first. The caller has
+    /// already established that this reader may read the repository.
+    pub fn origins_in(&self, repo: &str, limit: Option<u32>) -> CoreResult<Vec<Origin>> {
+        raw::origins_in(&self.conn, repo, limit)
+    }
+
+    pub fn origin(&self, id: &OriginId) -> CoreResult<Option<Origin>> {
+        raw::origin(&self.conn, id.as_str())
+    }
+
+    /// One report by the number people refer to it by.
+    pub fn origin_numbered(&self, repo: &str, number: i64) -> CoreResult<Option<Origin>> {
+        raw::origin_numbered(&self.conn, repo, number)
+    }
+
+    /// Whether a runner re-runs claims on this repository. See
+    /// [`raw::has_runner`].
+    pub fn has_runner(&self, repo: &str) -> CoreResult<bool> {
+        raw::has_runner(&self.conn, repo)
     }
 
     pub fn threads_on(&self, change: &ChangeId) -> CoreResult<Vec<Thread>> {

@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Bump whenever a projection table changes shape. The log is never
 /// touched; projections are rebuilt from it.
-const SCHEMA_VERSION: i64 = 36;
+const SCHEMA_VERSION: i64 = 37;
 
 /// The log itself, which outlives every schema.
 const EVENT_SCHEMA: &str = "
@@ -524,6 +524,47 @@ CREATE TABLE IF NOT EXISTS thread_replies (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS idx_thread_replies_thread ON thread_replies (thread_id);
 
+-- What somebody came to say about a repository, before any of it is
+-- work: a bug, a request, or a question. Nothing here is ever closed
+-- for being old, so there is no state for that and no column to put a
+-- date of abandonment in. A discarded report keeps its row and its
+-- number and loses its text.
+CREATE TABLE IF NOT EXISTS origins (
+  id       TEXT PRIMARY KEY,
+  repo     TEXT NOT NULL,
+  number   INTEGER NOT NULL,
+  kind     TEXT NOT NULL,
+  title    TEXT NOT NULL,
+  body     TEXT NOT NULL,
+  by       TEXT NOT NULL,
+  at       TEXT NOT NULL,
+  seq      INTEGER NOT NULL,
+  state    TEXT NOT NULL DEFAULT 'open',
+  -- A bug's reproduction, as far as anybody has taken it. `command` is
+  -- the field that decides whether anyone else can check this.
+  version  TEXT,
+  command  TEXT,
+  observed TEXT,
+  expected TEXT,
+  settled_how  TEXT,
+  settled_note TEXT,
+  settled_of   INTEGER,
+  settled_by   TEXT,
+  settled_at   TEXT
+) STRICT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_origins_number ON origins (repo, number);
+CREATE INDEX IF NOT EXISTS idx_origins_repo ON origins (repo, seq);
+CREATE INDEX IF NOT EXISTS idx_origins_by ON origins (by);
+
+CREATE TABLE IF NOT EXISTS origin_replies (
+  seq       INTEGER PRIMARY KEY,
+  origin_id TEXT NOT NULL,
+  by        TEXT NOT NULL,
+  body      TEXT NOT NULL,
+  at        TEXT NOT NULL
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_origin_replies_origin ON origin_replies (origin_id);
+
 CREATE TABLE IF NOT EXISTS identity_links (
   issuer    TEXT NOT NULL,
   subject   TEXT NOT NULL,
@@ -587,6 +628,8 @@ const PROJECTION_TABLES: &[&str] = &[
     "verdicts",
     "threads",
     "thread_replies",
+    "origins",
+    "origin_replies",
     "attention_draws",
     "identity_links",
     "workload_bindings",
@@ -1047,7 +1090,18 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         | RepoUnwatched { repo, .. }
         | RepoUnarchived { repo }
         | RepoDeleted { repo }
+        | OriginOpened { repo, .. }
         | ChangeOpened { repo, .. } => (Some(repo.clone()), None),
+
+        // Named by a report, which knows its repository.
+        OriginReplied { origin, .. }
+        | OriginSettled { origin, .. }
+        | OriginDiscarded { origin, .. } => (
+            tx.prepare_cached("SELECT repo FROM origins WHERE id = ?")?
+                .query_row(params![origin.as_str()], |row| row.get::<_, String>(0))
+                .optional()?,
+            None,
+        ),
 
         // Named by a change, which knows its repository.
         RevisionPushed { change, .. }
@@ -1359,6 +1413,23 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
             .query_row(params![id], |row| Ok((row.get(0)?, row.get(1)?)))
             .optional()?)
     };
+    struct OriginRef {
+        repo: String,
+        number: i64,
+        by: String,
+    }
+    let origin_ref = |id: &str| -> CoreResult<Option<OriginRef>> {
+        Ok(tx
+            .prepare_cached("SELECT repo, number, by FROM origins WHERE id = ?")?
+            .query_row(params![id], |row| {
+                Ok(OriginRef {
+                    repo: row.get(0)?,
+                    number: row.get(1)?,
+                    by: row.get(2)?,
+                })
+            })
+            .optional()?)
+    };
 
     let actor = env.actor.as_str();
     // (recipient, kind, repo, change, number, what)
@@ -1377,6 +1448,66 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 Some(change.as_str().to_owned()),
                 Some(*number),
                 format!("{actor} opened #{number} in {repo}: {title}"),
+            )
+        }),
+
+        OriginOpened {
+            repo,
+            number,
+            origin_kind,
+            title,
+            ..
+        } => repo_owner(repo)?.map(|owner| {
+            (
+                owner,
+                "reported",
+                Some(repo.clone()),
+                None,
+                Some(*number),
+                format!(
+                    "{actor} filed a {} on {repo}: #{number} {title}",
+                    origin_kind.as_str()
+                ),
+            )
+        }),
+
+        // Whoever filed it hears what happened to it; when they are the
+        // one who acted, the repository's owner hears instead. A report
+        // that gets an answer and never tells the person who asked is
+        // the failure this whole surface exists to avoid.
+        OriginReplied { origin, .. } => origin_ref(origin.as_str())?.and_then(|o| {
+            let to = if o.by == actor {
+                repo_owner(&o.repo).ok().flatten()?
+            } else {
+                o.by
+            };
+            Some((
+                to,
+                "report-reply",
+                Some(o.repo.clone()),
+                None,
+                Some(o.number),
+                format!("{actor} replied on report #{} in {}", o.number, o.repo),
+            ))
+        }),
+        OriginSettled { origin, how, .. } => origin_ref(origin.as_str())?.map(|o| {
+            (
+                o.by,
+                "report-settled",
+                Some(o.repo.clone()),
+                None,
+                Some(o.number),
+                format!("report #{} in {} was {}", o.number, o.repo, how.as_str()),
+            )
+        }),
+        OriginDiscarded { origin, reason } => origin_ref(origin.as_str())?.map(|o| {
+            (
+                o.by,
+                "report-settled",
+                Some(o.repo.clone()),
+                None,
+                Some(o.number),
+                format!("report #{} in {} was discarded: {reason}", o.number, o.repo),
             )
         }),
 
@@ -1815,6 +1946,22 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 Some(c.number),
             )
         }),
+        OriginOpened {
+            repo,
+            number,
+            origin_kind,
+            title,
+            ..
+        } => Some((
+            repo.clone(),
+            "reported",
+            format!(
+                "{actor} filed a {} on {repo}: #{number} {title}",
+                origin_kind.as_str()
+            ),
+            None,
+            Some(*number),
+        )),
         AttentionDrawn { change, repo, .. } => change_ref(change.as_str())?.map(|c| {
             (
                 repo.clone(),
@@ -1829,15 +1976,45 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
     // @name in a thread lands in that person's inbox, when they could
     // read the repository anyway: a mention never shows a stranger a
     // change they could not open.
-    let said: Option<(&str, &crate::id::ChangeId)> = match &env.event {
+    // Where a mention points: a change, or a report. Both carry a
+    // repository and a number, which is all the inbox needs.
+    struct Named<'a> {
+        body: &'a str,
+        repo: String,
+        change: Option<String>,
+        number: i64,
+        what: &'static str,
+    }
+    let said: Option<Named<'_>> = match &env.event {
         ThreadOpened { body, change, .. } | ThreadReplied { body, change, .. } => {
-            Some((body.as_str(), change))
+            change_ref(change.as_str())?.map(|c| Named {
+                body: body.as_str(),
+                repo: c.repo,
+                change: Some(change.as_str().to_owned()),
+                number: c.number,
+                what: "#",
+            })
         }
+        OriginOpened {
+            body, repo, number, ..
+        } => Some(Named {
+            body: body.as_str(),
+            repo: repo.clone(),
+            change: None,
+            number: *number,
+            what: "report #",
+        }),
+        OriginReplied { body, origin } => origin_ref(origin.as_str())?.map(|o| Named {
+            body: body.as_str(),
+            repo: o.repo,
+            change: None,
+            number: o.number,
+            what: "report #",
+        }),
         _ => None,
     };
-    if let Some((body, change)) = said
-        && let Some(c) = change_ref(change.as_str())?
-    {
+    if let Some(c) = said {
+        let body = c.body;
         let mut told: Vec<String> = Vec::new();
         for name in crate::mentions::in_text(body) {
             if name == actor || told.iter().any(|t| t == name) {
@@ -1860,9 +2037,12 @@ fn record_notices(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                     env.seq.0,
                     name,
                     c.repo,
-                    change.as_str(),
+                    c.change,
                     c.number,
-                    format!("{actor} mentioned you on #{}: {excerpt}", c.number)
+                    format!(
+                        "{actor} mentioned you on {}{}: {excerpt}",
+                        c.what, c.number
+                    )
                 ],
             )?;
             told.push(name.to_owned());
@@ -1971,6 +2151,8 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 open_proposals: None,
                 proposals_a_day: None,
                 proposal_push: None,
+                open_reports: None,
+                reports_a_day: None,
             };
             tx.execute(
                 "INSERT OR REPLACE INTO quotas (owner, quota) VALUES (?, ?)",
@@ -2680,6 +2862,76 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 ],
             )?;
         }
+        Event::OriginOpened {
+            origin,
+            repo,
+            number,
+            origin_kind,
+            title,
+            body,
+            repro,
+        } => {
+            tx.execute(
+                "INSERT INTO origins (id, repo, number, kind, title, body, by, at, seq, state,
+                                      version, command, observed, expected)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'open', ?10, ?11, ?12, ?13)",
+                params![
+                    origin.as_str(),
+                    repo,
+                    number,
+                    origin_kind.as_str(),
+                    title,
+                    body,
+                    actor,
+                    env.ts,
+                    env.seq.0,
+                    repro.version,
+                    repro.command,
+                    repro.observed,
+                    repro.expected
+                ],
+            )?;
+        }
+        Event::OriginReplied { origin, body } => {
+            tx.execute(
+                "INSERT INTO origin_replies (seq, origin_id, by, body, at) VALUES (?, ?, ?, ?, ?)",
+                params![env.seq.0, origin.as_str(), actor, body, env.ts],
+            )?;
+        }
+        Event::OriginSettled {
+            origin,
+            how,
+            note,
+            duplicate_of,
+        } => {
+            tx.execute(
+                "UPDATE origins SET state = 'settled', settled_how = ?, settled_note = ?,
+                        settled_of = ?, settled_by = ?, settled_at = ? WHERE id = ?",
+                params![
+                    how.as_str(),
+                    note,
+                    duplicate_of,
+                    actor,
+                    env.ts,
+                    origin.as_str()
+                ],
+            )?;
+        }
+        Event::OriginDiscarded { origin, reason } => {
+            // The number stays and the reason stays; what a stranger
+            // wrote does not. Its replies go with it.
+            tx.execute(
+                "UPDATE origins SET state = 'discarded', title = 'discarded', body = ?,
+                        version = NULL, command = NULL, observed = NULL, expected = NULL,
+                        settled_how = NULL, settled_note = NULL, settled_of = NULL,
+                        settled_by = ?, settled_at = ? WHERE id = ?",
+                params![reason, actor, env.ts, origin.as_str()],
+            )?;
+            tx.execute(
+                "DELETE FROM origin_replies WHERE origin_id = ?",
+                params![origin.as_str()],
+            )?;
+        }
         Event::ThreadOpened {
             thread,
             change,
@@ -2948,6 +3200,7 @@ mod concurrency_tests {
                     attention_budget: None,
                     agents_act_in_sessions: false,
                     proposals: false,
+                    community: false,
                     trust: None,
                 },
             )
@@ -3365,8 +3618,8 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                36,
-                r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null,"proposals":false}"#
+                37,
+                r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null,"proposals":false,"community":false}"#
             ),
             "the policy's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
         );
@@ -3385,7 +3638,7 @@ mod projection_shape {
         let short: String = digest[..6].iter().map(|b| format!("{b:02x}")).collect();
         assert_eq!(
             (super::SCHEMA_VERSION, short.as_str()),
-            (36, "1c9e491d1451"),
+            (37, "2aa5fc0e1ce7"),
             "the projection schema changed: bump SCHEMA_VERSION and pin the new digest here"
         );
     }
@@ -3435,13 +3688,15 @@ mod projection_shape {
             open_proposals: Some(Some(3)),
             proposals_a_day: None,
             proposal_push: Some(Some(33554432)),
+            open_reports: Some(Some(20)),
+            reports_a_day: None,
         })
         .unwrap();
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                36,
-                r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25,"open_proposals":3,"proposal_push":33554432}"#
+                37,
+                r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25,"open_proposals":3,"proposal_push":33554432,"open_reports":20}"#
             ),
             "the quota's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
         );

@@ -1,8 +1,8 @@
 //! Projection types: the current state of the graph, derived from the log.
 
 use crate::id::{
-    ChangeId, ClaimId, GrantId, PrincipalId, SessionId, TaskId, ThreadId, TokenId, VerdictId,
-    VerificationId,
+    ChangeId, ClaimId, GrantId, OriginId, PrincipalId, SessionId, TaskId, ThreadId, TokenId,
+    VerdictId, VerificationId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -151,6 +151,57 @@ str_enum!(
 );
 
 str_enum!(
+    /// What somebody came to say about a repository. The kind is a
+    /// commitment rather than a label: a bug is checkable and waits to
+    /// be reproduced, a request is seconded by use rather than by vote,
+    /// and a question is open until somebody answers it. Conflating the
+    /// three is what makes triage miserable everywhere else.
+    OriginKind {
+        /// Something is wrong, and there is a way to see it go wrong.
+        Bug => "bug",
+        /// Something is missing, and there is something it would let
+        /// somebody do.
+        Request => "request",
+        /// How is this meant to work.
+        Question => "question",
+    }
+);
+
+str_enum!(
+    /// Where a report stands. Nothing here ever closes for being old:
+    /// an append-only log has no reason to forget, and a quiet report
+    /// is one nobody has reproduced yet rather than one nobody may.
+    OriginState {
+        /// Filed, and nothing has happened to it.
+        Open => "open",
+        /// Settled, in one of the ways `Settlement` names.
+        Settled => "settled",
+        /// Should never have arrived: its text is gone, its number
+        /// stays, and the reason is on the record.
+        Discarded => "discarded",
+    }
+);
+
+str_enum!(
+    /// How a report was settled. Every settlement says which kind it
+    /// was, so "closed" is never a euphemism and never means "we
+    /// stopped looking".
+    Settlement {
+        /// A question got its answer, or a report was explained.
+        Answered => "answered",
+        /// It is already fixed, in a version the note names.
+        Fixed => "fixed",
+        /// Not going to happen, and the reason stays on the page for
+        /// whoever asks next.
+        Declined => "declined",
+        /// Whoever filed it took it back.
+        Withdrawn => "withdrawn",
+        /// Somebody said this first; the settlement names them.
+        Duplicate => "duplicate",
+    }
+);
+
+str_enum!(
     /// Which side of a diff a line number counts on.
     Side {
         Old => "old",
@@ -284,6 +335,12 @@ pub struct Quota {
     /// Bytes one push of a proposal may carry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proposal_push: Option<u64>,
+    /// Reports one person may have open on one repository.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_reports: Option<u32>,
+    /// Reports one person may file in a day, across the forge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reports_a_day: Option<u32>,
 }
 
 impl Default for Quota {
@@ -302,6 +359,8 @@ impl Default for Quota {
             open_proposals: Some(3),
             proposals_a_day: Some(10),
             proposal_push: Some(32 * 1024 * 1024),
+            open_reports: Some(20),
+            reports_a_day: Some(20),
         }
     }
 }
@@ -320,6 +379,8 @@ impl Quota {
             open_proposals: None,
             proposals_a_day: None,
             proposal_push: None,
+            open_reports: None,
+            reports_a_day: None,
         }
     }
 
@@ -338,6 +399,8 @@ impl Quota {
             open_proposals: over.open_proposals.unwrap_or(self.open_proposals),
             proposals_a_day: over.proposals_a_day.unwrap_or(self.proposals_a_day),
             proposal_push: over.proposal_push.unwrap_or(self.proposal_push),
+            open_reports: over.open_reports.unwrap_or(self.open_reports),
+            reports_a_day: over.reports_a_day.unwrap_or(self.reports_a_day),
         }
     }
 }
@@ -434,6 +497,18 @@ pub struct QuotaOverride {
         deserialize_with = "said"
     )]
     pub proposal_push: Option<Option<u64>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "said"
+    )]
+    pub open_reports: Option<Option<u32>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "said"
+    )]
+    pub reports_a_day: Option<Option<u32>>,
 }
 
 /// Tell "the caller wrote null" apart from "the caller wrote nothing",
@@ -460,6 +535,8 @@ impl QuotaOverride {
             open_proposals: newer.open_proposals.or(self.open_proposals),
             proposals_a_day: newer.proposals_a_day.or(self.proposals_a_day),
             proposal_push: newer.proposal_push.or(self.proposal_push),
+            open_reports: newer.open_reports.or(self.open_reports),
+            reports_a_day: newer.reports_a_day.or(self.reports_a_day),
         }
     }
 
@@ -904,6 +981,11 @@ pub struct Policy {
     /// is public: open one, and act on their own. Off unless said.
     #[serde(default)]
     pub proposals: bool,
+    /// Anyone signed in may report a bug, ask for something or ask a
+    /// question here, when the repository is public. Off unless said:
+    /// a front door is a thing an owner opens on purpose.
+    #[serde(default)]
+    pub community: bool,
 }
 
 /// A bar read off a principal's record, and what clearing it buys. The
@@ -961,6 +1043,7 @@ impl Default for Policy {
             require_concerns_resolved: true,
             attention_budget: None,
             agents_act_in_sessions: false,
+            community: false,
             trust: None,
             proposals: false,
         }
@@ -1227,6 +1310,76 @@ pub struct Verdict {
     pub by: PrincipalId,
     #[serde(default)]
     pub seq: i64,
+}
+
+/// A bug's reproduction, as far as anybody has taken it. Every field
+/// is optional at filing: prose costs nothing and blocks nothing, and
+/// anyone may sharpen somebody else's report afterwards. What prose
+/// cannot do is spend a maintainer's day on its own.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Repro {
+    /// What they were running, as they said it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// The command that shows it, which is the field that decides
+    /// whether anybody else can check this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected: Option<String>,
+}
+
+impl Repro {
+    /// Whether this carries the one field that makes a report checkable.
+    pub fn is_runnable(&self) -> bool {
+        self.command.as_ref().is_some_and(|c| !c.trim().is_empty())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.version.is_none()
+            && self.command.is_none()
+            && self.observed.is_none()
+            && self.expected.is_none()
+    }
+}
+
+/// Something somebody came to say about a repository, before any of it
+/// is work: the column the graph was missing, where intent comes from.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Origin {
+    pub id: OriginId,
+    pub repo: String,
+    /// Its number in this repository, which is how people refer to it.
+    pub number: i64,
+    pub kind: OriginKind,
+    pub title: String,
+    pub body: String,
+    pub by: PrincipalId,
+    pub at: String,
+    pub state: OriginState,
+    /// A bug's reproduction. Empty on a request or a question.
+    #[serde(default)]
+    pub repro: Repro,
+    /// The event that filed it, which is what a page of reports is cut
+    /// at: newest first, `before` this.
+    pub seq: i64,
+    #[serde(default)]
+    pub replies: Vec<Reply>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settled: Option<SettledReport>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SettledReport {
+    pub how: Settlement,
+    pub note: String,
+    /// The report this repeats, when `how` is `duplicate`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duplicate_of: Option<i64>,
+    pub by: PrincipalId,
+    pub at: String,
 }
 
 /// A discussion thread on a change, with everything said in it and how

@@ -2276,6 +2276,11 @@ pub fn repo_settings(
                                         span class="d" { "While the repository is public, anyone signed in can push a change here as a proposal: theirs to revise and abandon, yours to review and land. It counts against their allowance, not yours." }
                                         input class="sw" type="checkbox" name="proposals" checked[policy.proposals];
                                     }
+                                    label class="opt" {
+                                        span class="t" { "Anyone may report a bug or ask for something" }
+                                        span class="d" { "While the repository is public, anyone signed in can file a bug, a request or a question here. A bug carrying the command that shows it gets re-run; one without waits for somebody to add one." }
+                                        input class="sw" type="checkbox" name="community" checked[policy.community];
+                                    }
                                 }
                             }
                         }
@@ -5823,6 +5828,28 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
             html! {
                 b { (people.name(principal).0) } " asked for a new sign-in link"
             },
+        ),
+        Event::OriginOpened {
+            repo,
+            number,
+            origin_kind,
+            title,
+            ..
+        } => (
+            "dot idle",
+            html! {
+                b { (actor) } " filed a " (origin_kind.as_str()) " on " (repo) ": "
+                a href={ "/" (repo) "/community/" (number) } { "#" (number) " " (title) }
+            },
+        ),
+        Event::OriginReplied { .. } => ("dot idle", html! { b { (actor) } " replied on a report" }),
+        Event::OriginSettled { how, .. } => (
+            "dot ok",
+            html! { b { (actor) } " settled a report: " (how.as_str()) },
+        ),
+        Event::OriginDiscarded { reason, .. } => (
+            "dot bad",
+            html! { b { (actor) } " discarded a report: " (reason) },
         ),
         Event::ThreadOpened {
             change,
