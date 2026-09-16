@@ -356,6 +356,86 @@ pub async fn get_principal(
     Ok(Json(json!(found(principal, "principal")?)))
 }
 
+/// Who a principal is and what they say about themself, with the
+/// record beside it: the question before trusting an author, choosing
+/// a reviewer, or working out whose hours it is. Anyone signed in may
+/// ask, since a page says the same.
+pub async fn principal_profile(
+    State(app): State<AppState>,
+    _actor: Actor,
+    Path(id): Path<String>,
+    Query(query): Query<RecordQuery>,
+) -> ApiResult<Json<Value>> {
+    let id = PrincipalId(id);
+    let principal = found(app.with_store(|s| s.principal(&id))?, "principal")?;
+    let days = query.days.unwrap_or(90).clamp(1, 3650);
+    let (profile, since, record, agents) = app.with_store(|s| {
+        let agents: Vec<Value> = if principal.kind == PrincipalKind::Agent {
+            Vec::new()
+        } else {
+            s.principals()?
+                .into_iter()
+                .filter(|p| {
+                    p.kind == PrincipalKind::Agent && p.active && p.owner.as_ref() == Some(&id)
+                })
+                .map(|p| {
+                    json!({
+                        "id": p.id,
+                        "display": p.display,
+                        "model": p.model,
+                        "harness": p.harness,
+                    })
+                })
+                .collect()
+        };
+        Ok::<_, ambolt_core::CoreError>((
+            s.profile_of(&id)?,
+            s.registered_at(&id)?,
+            s.record_of(&id, days)?,
+            agents,
+        ))
+    })?;
+    let local_time = profile
+        .zone
+        .as_deref()
+        .and_then(|zone| jiff::tz::TimeZone::get(zone).ok())
+        .map(|tz| {
+            jiff::Timestamp::now()
+                .to_zoned(tz)
+                .strftime("%H:%M")
+                .to_string()
+        });
+    let drawn = crate::web::avatars::GENERATION;
+    let avatar = match principal.kind {
+        PrincipalKind::Agent => Some(format!("/avatars/{drawn}/agent/{id}.svg")),
+        PrincipalKind::Human if profile.mark != 0 => {
+            Some(format!("/avatars/{drawn}/person/{id}.{}.svg", profile.mark))
+        }
+        PrincipalKind::Human => Some(format!("/avatars/{drawn}/person/{id}.svg")),
+        PrincipalKind::Team => None,
+    };
+    Ok(Json(json!({
+        "id": principal.id,
+        "kind": principal.kind,
+        "display": principal.display,
+        "active": principal.active,
+        "owner": principal.owner,
+        "model": principal.model,
+        "harness": principal.harness,
+        "since": since,
+        "avatar": avatar,
+        "says": {
+            "line": profile.line,
+            "pronouns": profile.pronouns,
+            "links": profile.links,
+            "zone": profile.zone,
+            "local_time": local_time,
+        },
+        "agents": agents,
+        "record": record,
+    })))
+}
+
 // ---- repos ----
 
 #[derive(Deserialize)]

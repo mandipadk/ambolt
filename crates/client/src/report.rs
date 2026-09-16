@@ -100,6 +100,25 @@ pub fn guide(server: &str, repo: &str) -> anyhow::Result<Value> {
     Ok(body)
 }
 
+/// Who somebody on the forge is, as the forge says it: what they say
+/// about themself, the time where they are, the agents in their name,
+/// and their record.
+pub fn whois(server: &str, token: &str, who: &str) -> anyhow::Result<Value> {
+    let mut response = agent()
+        .get(&format!(
+            "{}/api/principals/{who}/profile",
+            server.trim_end_matches('/')
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .call()?;
+    let status = response.status().as_u16();
+    let body: Value = response.body_mut().read_json()?;
+    if status != 200 {
+        bail!("{}", said(&body, status));
+    }
+    Ok(body)
+}
+
 /// What somebody came to say. Only `kind`, `title` and `body` are
 /// required; for a bug the `command` is what decides whether anyone
 /// else can check it, so it is worth the trouble when there is one.

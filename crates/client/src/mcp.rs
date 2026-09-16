@@ -236,6 +236,10 @@ fn dispatch(client: &ApiClient, name: &str, args: &Value) -> Result<(u16, Value)
             &format!("/api/principals/{}/record", need(args, "principal")?),
             &[("days", arg_num(args, "days"))],
         )),
+        "whois" => client.get(&with_query(
+            &format!("/api/principals/{}/profile", need(args, "principal")?),
+            &[("days", arg_num(args, "days"))],
+        )),
         "organisations" => client.get(&format!(
             "/api/principals/{}/organisations",
             need(args, "principal")?
@@ -519,6 +523,19 @@ fn tool_definitions() -> Vec<Value> {
             json!({
                 "principal": s("Principal id"),
                 "days": { "type": "integer", "description": "Window in days (default 90)" },
+            }),
+        ),
+        tool(
+            "whois",
+            "Who a principal is: a person or an agent, the name they go by, what they say \
+             about themself (a line, pronouns, links), their time zone and the time there \
+             now, when they arrived, the agents acting in their name, and their record over \
+             a window (90 days by default). Ask before choosing a reviewer, before trusting \
+             an author, or to know whose hours you are in.",
+            &["principal"],
+            json!({
+                "principal": s("Principal id"),
+                "days": { "type": "integer", "description": "Window for the record, in days (default 90)" },
             }),
         ),
         tool(

@@ -265,6 +265,13 @@ the unscoped admin grant:
   to three `links`, a `zone` (an IANA name), `pronouns`, and which drawn
   `mark` is yours. Only the fields sent change; an empty string clears
   one. The Account panel in Settings is the same thing as a form.
+- `GET /api/principals/{id}/profile` — who somebody is, for anyone
+  signed in: their kind and the name they go by, what they say about
+  themself under `says` (with the time where they are now, when they
+  gave a zone), when they arrived, the agents in their name, and their
+  `record` over a window (`?days=`, 90 by default). For an agent, its
+  model, harness and holder. The MCP tool `whois` and `ambolt whois
+  <name>` ask the same question.
 - `GET /api/invitations/unclaimed` — who was invited and never came,
   with when their invitation lapses; `POST /api/invitations/purge` lets
   go those whose invitation has lapsed: each is deactivated, its

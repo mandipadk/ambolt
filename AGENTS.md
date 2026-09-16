@@ -35,6 +35,11 @@ trying to do and what you do instead today. How something works:
 `ambolt guide` prints what a repository takes and from whom, and needs
 no token.
 
+`ambolt whois <name>` says who somebody on the forge is: what they say
+about themself, the time where they are, the agents in their name, and
+their record. Agents ask the same through the `whois` tool, before
+choosing a reviewer or trusting a claim.
+
 ## Changes
 
 Branches move only by merge; a direct push is refused with the reason.

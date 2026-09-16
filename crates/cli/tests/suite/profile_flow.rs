@@ -4,6 +4,7 @@
 use crate::common::*;
 use axum::http::StatusCode;
 use serde_json::json;
+use std::process::Command;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_persons_page_carries_the_record_and_an_organisations_does_not() {
@@ -335,4 +336,121 @@ async fn standing_counts_since_joining_when_asked() {
         page.contains(r#"class="on" href="/ada/judgement?since=joining">Since joining</a>"#),
         "{page}"
     );
+}
+
+/// Who somebody is, asked over the API and from the terminal: what they
+/// say, the time where they are, the agents in their name, their
+/// record; an agent's model, harness and holder.
+#[tokio::test(flavor = "multi_thread")]
+async fn whois_says_who_somebody_is_over_the_api_and_the_binary() {
+    let forge = boot().await;
+    let app = &forge.app;
+    api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "bee", "kind": "human", "display": "Bee" })),
+    )
+    .await;
+    let (status, body) = api(
+        app,
+        "PATCH",
+        "/api/you/profile",
+        "ada",
+        Some(json!({
+            "display": "Ada Byron",
+            "line": "Counting machines, mostly.",
+            "zone": "Europe/London",
+            "pronouns": "she/her",
+            "links": ["https://ada.example/"],
+            "mark": 2
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // Anyone signed in may ask, the way anyone may read the page.
+    let (status, who) = api(app, "GET", "/api/principals/ada/profile", "bee", None).await;
+    assert_eq!(status, StatusCode::OK, "{who}");
+    assert_eq!(who["kind"], "human", "{who}");
+    assert_eq!(who["display"], "Ada Byron", "{who}");
+    assert_eq!(who["says"]["line"], "Counting machines, mostly.", "{who}");
+    assert_eq!(who["says"]["pronouns"], "she/her", "{who}");
+    assert_eq!(who["says"]["zone"], "Europe/London", "{who}");
+    let clock = who["says"]["local_time"].as_str().unwrap_or_default();
+    assert!(
+        clock.len() == 5 && clock.as_bytes()[2] == b':',
+        "the time where they are, as a clock reads it: {who}"
+    );
+    assert_eq!(who["avatar"], "/avatars/2/person/ada.2.svg", "{who}");
+    assert!(who["since"].is_string(), "{who}");
+    assert_eq!(who["record"]["window_days"], 90, "{who}");
+    let agents: Vec<&str> = who["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|agent| agent["id"].as_str())
+        .collect();
+    assert!(agents.contains(&"scout"), "{who}");
+    let (status, who) = api(
+        app,
+        "GET",
+        "/api/principals/ada/profile?days=7",
+        "bee",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{who}");
+    assert_eq!(who["record"]["window_days"], 7, "{who}");
+
+    // An agent: its model, its harness, whose it is; no strip of its own.
+    let (status, who) = api(app, "GET", "/api/principals/scout/profile", "bee", None).await;
+    assert_eq!(status, StatusCode::OK, "{who}");
+    assert_eq!(who["kind"], "agent", "{who}");
+    assert_eq!(who["owner"], "ada", "{who}");
+    assert!(who["model"].is_string(), "{who}");
+    assert_eq!(who["avatar"], "/avatars/2/agent/scout.svg", "{who}");
+    assert!(who["agents"].as_array().unwrap().is_empty(), "{who}");
+    let (status, _) = api(app, "GET", "/api/principals/nobody/profile", "bee", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // The same question from the terminal, as lines and as JSON.
+    let server = format!("http://{}", forge.addr);
+    let run = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_ambolt"))
+            .args(["whois"])
+            .args(args)
+            .args(["--server", &server, "--token", &forge.ada_token])
+            .output()
+            .expect("run ambolt whois");
+        (
+            output.status.success(),
+            format!(
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        )
+    };
+    let (ok, out) = run(&["ada"]);
+    assert!(ok, "{out}");
+    assert!(out.starts_with("Ada Byron  @ada  person\n"), "{out}");
+    assert!(
+        out.contains("  says      Counting machines, mostly."),
+        "{out}"
+    );
+    assert!(out.contains(" in Europe/London"), "{out}");
+    assert!(out.contains("  agents    "), "{out}");
+    assert!(out.contains(" landed, "), "{out}");
+    let (ok, out) = run(&["scout"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("@scout  agent in ada's name"), "{out}");
+    assert!(out.contains("  model     "), "{out}");
+    let (ok, out) = run(&["ada", "--json"]);
+    assert!(ok, "{out}");
+    let parsed: serde_json::Value = serde_json::from_str(&out).expect("json out");
+    assert_eq!(parsed["says"]["zone"], "Europe/London", "{out}");
+    let (ok, out) = run(&["nobody"]);
+    assert!(!ok, "{out}");
 }

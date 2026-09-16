@@ -73,6 +73,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/principals/{id}", get(routes::get_principal))
         .route("/api/principals/{id}/record", get(routes::principal_record))
         .route(
+            "/api/principals/{id}/profile",
+            get(routes::principal_profile),
+        )
+        .route(
             "/api/principals/{id}/quota",
             get(routes::get_quota)
                 .post(routes::set_quota)

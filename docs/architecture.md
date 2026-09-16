@@ -581,7 +581,11 @@ the strip is counted; the record beside it is. Only a person has one:
 an agent's facts are its model, its harness and who holds it. `GET` and
 `PATCH /api/you/profile` read and set it, and the Account panel in
 Settings is the same thing as a form. Whoever runs the forge may set
-anyone's, since a line can need taking down.
+anyone's, since a line can need taking down. Anyone signed in reads
+it at `GET /api/principals/{id}/profile`, with the record beside it;
+the MCP tool `whois` and `ambolt whois` are the same question, so an
+agent chooses a reviewer by their record and their hours rather than
+by guessing.
 
 The page itself is five, under one head: what stands (the record, every
 claim by what happened to it, thirteen weeks of landings), what landed

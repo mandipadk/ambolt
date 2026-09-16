@@ -270,6 +270,25 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Say who somebody on the forge is: a person or an agent, what
+    /// they say about themself, the time where they are, the agents in
+    /// their name, and their record.
+    Whois {
+        /// Username of the person or agent, e.g. "ada".
+        who: String,
+        /// Base URL of the forge. Taken from the git remote if omitted.
+        #[arg(long)]
+        server: Option<String>,
+        /// API token. Also read from AMBOLT_TOKEN.
+        #[arg(long)]
+        token: Option<String>,
+        /// The git remote to read, when server is not given.
+        #[arg(long, default_value = "origin")]
+        remote: String,
+        /// Print the forge's answer as JSON rather than as lines.
+        #[arg(long)]
+        json: bool,
+    },
     /// Expose a running forge as MCP tools over stdio for an AI agent.
     Mcp {
         /// Base URL of the forge server to proxy to.
@@ -1400,6 +1419,27 @@ async fn main() -> anyhow::Result<()> {
                 print_guide(&guide);
             }
         }
+        Command::Whois {
+            who,
+            server,
+            token,
+            remote,
+            json,
+        } => {
+            let server = match server {
+                Some(server) => server,
+                None => report::from_remote(std::path::Path::new("."), &remote)?.server,
+            };
+            let token = token
+                .or_else(|| setting("TOKEN"))
+                .context("pass --token, or set AMBOLT_TOKEN")?;
+            let answer = report::whois(server.trim_end_matches('/'), &token, &who)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&answer)?);
+            } else {
+                print_whois(&answer);
+            }
+        }
         Command::Mcp {
             server,
             token,
@@ -1433,6 +1473,64 @@ fn whereabouts(
             .to_owned(),
         repo.unwrap_or(here.repo),
     ))
+}
+
+/// Who somebody is, as lines rather than JSON, for the person asking.
+fn print_whois(who: &serde_json::Value) {
+    let say = |key: &str| who[key].as_str().unwrap_or("");
+    let says = &who["says"];
+    let kind = match (say("kind"), who["owner"].as_str()) {
+        ("agent", Some(owner)) => format!("agent in {owner}'s name"),
+        ("agent", None) => "agent".to_owned(),
+        ("team", _) => "organisation".to_owned(),
+        _ => "person".to_owned(),
+    };
+    println!("{}  @{}  {kind}", say("display"), say("id"));
+    if let Some(line) = says["line"].as_str() {
+        println!("  says      {line}");
+    }
+    if let Some(pronouns) = says["pronouns"].as_str() {
+        println!("  pronouns  {pronouns}");
+    }
+    for link in says["links"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|link| link.as_str())
+    {
+        println!("  link      {link}");
+    }
+    if let (Some(time), Some(zone)) = (says["local_time"].as_str(), says["zone"].as_str()) {
+        println!("  time      {time} in {zone}");
+    }
+    if let Some(model) = who["model"].as_str() {
+        println!("  model     {model}");
+    }
+    if let Some(harness) = who["harness"].as_str() {
+        println!("  harness   {harness}");
+    }
+    if let Some(since) = who["since"].as_str() {
+        println!("  since     {}", since.get(..10).unwrap_or(since));
+    }
+    let agents: Vec<&str> = who["agents"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|agent| agent["id"].as_str())
+        .collect();
+    if !agents.is_empty() {
+        println!("  agents    {}", agents.join(", "));
+    }
+    let record = &who["record"];
+    println!(
+        "  record    {} landed, {} of {} claims reproduced, {} disputed, {} blocked, last {} days",
+        record["landed"],
+        record["reproduced"],
+        record["judged"],
+        record["disputed"],
+        record["blocks"],
+        record["window_days"]
+    );
 }
 
 /// The guide as lines rather than JSON, for the person reading it.

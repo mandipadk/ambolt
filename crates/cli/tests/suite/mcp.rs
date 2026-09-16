@@ -184,6 +184,7 @@ async fn full_agent_workflow_over_mcp() {
         "get_repo",
         "get_thread",
         "record",
+        "whois",
     ] {
         assert!(
             tools.contains(&expected),
@@ -216,6 +217,24 @@ async fn full_agent_workflow_over_mcp() {
     assert!(
         inbox["unread"].is_number() && inbox["notices"].is_array(),
         "{inbox}"
+    );
+    // Who somebody is, before trusting them: the person and the agent.
+    let (who, is_error) = mcp
+        .call_tool(32, "whois", json!({ "principal": "ada" }))
+        .await;
+    assert!(!is_error, "{who}");
+    assert_eq!(who["kind"], "human", "{who}");
+    assert!(
+        who["says"].is_object() && who["record"]["window_days"] == 90,
+        "{who}"
+    );
+    assert!(
+        who["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|agent| agent["id"] == "scout"),
+        "{who}"
     );
 
     let (_, is_error) = mcp
