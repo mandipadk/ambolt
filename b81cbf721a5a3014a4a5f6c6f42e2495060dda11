@@ -1,0 +1,142 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Iletters0139",
+      "id": "c-6xks99173ww2j1yf8xhf4gw3pz",
+      "landed_oid": "b81cbf721a5a3014a4a5f6c6f42e2495060dda11",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 156,
+      "opened_at": "2026-09-16T03:22:57.387093714Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": null,
+      "title": "Send mail worth reading, and ask the waitlist a better question",
+      "updated_at": "2026-09-16T03:46:56.281534736Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-6xks99173ww2j1yf8xhf4gw3pz",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-1fcdrqdq4r1b73hpwj7vcpssfw",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1496,
+        "summary": "clippy -D warnings clean and the whole suite green on this change rebased onto the current main, where it meets the community work: 377 tests, 0 failures.",
+        "unchecked": [
+          "no mail client renders the letters; they were read as source and as one sent message, not in Gmail or Outlook"
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "b81cbf721a5a3014a4a5f6c6f42e2495060dda11",
+    "landed_at": "2026-09-16T03:46:56.281534736Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-6xks99173ww2j1yf8xhf4gw3pz",
+      "commit_oid": "1dc5fa16f6026145249b0ed395495267f813206b",
+      "message": "Send mail worth reading, and ask the waitlist a better question\n\nEvery message the forge sent was a line of text and a bare link. They\nnow share one shape — the wordmark, what kind of message it is, one\nheading, one sentence, the facts it rests on, one thing to do, and what\nto do if it was not you — and go out as HTML and plain text together,\nso a client that strips the first still reads and a spam filter sees\nboth. The six are the invitation (which now names the username, since\nthat is the one thing a new person cannot guess), the address\nconfirmation, the password reset, the sign-in link, a report to whoever\nruns the forge, and the watcher's word that a forge went down. No\nimages, no web fonts, nothing to fetch: it renders the same with images\noff, and dark is a prefers-color-scheme block for the clients that\nhonour one. Whatever a stranger wrote arrives escaped.\n\nThe waitlist form asked for a company, and offered a forge of its own\nin return. A forge of its own is for somebody who has outgrown this\none, not for somebody filling in a field, so the form asks what they\nwould use it for instead, in a labelled card rather than two bare\ninputs and three paragraphs of grey. The column and the API keep taking\na company, so an older page and the rows already on the list still mean\nwhat they meant.\n\nA repository's page says how many commits are on its default branch,\ncounted by git, so imported history counts the same as history made\nhere.\n\nTests read mail the way a person does now: the headers, then the text\nhalf, with the transport's encoding undone.\n\nChange-Id: Iletters0139\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/src/watch.rs",
+        "crates/cli/tests/suite/common/mod.rs",
+        "crates/cli/tests/suite/operator_flow.rs",
+        "crates/cli/tests/suite/report_flow.rs",
+        "crates/cli/tests/suite/reset_flow.rs",
+        "crates/cli/tests/suite/security_flow.rs",
+        "crates/cli/tests/suite/welcome_flow.rs",
+        "crates/git/src/store.rs",
+        "crates/server/src/letters.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/mail.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1499,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-1fcdrqdq4r1b73hpwj7vcpssfw",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-1fcdrqdq4r1b73hpwj7vcpssfw",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 213 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 15 path(s) outside docs/, *.md: crates/cli/src/watch.rs, crates/cli/tests/suite/common/mod.rs, crates/cli/tests/suite/operator_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-6xks99173ww2j1yf8xhf4gw3pz",
+        "claim": "cl-1fcdrqdq4r1b73hpwj7vcpssfw",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-21pkrnjh9vsbytccqfvamb5e33",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1497
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "CxUDTKrkvD3Pxu3BUuIVXBwahTY+wILQHRI1ODcoeAnR+TZ6hWprssJpLMIAhGWiVqInM1+CpHTX/cmKQ48kAg=="
+  }
+}
