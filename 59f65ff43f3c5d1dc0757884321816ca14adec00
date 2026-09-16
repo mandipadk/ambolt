@@ -1,0 +1,161 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Iwelcome0162",
+      "id": "c-454gsx8g8nbgvfzp4mrsmcd0h8",
+      "landed_oid": "59f65ff43f3c5d1dc0757884321816ca14adec00",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 165,
+      "opened_at": "2026-09-16T18:52:03.894960965Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-4nzrk68jbfw73ge5qrkp47p7bm",
+      "title": "Give the first hour a page of its own, and ask everyone once",
+      "updated_at": "2026-09-16T18:54:33.752200801Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-454gsx8g8nbgvfzp4mrsmcd0h8",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-5dg42jgq4k04n825dp3bjsy1ke",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1567,
+        "summary": "the whole suite, on the box: green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-454gsx8g8nbgvfzp4mrsmcd0h8",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-4fcdfmbbxfvs82fetwpnnappm5",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1568,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "59f65ff43f3c5d1dc0757884321816ca14adec00",
+    "landed_at": "2026-09-16T18:54:33.752200801Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-454gsx8g8nbgvfzp4mrsmcd0h8",
+      "commit_oid": "59f65ff43f3c5d1dc0757884321816ca14adec00",
+      "message": "Give the first hour a page of its own, and ask everyone once\n\nFollowing an invitation used to drop a person on Settings under a\nbanner, with a name they could not change. Now every sign-in of\nsomebody the page has never had its say to lands on /welcome: three\nsteps, each skippable, using the whole page. Who they are (the mark\nthey choose among the drawings, the name they are shown by, a line, a\ntime zone the browser guesses first, pronouns, a link). How they sign\nin next time (a passkey where the forge can register one, a password\neither way; a new password keeps them on the page, on a fresh\nsession). What brought them here (agents, code, the organisation that\ninvited them, or just looking), which is a list of doors and records\nnothing but that the page has asked. The door, or skipping to their\nown page, is what marks it asked; from then on a sign-in goes Home.\nAccounts that existed before the page did are asked too, the first\ntime, since nobody has said who they are yet.\n\nEvery way in goes through the same rule: the sign-in form, a pasted\ntoken, a sign-in link, a passkey, a provider, and the dev identity.\nThe Settings banner for a first sign-in goes, and the walk in the\ninvitation test follows the new page.\n\nChange-Id: Iwelcome0162\nTask: t-4nzrk68jbfw73ge5qrkp47p7bm\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/common/mod.rs",
+        "crates/cli/tests/suite/invite_flow.rs",
+        "crates/cli/tests/suite/oidc_flow.rs",
+        "crates/cli/tests/suite/reset_flow.rs",
+        "crates/server/src/oidc.rs",
+        "crates/server/src/passkeys.rs",
+        "crates/server/src/web/app.js",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1572,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-5dg42jgq4k04n825dp3bjsy1ke, cl-4fcdfmbbxfvs82fetwpnnappm5",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-5dg42jgq4k04n825dp3bjsy1ke",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 223 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 10 path(s) outside docs/, *.md: crates/cli/tests/suite/common/mod.rs, crates/cli/tests/suite/invite_flow.rs, crates/cli/tests/suite/oidc_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-454gsx8g8nbgvfzp4mrsmcd0h8",
+        "claim": "cl-5dg42jgq4k04n825dp3bjsy1ke",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-0shwkp1ab0psgh32e1gymsep6f",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1569
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-454gsx8g8nbgvfzp4mrsmcd0h8",
+        "claim": "cl-4fcdfmbbxfvs82fetwpnnappm5",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-2dtw5tx2zffn85phy7500e2pzx",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.79s",
+        "revision": 1,
+        "seq": 1570
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "ccZ1aoNxQ739KjDaocVCuokH0A2vk9pA+zUMh4D9y1D/fx4G2jcchp13527ySTiz8GpsRNYgr/EFr3LOZ6M2Dg=="
+  }
+}
