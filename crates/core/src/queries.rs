@@ -2061,6 +2061,25 @@ impl Store {
     }
 
     /// When somebody was registered: the log's first word of them.
+    /// What somebody picked to show on their page, in their order. A
+    /// pick whose change is gone is skipped.
+    pub fn picks_of(&self, who: &PrincipalId) -> CoreResult<Vec<crate::Picked>> {
+        let rows: Vec<(String, String)> = self
+            .conn
+            .prepare_cached(
+                "SELECT change_id, line FROM picks WHERE principal = ?1 ORDER BY position",
+            )?
+            .query_map(params![who.as_str()], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut out = Vec::new();
+        for (id, line) in rows {
+            if let Some(change) = raw::change(&self.conn, &id)? {
+                out.push(crate::Picked { change, line });
+            }
+        }
+        Ok(out)
+    }
+
     pub fn registered_at(&self, who: &PrincipalId) -> CoreResult<Option<String>> {
         Ok(self
             .conn

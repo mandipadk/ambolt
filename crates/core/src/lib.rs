@@ -77,11 +77,11 @@ pub use types::{
     BrowserSession, Capability, Change, ChangeSpec, ChangeState, Claim, ClaimKind, ClaimSpec,
     Contact, Cover, DebtSnapshot, Disposition, EarnedTrust, Grant, IdentityLink, Independence,
     Lease, Lesson, LineState, MembersAct, Mirror, Notice, ObjectFormat, Origin, OriginKind,
-    OriginState, PackOrigin, PasskeyRecord, Policy, PolicyPack, Preference, Principal,
-    PrincipalKind, Profile, ProfileChanges, Provenance, QueueEntry, Quota, Receipt, Replay, Reply,
-    Repo, Repro, Resolution, Resolved, ReviewDomain, Revision, Scope, Session, SessionState,
-    SettledReport, Settlement, Side, Simulated, Simulation, Task, TaskState, TeamRole, Thread,
-    ThreadKind, TokenInfo, Verdict, Verification, Visibility, Waiver, WorkloadBinding,
-    canonical_json, line_state,
+    OriginState, PackOrigin, PasskeyRecord, Pick, Picked, Policy, PolicyPack, Preference,
+    Principal, PrincipalKind, Profile, ProfileChanges, Provenance, QueueEntry, Quota, Receipt,
+    Replay, Reply, Repo, Repro, Resolution, Resolved, ReviewDomain, Revision, Scope, Session,
+    SessionState, SettledReport, Settlement, Side, Simulated, Simulation, Task, TaskState,
+    TeamRole, Thread, ThreadKind, TokenInfo, Verdict, Verification, Visibility, Waiver,
+    WorkloadBinding, canonical_json, line_state,
 };
 pub use types::{GraduatedRepo, Graduation};

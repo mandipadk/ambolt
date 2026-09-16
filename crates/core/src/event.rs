@@ -122,6 +122,12 @@ pub enum Event {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         welcomed: Option<bool>,
     },
+    /// The changes somebody picked to show on their page, in order, with
+    /// a line each: the whole list, replacing what was picked before.
+    ProfilePicked {
+        principal: PrincipalId,
+        picks: Vec<crate::types::Pick>,
+    },
     PasswordSet {
         principal: PrincipalId,
         #[serde(default, skip_serializing)]
@@ -626,6 +632,7 @@ impl Event {
             Event::PrincipalDeactivated { .. } => "principal_deactivated",
             Event::PrincipalDisplayChanged { .. } => "principal_display_changed",
             Event::ProfileSet { .. } => "profile_set",
+            Event::ProfilePicked { .. } => "profile_picked",
             Event::PrincipalReactivated { .. } => "principal_reactivated",
             Event::TokenMinted { .. } => "token_minted",
             Event::TokenRevoked { .. } => "token_revoked",

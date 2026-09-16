@@ -306,6 +306,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/repos/{owner}/{name}/unwatch", post(routes::unwatch))
         .route("/api/you/watches", get(routes::my_watches))
         .route(
+            "/api/you/picks",
+            get(routes::my_picks).put(routes::set_my_picks),
+        )
+        .route(
             "/api/you/profile",
             get(routes::my_profile).patch(routes::set_my_profile),
         )

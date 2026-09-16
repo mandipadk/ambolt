@@ -3488,6 +3488,8 @@ pub struct PersonPage<'a> {
     /// Whether Standing and Judgement count since they arrived rather
     /// than the last ninety days.
     pub joining: bool,
+    /// What they picked to show, that the viewer may read.
+    pub picks: &'a [ambolt_core::Picked],
 }
 
 /// Thirteen weekly bars in one drawing, labelled where the month turns.
@@ -3560,6 +3562,7 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
         may_create,
         people,
         joining,
+        picks,
     } = page;
     let id = owner.id.as_str();
     let agent = owner.kind == ambolt_core::PrincipalKind::Agent;
@@ -3676,6 +3679,34 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
             div class="panel" {
                 header { h2 { "Record" } }
                 a class="btn2 sm" href={ "/api/principals/" (id) "/record/signed" } download={ (id) "-record.json" } { (ic("download", "sm")) "Verify this record" }
+            }
+        }
+    };
+    // What they picked: up to four of their own landings, in their words.
+    let picked = html! {
+        @if !picks.is_empty() || is_self {
+            div class="sec" {
+                div class="sh" {
+                    h2 { "Picked" }
+                    @if !picks.is_empty() { span class="n" { (picks.len()) } }
+                    @if is_self { span class="right" { a class="more" href="/you/picks" { @if picks.is_empty() { "Pick" } @else { "Change" } } } }
+                }
+                @if picks.is_empty() {
+                    p class="saying" { "Up to four of your landed changes, each with a line of yours." }
+                } @else {
+                    div class="panel" {
+                        @for (i, pick) in picks.iter().enumerate() {
+                            a class="row picked" href={ "/" (pick.change.repo) "/changes/" (pick.change.number) } {
+                                span class="no" { (i + 1) }
+                                span class="tt" {
+                                    span class="t" { "#" (pick.change.number) " " (pick.change.title) }
+                                    @if !pick.line.is_empty() { span class="s" { (pick.line) } }
+                                }
+                                span class="side1 r" { (short_day(&pick.change.updated_at)) }
+                            }
+                        }
+                    }
+                }
             }
         }
     };
@@ -3796,6 +3827,7 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
                             }
                         }
                     }
+                    (picked)
                 }
                 TabBody::Landed { works_in, tree, tree_total, rows, total, filter, all } => {
                     @if !works_in.is_empty() {
@@ -6154,6 +6186,71 @@ impl Says {
     }
 }
 
+/// The page where a person picks what their page shows.
+pub struct PicksPage<'a> {
+    pub theme: Theme,
+    pub viewer: &'a Viewer,
+    /// Their landed changes, newest first: what there is to pick from.
+    pub landed: &'a [ambolt_core::Change],
+    pub picks: &'a [ambolt_core::Picked],
+    pub error: Option<&'a str>,
+}
+
+pub fn picks_page(page: PicksPage<'_>) -> Markup {
+    let PicksPage {
+        theme,
+        viewer,
+        landed,
+        picks,
+        error,
+    } = page;
+    let slot = |n: usize, label: &str| {
+        let chosen = picks.get(n - 1);
+        let pick = format!("pick{n}");
+        let line = format!("line{n}");
+        html! {
+            div class="field" {
+                label for=(pick) { (label) }
+                select class="input" id=(pick) name=(pick) {
+                    option value="" selected[chosen.is_none()] { "Nothing" }
+                    @for change in landed {
+                        option value=(change.id.as_str()) selected[chosen.is_some_and(|p| p.change.id == change.id)] {
+                            "#" (change.number) " " (change.title) ", " (change.repo)
+                        }
+                    }
+                }
+                input class="input" id=(line) name=(line) type="text" maxlength="120" placeholder="A line about it" value=[chosen.map(|p| p.line.as_str())];
+            }
+        }
+    };
+    layout_section(
+        theme,
+        viewer,
+        "settings",
+        "Picked",
+        html! {
+            div class="pagehead" {
+                div { h1 { "Picked" } p class="sub" { "Up to four of your landed changes, in the order you want them, each with a line of yours." } }
+            }
+            @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+            @if landed.is_empty() {
+                p class="saying" { "Nothing of yours has landed yet. The first landing is the first thing to pick." }
+            } @else {
+                form class="page-form" method="post" action="/you/picks" {
+                    (slot(1, "First"))
+                    (slot(2, "Second"))
+                    (slot(3, "Third"))
+                    (slot(4, "Fourth"))
+                    div class="acts" {
+                        button class="btn" type="submit" { "Save" }
+                        a class="ghost" href={ "/" (viewer.0.as_str()) } { "Back to your page" }
+                    }
+                }
+            }
+        },
+    )
+}
+
 /// The welcome page: what it needs to draw one of its three steps.
 pub struct WelcomePage<'a> {
     pub theme: Theme,
@@ -7264,6 +7361,10 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
             "dot idle",
             html! { b { (actor) } " changed what " (people.name(principal).0) " says about themself" },
         ),
+        Event::ProfilePicked { principal, picks } => (
+            "dot idle",
+            html! { b { (actor) } " picked " (picks.len()) " change" @if picks.len() != 1 { "s" } " to show on " (people.name(principal).0) "'s page" },
+        ),
         Event::RepoRenamed { repo, to } => (
             "dot idle",
             html! { b { (actor) } " renamed " (repo) " to " (to) },
@@ -7461,6 +7562,7 @@ pub fn named_in(envelope: &Envelope) -> Vec<&str> {
         | Event::PrincipalReactivated { principal, .. }
         | Event::PrincipalDisplayChanged { principal, .. }
         | Event::ProfileSet { principal, .. }
+        | Event::ProfilePicked { principal, .. }
         | Event::PrincipalRegistered { principal, .. }
         | Event::TokenMinted { principal, .. } => ids.push(principal.as_str()),
         Event::RepoTransferOffered { to, .. } => ids.push(to.as_str()),

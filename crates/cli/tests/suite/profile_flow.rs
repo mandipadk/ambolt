@@ -518,3 +518,196 @@ async fn a_record_is_signed_and_verifies_offline() {
     assert!(page.contains("/api/principals/ada/record/signed"), "{page}");
     assert!(page.contains("Verify this record"), "{page}");
 }
+
+/// A person picks up to four of their own landed changes, each with a
+/// line; the page shows them in that order, and only what landed, only
+/// theirs, at most four, none twice.
+#[tokio::test(flavor = "multi_thread")]
+async fn picked_changes_show_on_the_page_in_the_persons_words() {
+    let forge = boot().await;
+    let (app, addr) = (&forge.app, forge.addr);
+    git(
+        &forge.work,
+        &[
+            "clone",
+            "-q",
+            &format!("http://ada:x@{addr}/git/ada/demo"),
+            "wc",
+        ],
+    );
+    let wc = forge.work.join("wc");
+    commit_file(
+        &wc,
+        "docs/pick.md",
+        "# Pick\n",
+        "Write the pick\n\nChange-Id: Ipick",
+    );
+    git(&wc, &["push", "-q", "origin", "HEAD:refs/for/main"]);
+    let (_, changes) = api(app, "GET", "/api/repos/ada/demo/changes", "ada", None).await;
+    let id = changes[0]["id"].as_str().unwrap().to_owned();
+    assert_eq!(changes[0]["owner"], "ada", "{changes}");
+
+    // Not landed yet: refused with the reason.
+    let (status, body) = api(
+        app,
+        "PUT",
+        "/api/you/picks",
+        "ada",
+        Some(json!({ "picks": [{ "change": id, "line": "Early." }] })),
+    )
+    .await;
+    assert_ne!(status, StatusCode::OK, "{body}");
+    assert!(
+        body["error"].as_str().unwrap_or("").contains("not landed"),
+        "{body}"
+    );
+
+    // Somebody other than the owner approves: bee, a person holding review.
+    api(
+        app,
+        "POST",
+        "/api/principals",
+        "ada",
+        Some(json!({ "id": "bee", "kind": "human", "display": "Bee" })),
+    )
+    .await;
+    let (status, body) = api(
+        app,
+        "POST",
+        "/api/grants",
+        "ada",
+        Some(json!({ "grantee": "bee", "actions": ["review"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        &format!("/api/changes/{id}/claims"),
+        "scout",
+        Some(json!({ "kind": "test", "passed": true, "summary": "verified" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        &format!("/api/changes/{id}/verdicts"),
+        "bee",
+        Some(json!({ "domain": "correctness", "disposition": "approve", "rationale": "Reviewed and correct." })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) = api(
+        app,
+        "POST",
+        &format!("/api/changes/{id}/enqueue"),
+        "ada",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    wait_for(app, "the change to land", async |app: &axum::Router| {
+        let (_, c) = api(app, "GET", &format!("/api/changes/{id}"), "ada", None).await;
+        c["state"] == "merged"
+    })
+    .await;
+    let (status, body) = api(
+        app,
+        "PUT",
+        "/api/you/picks",
+        "ada",
+        Some(json!({ "picks": [{ "change": id, "line": "The first thing I landed here." }] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["picked"][0]["change"], id, "{body}");
+    assert_eq!(
+        body["picked"][0]["line"], "The first thing I landed here.",
+        "{body}"
+    );
+
+    // Five is too many; twice is once too often; scout may not pick for ada.
+    let five: Vec<_> = (0..5).map(|_| json!({ "change": id })).collect();
+    let (status, body) = api(
+        app,
+        "PUT",
+        "/api/you/picks",
+        "ada",
+        Some(json!({ "picks": five })),
+    )
+    .await;
+    assert_ne!(status, StatusCode::OK, "{body}");
+    let (status, body) = api(
+        app,
+        "PUT",
+        "/api/you/picks",
+        "ada",
+        Some(json!({ "picks": [{ "change": id }, { "change": id }] })),
+    )
+    .await;
+    assert_ne!(status, StatusCode::OK, "{body}");
+    assert!(
+        body["error"].as_str().unwrap_or("").contains("twice"),
+        "{body}"
+    );
+    let (status, body) = api(
+        app,
+        "PUT",
+        "/api/you/picks",
+        "scout",
+        Some(json!({ "picks": [{ "change": id }] })),
+    )
+    .await;
+    assert_ne!(status, StatusCode::OK, "an agent picks nothing: {body}");
+
+    // The page shows it in her words, with the way to change it; so does
+    // the profile over the API, to anyone.
+    let (_, cookie) = sign_in_as(&forge, "ada").await;
+    let (status, page) = page_with_cookie(app, "/ada", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("<h2>Picked</h2>"), "{page}");
+    assert!(page.contains("The first thing I landed here."), "{page}");
+    assert!(page.contains(r#"href="/you/picks""#), "{page}");
+    let (_, who) = api(app, "GET", "/api/principals/ada/profile", "scout", None).await;
+    assert_eq!(who["picked"][0]["change"], id, "{who}");
+    let (_, mine) = api(app, "GET", "/api/you/profile", "ada", None).await;
+    assert_eq!(
+        mine["picked"][0]["line"], "The first thing I landed here.",
+        "{mine}"
+    );
+
+    // The page to pick on lists what landed, and saves through the form.
+    let (status, page) = page_with_cookie(app, "/you/picks", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("Write the pick"), "{page}");
+    assert!(
+        page.contains(r#"value="The first thing I landed here.""#),
+        "{page}"
+    );
+    let (status, _) = post_form_page(
+        app,
+        "/you/picks",
+        &cookie,
+        &format!("pick1={id}&line1=Said+again.&pick2=&line2="),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    let (_, page) = page_with_cookie(app, "/ada", &cookie).await;
+    assert!(page.contains("Said again."), "{page}");
+
+    // An empty list clears it, and the section invites her to pick.
+    let (status, body) = api(
+        app,
+        "PUT",
+        "/api/you/picks",
+        "ada",
+        Some(json!({ "picks": [] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body["picked"].as_array().unwrap().is_empty(), "{body}");
+    let (_, page) = page_with_cookie(app, "/ada", &cookie).await;
+    assert!(!page.contains("Said again."), "{page}");
+    assert!(page.contains(">Pick</a>"), "{page}");
+}

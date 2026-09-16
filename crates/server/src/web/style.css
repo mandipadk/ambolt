@@ -911,6 +911,13 @@ details.alt .field { margin-bottom: 10px; }
 .row.landed .rcpt { color: var(--ink3); display: inline-flex; height: 24px; align-items: center; }
 .row.landed .rcpt:hover { color: var(--accent); }
 .row.agentrow { grid-template-columns: 34px minmax(0, 1fr) auto; }
+.row.picked { grid-template-columns: 32px minmax(0, 1fr) 88px; }
+.row.picked .no { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--hair2); display: grid; place-items: center; font-size: 12.5px; color: var(--ink3); font-variant-numeric: tabular-nums; }
+.row.picked .t { white-space: normal; }
+.row.picked .s { white-space: normal; max-width: 66ch; }
+.row.picked .side1 { font-size: 13px; color: var(--ink3); line-height: 24px; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.page-form .acts { display: flex; gap: 12px; align-items: center; }
+.pagehead + .page-form { margin-top: 24px; }
 .row.agentrow .av { width: 34px; height: 34px; }
 .row.agentrow .kv { margin-top: 8px; display: grid; grid-template-columns: minmax(150px, 190px) 80px minmax(120px, 170px) minmax(0, 1fr); gap: 6px 20px; }
 .row.agentrow .holds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }

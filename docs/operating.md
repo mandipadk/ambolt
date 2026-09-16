@@ -271,7 +271,14 @@ the unscoped admin grant:
   gave a zone), when they arrived, the agents in their name, and their
   `record` over a window (`?days=`, 90 by default). For an agent, its
   model, harness and holder. The MCP tool `whois` and `ambolt whois
-  <name>` ask the same question.
+  <name>` ask the same question. Both carry `picked`: what the person
+  chose to show.
+- `GET /api/you/picks` and `PUT /api/you/picks {"picks": [{"change": …,
+  "line": …}]}` — up to four of your own landed changes to show on your
+  page, in that order, each with a line; the list given replaces the
+  last, and an empty list clears it. A change not yours, not landed, or
+  named twice is refused with the reason. `/you/picks` is the same as a
+  form.
 - `GET /api/invitations/unclaimed` — who was invited and never came,
   with when their invitation lapses; `POST /api/invitations/purge` lets
   go those whose invitation has lapsed: each is deactivated, its

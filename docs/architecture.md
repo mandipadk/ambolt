@@ -596,7 +596,12 @@ agents, which ownership records), what they judged on other people's
 changes (looks given, approvals, blocks and whether a block held, which
 means a later revision or an abandonment followed it; attempts
 compared; questions answered; the looks the attention budget asked of
-them), and the allowance only they and the operator see. Standing and Judgement count the last ninety days, or everything since the person arrived, whichever the reader picks. The record is signed the way a receipt is, at `/api/principals/{id}/record/signed`, and `ambolt record verify` checks it without the forge. Every list
+them), and the allowance only they and the operator see. Standing and Judgement count the last ninety days, or everything since the person arrived, whichever the reader picks. The record is signed the way a receipt is, at `/api/principals/{id}/record/signed`, and `ambolt record verify` checks it without the forge. Picked is the one
+place what they say and what was witnessed meet: up to four of their own
+landed changes, in their order, each with a line of theirs
+(`ProfilePicked` carries the whole list each time; a change not theirs,
+not landed, or picked twice is refused with the reason). It sits under
+Standing on the Overview, and `/you/picks` is where they choose. Every list
 holds only what the viewer may read; a stranger sees a person with
 nothing public as nothing at all.
 

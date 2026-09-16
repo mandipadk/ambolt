@@ -116,6 +116,7 @@ pub fn routes() -> Router<AppState> {
         .route("/you/settings", get(settings_page).post(change_password))
         .route("/you/settings/email", post(change_email))
         .route("/you/settings/profile", post(set_profile_form))
+        .route("/you/picks", get(picks_page).post(set_picks_form))
         .route("/welcome", get(welcome_page).post(welcome_step))
         .route("/you/sessions", get(sessions_page).post(sessions_action))
         .route(
@@ -837,6 +838,77 @@ pub(crate) fn user_agent(headers: &HeaderMap) -> Option<&str> {
 /// Sessions live on the settings page now; the old address still answers.
 async fn sessions_page() -> Response {
     Redirect::permanent("/you/settings#sessions").into_response()
+}
+
+/// The page where a person picks up to four of their landed changes to
+/// show on their page, each with a line.
+async fn picks_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    viewer: Viewer,
+    Query(flash): Query<Flash>,
+) -> Response {
+    let (landed, picks) = match app.with_store(|s| {
+        Ok::<_, ambolt_core::CoreError>((s.landed_by(&viewer.0, 60)?, s.picks_of(&viewer.0)?))
+    }) {
+        Ok(pair) => pair,
+        Err(err) => return oops(err),
+    };
+    views::picks_page(views::PicksPage {
+        theme,
+        viewer: &viewer,
+        landed: &landed,
+        picks: &picks,
+        error: flash.error.as_deref(),
+    })
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct PicksForm {
+    #[serde(default)]
+    pick1: String,
+    #[serde(default)]
+    line1: String,
+    #[serde(default)]
+    pick2: String,
+    #[serde(default)]
+    line2: String,
+    #[serde(default)]
+    pick3: String,
+    #[serde(default)]
+    line3: String,
+    #[serde(default)]
+    pick4: String,
+    #[serde(default)]
+    line4: String,
+}
+
+async fn set_picks_form(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    Form(form): Form<PicksForm>,
+) -> Response {
+    let picks: Vec<ambolt_core::Pick> = [
+        (&form.pick1, &form.line1),
+        (&form.pick2, &form.line2),
+        (&form.pick3, &form.line3),
+        (&form.pick4, &form.line4),
+    ]
+    .into_iter()
+    .filter(|(change, _)| !change.trim().is_empty())
+    .map(|(change, line)| ambolt_core::Pick {
+        change: ambolt_core::ChangeId(change.trim().to_owned()),
+        line: line.trim().to_owned(),
+    })
+    .collect();
+    match app.with_store(|s| s.pick_changes(&viewer.0, &viewer.0, picks)) {
+        Ok(env) => {
+            app.publish(&env);
+            Redirect::to(&format!("/{}", viewer.0.as_str())).into_response()
+        }
+        Err(err) => flash("/you/picks", &humane(&err)),
+    }
 }
 
 #[derive(Deserialize)]
@@ -3175,6 +3247,15 @@ async fn person_page(
         held_by,
     };
     let says = says_of(app, &owner);
+    let picks: Vec<ambolt_core::Picked> = if agent {
+        Vec::new()
+    } else {
+        app.with_store(|s| s.picks_of(&owner_id))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|pick| may_read(&pick.change.repo))
+            .collect()
+    };
     // An agent takes up its holder's allowance, so it has no tab of its own.
     let may_allowance = !agent && (is_self || admin);
     let may_create = is_self;
@@ -3282,6 +3363,7 @@ async fn person_page(
         who: who.reading(),
         owner: &owner,
         joining,
+        picks: &picks,
         tab,
         says: &says,
         standing: &standing,

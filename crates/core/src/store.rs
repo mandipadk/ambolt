@@ -15,7 +15,7 @@ use std::path::Path;
 
 /// Bump whenever a projection table changes shape. The log is never
 /// touched; projections are rebuilt from it.
-const SCHEMA_VERSION: i64 = 38;
+const SCHEMA_VERSION: i64 = 39;
 
 /// The log itself, which outlives every schema.
 const EVENT_SCHEMA: &str = "
@@ -340,6 +340,16 @@ CREATE TABLE IF NOT EXISTS profiles (
   welcomed  INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 
+-- What a person picked to show on their page, in their order. Filled
+-- from ProfilePicked, which carries the whole list each time.
+CREATE TABLE IF NOT EXISTS picks (
+  principal TEXT NOT NULL,
+  position  INTEGER NOT NULL,
+  change_id TEXT NOT NULL,
+  line      TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (principal, position)
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS team_members (
   team   TEXT NOT NULL,
   member TEXT NOT NULL,
@@ -621,6 +631,7 @@ const PROJECTION_TABLES: &[&str] = &[
     "notices",
     "watches",
     "profiles",
+    "picks",
     "team_members",
     "team_settings",
     "org_teams",
@@ -1172,7 +1183,8 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         | PrincipalDeactivated { principal }
         | PrincipalReactivated { principal }
         | PrincipalDisplayChanged { principal, .. }
-        | ProfileSet { principal, .. } => (None, Some(principal.as_str().to_owned())),
+        | ProfileSet { principal, .. }
+        | ProfilePicked { principal, .. } => (None, Some(principal.as_str().to_owned())),
         TokenMinted { principal, .. } => (None, Some(principal.as_str().to_owned())),
         TokenRevoked { token } => {
             let owner: Option<String> = tx
@@ -2303,6 +2315,23 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         Event::PrincipalDisplayChanged { principal, display } => {
             tx.prepare_cached("UPDATE principals SET display = ? WHERE id = ?")?
                 .execute(params![display, principal.as_str()])?;
+        }
+        Event::ProfilePicked { principal, picks } => {
+            tx.execute(
+                "DELETE FROM picks WHERE principal = ?",
+                params![principal.as_str()],
+            )?;
+            for (position, pick) in picks.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO picks (principal, position, change_id, line) VALUES (?, ?, ?, ?)",
+                    params![
+                        principal.as_str(),
+                        position as i64,
+                        pick.change.as_str(),
+                        pick.line.trim()
+                    ],
+                )?;
+            }
         }
         Event::ProfileSet {
             principal,
@@ -3696,7 +3725,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                38,
+                39,
                 r#"{"require_executed_check":true,"independence":"human_or_two_models","require_runner_verification":false,"runner_quorum":1,"required_domains":[],"require_concerns_resolved":true,"attention_budget":null,"agents_act_in_sessions":false,"trust":null,"proposals":false,"community":false}"#
             ),
             "the policy's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"
@@ -3716,7 +3745,7 @@ mod projection_shape {
         let short: String = digest[..6].iter().map(|b| format!("{b:02x}")).collect();
         assert_eq!(
             (super::SCHEMA_VERSION, short.as_str()),
-            (38, "d35b3321f09a"),
+            (39, "11cbcdc22143"),
             "the projection schema changed: bump SCHEMA_VERSION and pin the new digest here"
         );
     }
@@ -3773,7 +3802,7 @@ mod projection_shape {
         assert_eq!(
             (super::SCHEMA_VERSION, shape.as_str()),
             (
-                38,
+                39,
                 r#"{"repos":0,"agents":null,"disk":5368709120,"tokens":50,"members":25,"open_proposals":3,"proposal_push":33554432,"open_reports":20}"#
             ),
             "the quota's stored shape changed: bump SCHEMA_VERSION and pin the new shape here"

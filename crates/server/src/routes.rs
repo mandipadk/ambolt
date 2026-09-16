@@ -369,7 +369,7 @@ pub async fn principal_profile(
     let id = PrincipalId(id);
     let principal = found(app.with_store(|s| s.principal(&id))?, "principal")?;
     let days = query.days.unwrap_or(90).clamp(1, 3650);
-    let (profile, since, record, agents) = app.with_store(|s| {
+    let (profile, since, record, agents, picks) = app.with_store(|s| {
         let agents: Vec<Value> = if principal.kind == PrincipalKind::Agent {
             Vec::new()
         } else {
@@ -388,11 +388,17 @@ pub async fn principal_profile(
                 })
                 .collect()
         };
+        let picks = if principal.kind == PrincipalKind::Human {
+            s.picks_of(&id)?
+        } else {
+            Vec::new()
+        };
         Ok::<_, ambolt_core::CoreError>((
             s.profile_of(&id)?,
             s.registered_at(&id)?,
             s.record_of(&id, days)?,
             agents,
+            picks,
         ))
     })?;
     let local_time = profile
@@ -432,6 +438,7 @@ pub async fn principal_profile(
             "local_time": local_time,
         },
         "agents": agents,
+        "picked": picks.iter().map(picked_json).collect::<Vec<_>>(),
         "record": record,
     })))
 }
@@ -2607,10 +2614,27 @@ pub async fn my_watches(State(app): State<AppState>, actor: Actor) -> ApiResult<
     Ok(Json(json!({ "watches": watches })))
 }
 
+/// A pick as the API says it: the change by id, number, repository and
+/// title, when it landed, and the line.
+fn picked_json(pick: &ambolt_core::Picked) -> Value {
+    json!({
+        "change": pick.change.id,
+        "repo": pick.change.repo,
+        "number": pick.change.number,
+        "title": pick.change.title,
+        "landed_at": pick.change.updated_at,
+        "line": pick.line,
+    })
+}
+
 /// What the caller says about themself, with the name they are shown by.
 pub async fn my_profile(State(app): State<AppState>, actor: Actor) -> ApiResult<Json<Value>> {
-    let (principal, profile) = app.with_store(|s| {
-        Ok::<_, ambolt_core::CoreError>((s.principal(&actor.0)?, s.profile_of(&actor.0)?))
+    let (principal, profile, picks) = app.with_store(|s| {
+        Ok::<_, ambolt_core::CoreError>((
+            s.principal(&actor.0)?,
+            s.profile_of(&actor.0)?,
+            s.picks_of(&actor.0)?,
+        ))
     })?;
     Ok(Json(json!({
         "id": actor.0,
@@ -2621,7 +2645,37 @@ pub async fn my_profile(State(app): State<AppState>, actor: Actor) -> ApiResult<
         "pronouns": profile.pronouns,
         "mark": profile.mark,
         "welcomed": profile.welcomed,
+        "picked": picks.iter().map(picked_json).collect::<Vec<_>>(),
     })))
+}
+
+/// What the caller picked to show on their page.
+pub async fn my_picks(State(app): State<AppState>, actor: Actor) -> ApiResult<Json<Value>> {
+    let picks = app.with_store(|s| s.picks_of(&actor.0))?;
+    Ok(Json(
+        json!({ "picked": picks.iter().map(picked_json).collect::<Vec<_>>() }),
+    ))
+}
+
+#[derive(Deserialize)]
+pub struct PicksBody {
+    #[serde(default)]
+    pub picks: Vec<ambolt_core::Pick>,
+}
+
+/// Pick up to four of your own landed changes to show on your page, each
+/// with a line; the list given replaces the last.
+pub async fn set_my_picks(
+    State(app): State<AppState>,
+    actor: Actor,
+    Json(body): Json<PicksBody>,
+) -> ApiResult<Json<Value>> {
+    let env = app.with_store(|s| {
+        s.acting_as(actor.1.as_ref())
+            .pick_changes(&actor.0, &actor.0, body.picks)
+    })?;
+    app.publish(&env);
+    my_picks(State(app), actor).await
 }
 
 #[derive(Deserialize)]

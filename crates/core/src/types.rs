@@ -315,6 +315,22 @@ pub struct ProfileChanges {
     pub welcomed: Option<bool>,
 }
 
+/// One of the changes a person picked to show on their page, with the
+/// line they wrote about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pick {
+    pub change: ChangeId,
+    #[serde(default)]
+    pub line: String,
+}
+
+/// A pick as a page reads it: the change itself and the line.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Picked {
+    pub change: Change,
+    pub line: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Principal {
     pub id: PrincipalId,

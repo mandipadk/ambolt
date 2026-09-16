@@ -226,6 +226,8 @@ const MAX_ITEMS: usize = 64;
 const MAX_LINE: usize = 120;
 const MAX_LINKS: usize = 3;
 const MAX_PRONOUNS: usize = 24;
+/// How many of their own landed changes a person may pick to show.
+const MAX_PICKS: usize = 4;
 
 fn bounded(what: &str, value: &str, limit: usize) -> CoreResult<()> {
     require(value.len() <= limit, || {
@@ -6140,6 +6142,71 @@ impl Store {
         )?;
         tx.commit()?;
         Ok(Some(env))
+    }
+
+    /// The changes somebody shows on their page: up to four of their own
+    /// that landed, each with a line of theirs. The list given replaces
+    /// the one before it; an empty list clears it. A change not theirs,
+    /// not landed, or picked twice is refused with the reason.
+    pub fn pick_changes(
+        &mut self,
+        actor: &PrincipalId,
+        subject: &PrincipalId,
+        picks: Vec<crate::types::Pick>,
+    ) -> CoreResult<Envelope> {
+        require(picks.len() <= MAX_PICKS, || {
+            format!("more than {MAX_PICKS} picks")
+        })?;
+        let tx = self.conn.transaction()?;
+        not_under_a_scope(
+            Acting::of(&self.scope, self.admin_elsewhere),
+            "pick what your page shows",
+        )?;
+        let acting = ensure_actor(&tx, actor)?;
+        let target = raw::principal(&tx, subject.as_str())?
+            .ok_or_else(|| CoreError::NotFound(format!("principal {subject}")))?;
+        require(target.kind == PrincipalKind::Human, || {
+            format!("{subject} is not a person; only people pick")
+        })?;
+        if acting.id != target.id {
+            authorize(
+                &tx,
+                Acting::of(&self.scope, self.admin_elsewhere),
+                actor,
+                Capability::Admin,
+                None,
+            )?;
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for pick in &picks {
+            let id = pick.change.as_str();
+            require(pick.line.chars().count() <= MAX_LINE, || {
+                format!("the line on {id} is longer than {MAX_LINE} characters")
+            })?;
+            require(seen.insert(id.to_owned()), || {
+                format!("{id} is picked twice")
+            })?;
+            let change =
+                raw::change(&tx, id)?.ok_or_else(|| CoreError::NotFound(format!("change {id}")))?;
+            require(change.owner == *subject, || {
+                format!("{id} is not {subject}'s change")
+            })?;
+            require(change.state == ChangeState::Merged, || {
+                format!("{id} has not landed")
+            })?;
+        }
+        let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
+        let env = append(
+            &tx,
+            actor,
+            via,
+            Event::ProfilePicked {
+                principal: subject.clone(),
+                picks,
+            },
+        )?;
+        tx.commit()?;
+        Ok(env)
     }
 
     /// The name somebody is shown by, set by themself, by whoever holds
