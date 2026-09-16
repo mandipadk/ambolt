@@ -177,7 +177,10 @@ async fn a_provider_identity_signs_in_only_once_it_is_linked() {
     // Now the provider signs her in.
     let (status, next, set_cookie) = round_trip(&forge, &provider, "/login/oidc", "").await;
     assert_eq!(status, StatusCode::SEE_OTHER, "{next}");
-    assert_eq!(next, "/");
+    assert_eq!(
+        next, "/welcome",
+        "never welcomed, so the first sign-in goes there"
+    );
     let fresh = set_cookie.split(';').next().unwrap().to_owned();
     let (status, you) = page_with_cookie(app, "/you/settings", &fresh).await;
     assert_eq!(status, StatusCode::OK);

@@ -25,7 +25,7 @@ async fn an_invitation_signs_somebody_in_exactly_once() {
         "a section page is not a repository"
     );
 
-    // Following it signs bee in and lands on settings, told to set a password.
+    // Following it signs bee in and lands on the welcome page.
     let response = tower::ServiceExt::oneshot(
         app.clone(),
         axum::http::Request::builder()
@@ -36,7 +36,7 @@ async fn an_invitation_signs_somebody_in_exactly_once() {
     .await
     .unwrap();
     assert_eq!(response.status(), StatusCode::SEE_OTHER);
-    assert_eq!(response.headers()["location"], "/you/settings?first=1");
+    assert_eq!(response.headers()["location"], "/welcome");
     let cookie = response.headers()["set-cookie"]
         .to_str()
         .unwrap()
@@ -44,13 +44,17 @@ async fn an_invitation_signs_somebody_in_exactly_once() {
         .next()
         .unwrap()
         .to_owned();
-    let (status, page) = page_with_cookie(app, "/you/settings?first=1", &cookie).await;
+    let (status, page) = page_with_cookie(app, "/welcome", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("This is you"), "{page}");
+    assert!(
+        page.contains("<code>bee</code>"),
+        "signed in as bee: {page}"
+    );
+    let (status, page) = page_with_cookie(app, "/welcome?step=2", &cookie).await;
     assert_eq!(status, StatusCode::OK);
     assert!(page.contains("Set a password"), "{page}");
-    assert!(
-        page.contains(">bee<") || page.contains("bee"),
-        "signed in as bee"
-    );
+    assert!(page.contains("Next time you sign in"), "the second step");
 
     // The link is spent.
     let response = tower::ServiceExt::oneshot(
@@ -83,7 +87,10 @@ async fn an_invitation_signs_somebody_in_exactly_once() {
     // Changing a password ends every session, this one included.
     assert!(location.contains("Password+changed"), "{location}");
     let redirect = redirect_of(app, "bee", "a perfectly ordinary password").await;
-    assert_eq!(redirect, "/", "a password set from an invitation signs in");
+    assert_eq!(
+        redirect, "/welcome",
+        "a password set from an invitation signs in, to the welcome page once"
+    );
     let (_, page) = page_with_cookie(app, "/people", &ada).await;
     assert!(page.contains("Can sign in"), "{page}");
 }
@@ -175,7 +182,7 @@ async fn a_second_invitation_kills_the_first_link() {
     );
     let (status, where_to) = get_redirect(app, &format!("/join?token={second}"), "").await;
     assert_eq!(status, StatusCode::SEE_OTHER);
-    assert_eq!(where_to, "/you/settings?first=1", "the newest link works");
+    assert_eq!(where_to, "/welcome", "the newest link works");
 }
 
 /// A name can be put right while nobody has been the account yet, and
@@ -218,4 +225,65 @@ async fn an_invitation_may_correct_the_name_until_somebody_arrives() {
     let (_, page) = page_with_cookie(app, "/people", &ada).await;
     assert!(page.contains("Bee Okoro"), "her name is hers: {page}");
     assert!(!page.contains("Somebody Else"), "{page}");
+}
+
+/// The welcome page asks once. Its steps may all be skipped, the door at
+/// the end records that it has had its say, and the next sign-in goes
+/// Home. An account that existed before the page did is asked too.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_welcome_page_asks_once_and_every_step_may_be_skipped() {
+    let forge = boot().await;
+    let app = &forge.app;
+    // ada has been here all along and was never welcomed: her next
+    // sign-in lands there, once.
+    let (_, cookie) = sign_in_as(&forge, "ada").await;
+    let (status, location) =
+        crate::common::sign_in_redirect(app, "ada", "a perfectly ordinary password").await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert_eq!(location, "/welcome");
+
+    // Step one records the strip and the mark.
+    let (status, location) = post_form(
+        app,
+        "/welcome",
+        &cookie,
+        "step=you&display=Ada+Byron&line=Counting+machines.&zone=Europe%2FLondon&pronouns=she%2Fher&link1=&mark=5",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{location}");
+    assert_eq!(location, "/welcome?step=2");
+    let (_, page) = page_with_cookie(app, "/ada", &cookie).await;
+    assert!(page.contains("Counting machines."), "{page}");
+    assert!(page.contains("/avatars/2/person/ada.5.svg"), "{page}");
+
+    // Step two: a password, and the person stays signed in on a new session.
+    let (status, location) = post_form(
+        app,
+        "/welcome",
+        &cookie,
+        "step=password&password=twelve+letters+at+least&confirm=twelve+letters+at+least",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{location}");
+    assert_eq!(location, "/welcome?step=3");
+
+    // Step three: a door, which marks the welcome had.
+    let (_, cookie) = sign_in(app, "ada", "twelve letters at least").await;
+    let cookie = cookie.unwrap().split(';').next().unwrap().to_owned();
+    let (status, page) = page_with_cookie(app, "/welcome?step=3", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("What brought you here?"), "{page}");
+    let (status, location) = post_form(app, "/welcome", &cookie, "step=door&door=agents").await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{location}");
+    assert_eq!(location, "/agents");
+    let (_, body) = api(app, "GET", "/api/you/profile", "ada", None).await;
+    assert_eq!(body["welcomed"], true, "{body}");
+
+    // Welcomed: the next sign-in goes Home, and the page is still there
+    // for anyone who asks for it.
+    let (_, location) =
+        crate::common::sign_in_redirect(app, "ada", "twelve letters at least").await;
+    assert_eq!(location, "/");
+    let (status, _) = page_with_cookie(app, "/welcome", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
 }

@@ -212,8 +212,10 @@ the unscoped admin grant:
   form sent one; `DELETE /api/waitlist/{email}` takes one off.
 - `POST /api/invitations {"id": "jane", "display": "Jane", "email": "jane@…"}`
   — an account under that name if there is none, the address on it, and
-  an invitation that signs them in once. Mailed when the forge can mail;
-  otherwise the answer carries the `link` to hand over. Their address
+  an invitation that signs them in once, onto `/welcome`: the page that
+  asks who they are, how they sign in next time and what brought them,
+  each step skippable, and asks nobody twice. Mailed when the forge can
+  mail; otherwise the answer carries the `link` to hand over. Their address
   leaves the waitlist once the invitation has reached them; a mail the
   forge could not send (`"mailed": false` with the `link`) leaves it
   there. An account somebody has already been — signed in, proved an

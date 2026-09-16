@@ -444,7 +444,12 @@ pub async fn callback(
                 None => return not_linked(&provider.label, false),
             };
             match app.start_session(&who, crate::web::user_agent(&headers)) {
-                Ok(session) => crate::web::signed_in(&app, crate::web::SESSION_COOKIE, &session),
+                Ok(session) => crate::web::signed_in_to(
+                    &app,
+                    crate::web::SESSION_COOKIE,
+                    &session,
+                    crate::web::landing_for(&app, &who),
+                ),
                 Err(err) => login_error(&crate::web::humane(&err)),
             }
         }

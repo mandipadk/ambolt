@@ -111,7 +111,10 @@ async fn a_reset_link_arrives_by_mail_and_works_exactly_once() {
     .await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert!(location.starts_with("/login?"), "{location}");
-    assert_eq!(redirect_of(app, "ada", "a brand new password").await, "/");
+    assert_eq!(
+        redirect_of(app, "ada", "a brand new password").await,
+        "/welcome"
+    );
     assert_eq!(
         get_with_cookie(app, "/you/settings", &cookie).await,
         StatusCode::SEE_OTHER,
@@ -243,7 +246,8 @@ async fn a_sign_in_link_signs_you_in_once_and_only_to_a_confirmed_address() {
     .await
     .unwrap();
     assert_eq!(response.status(), StatusCode::SEE_OTHER);
-    assert_eq!(response.headers()["location"], "/");
+    // Never welcomed, so the first sign-in goes there once.
+    assert_eq!(response.headers()["location"], "/welcome");
     let session = response.headers()["set-cookie"]
         .to_str()
         .unwrap()

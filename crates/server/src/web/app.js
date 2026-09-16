@@ -327,3 +327,13 @@
     if (event.key === 'Escape') close();
   });
 })();
+
+// An empty time-zone field starts with the browser's guess; the person
+// keeps or changes it before anything is saved.
+(function () {
+  var zone = document.getElementById('zone');
+  if (!zone || zone.value) return;
+  try {
+    zone.value = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch (e) { /* no guess, no harm */ }
+})();

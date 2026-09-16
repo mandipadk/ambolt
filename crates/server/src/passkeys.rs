@@ -345,7 +345,8 @@ async fn settle(
                 "{}={session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000{secure}",
                 crate::web::SESSION_COOKIE
             );
-            ([(header::SET_COOKIE, cookie)], Json(json!({ "to": "/" }))).into_response()
+            let to = crate::web::landing_for(&app, &who);
+            ([(header::SET_COOKIE, cookie)], Json(json!({ "to": to }))).into_response()
         }
         Err(err) => crate::web::oops(err),
     }

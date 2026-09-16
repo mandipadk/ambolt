@@ -116,6 +116,7 @@ pub fn routes() -> Router<AppState> {
         .route("/you/settings", get(settings_page).post(change_password))
         .route("/you/settings/email", post(change_email))
         .route("/you/settings/profile", post(set_profile_form))
+        .route("/welcome", get(welcome_page).post(welcome_step))
         .route("/you/sessions", get(sessions_page).post(sessions_action))
         .route(
             "/passkeys/register/begin",
@@ -861,6 +862,168 @@ async fn sessions_action(
     match result {
         Ok(()) => Redirect::to("/you/settings?done=1").into_response(),
         Err(err) => flash("/you/settings", &humane(&err)),
+    }
+}
+
+#[derive(Deserialize)]
+struct WelcomeQuery {
+    #[serde(default)]
+    step: Option<u8>,
+    #[serde(default)]
+    marks: Option<u32>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+/// The first hour: three steps, every one skippable, then their page.
+async fn welcome_page(
+    State(app): State<AppState>,
+    Palette(theme): Palette,
+    viewer: Viewer,
+    Query(query): Query<WelcomeQuery>,
+) -> Response {
+    let profile = app
+        .with_store(|s| s.profile_of(&viewer.0))
+        .unwrap_or_default();
+    let passkeys = app
+        .with_store(|s| s.passkeys_of(&viewer.0))
+        .map(|k| k.len())
+        .unwrap_or(0);
+    let has_password = app.with_store(|s| s.has_password(&viewer.0));
+    let orgs = app
+        .with_store(|s| s.memberships_of(&viewer.0))
+        .unwrap_or_default();
+    views::welcome_steps(views::WelcomePage {
+        theme,
+        viewer: &viewer,
+        profile: &profile,
+        step: query.step.unwrap_or(1).clamp(1, 3),
+        marks_page: query.marks.unwrap_or(0).min(10_000),
+        passkeys_on: crate::passkeys::enabled(&app),
+        passkeys,
+        has_password,
+        orgs: &orgs,
+        error: query.error.as_deref(),
+    })
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct WelcomeForm {
+    #[serde(default)]
+    step: String,
+    #[serde(default)]
+    display: String,
+    #[serde(default)]
+    line: String,
+    #[serde(default)]
+    zone: String,
+    #[serde(default)]
+    pronouns: String,
+    #[serde(default)]
+    link1: String,
+    #[serde(default)]
+    mark: Option<u32>,
+    #[serde(default)]
+    password: String,
+    #[serde(default)]
+    confirm: String,
+    #[serde(default)]
+    door: String,
+}
+
+/// One step of the welcome page, posted. `you` records the strip and
+/// goes on; `password` sets one and keeps the person signed in;
+/// `door` and `done` mark the welcome had, so it never asks again, and
+/// go where the person chose.
+async fn welcome_step(
+    State(app): State<AppState>,
+    viewer: Viewer,
+    headers: HeaderMap,
+    Form(form): Form<WelcomeForm>,
+) -> Response {
+    let back = |step: u8, what: &str| {
+        Redirect::to(&format!("/welcome?step={step}&error={}", urlencode(what))).into_response()
+    };
+    match form.step.as_str() {
+        "you" => {
+            if let Err(err) = app.with_store(|s| s.set_display(&viewer.0, &viewer.0, &form.display))
+            {
+                return back(1, &humane(&err));
+            }
+            let links: Vec<String> = [form.link1.trim()]
+                .into_iter()
+                .filter(|l| !l.is_empty())
+                .map(str::to_owned)
+                .collect();
+            let said = ambolt_core::ProfileChanges {
+                line: Some(form.line),
+                links: Some(links),
+                zone: Some(form.zone),
+                pronouns: Some(form.pronouns),
+                mark: form.mark,
+                welcomed: None,
+            };
+            match app.with_store(|s| s.set_profile(&viewer.0, &viewer.0, said)) {
+                Ok(Some(env)) => app.publish(&env),
+                Ok(None) => {}
+                Err(err) => return back(1, &humane(&err)),
+            }
+            Redirect::to("/welcome?step=2").into_response()
+        }
+        "password" => {
+            if form.password != form.confirm {
+                return back(2, "Those two did not match");
+            }
+            match app.with_store(|s| s.set_password(&viewer.0, &viewer.0, &form.password)) {
+                Ok(env) => {
+                    // A new password ends every session, this one
+                    // included; a fresh one keeps the person on the page.
+                    app.end_sessions_of(&viewer.0);
+                    app.publish(&env);
+                    match app.start_session(&viewer.0, user_agent(&headers)) {
+                        Ok(session) => {
+                            signed_in_to(&app, SESSION_COOKIE, &session, "/welcome?step=3")
+                        }
+                        Err(err) => oops(err),
+                    }
+                }
+                Err(err) => back(2, &humane(&err)),
+            }
+        }
+        "door" | "done" => {
+            let welcomed = ambolt_core::ProfileChanges {
+                welcomed: Some(true),
+                ..Default::default()
+            };
+            match app.with_store(|s| s.set_profile(&viewer.0, &viewer.0, welcomed)) {
+                Ok(Some(env)) => app.publish(&env),
+                Ok(None) => {}
+                Err(err) => return back(3, &humane(&err)),
+            }
+            let me = format!("/{}", viewer.0);
+            let to = match form.door.as_str() {
+                "agents" => "/agents".to_owned(),
+                "code" => "/new".to_owned(),
+                "explore" => "/explore".to_owned(),
+                door if door.starts_with("org:") => {
+                    let org = &door[4..];
+                    let member = app
+                        .with_store(|s| s.memberships_of(&viewer.0))
+                        .unwrap_or_default()
+                        .iter()
+                        .any(|(name, _)| name == org);
+                    if member {
+                        format!("/{org}")
+                    } else {
+                        me.clone()
+                    }
+                }
+                _ => me.clone(),
+            };
+            Redirect::to(&to).into_response()
+        }
+        _ => Redirect::to("/welcome").into_response(),
     }
 }
 
@@ -1803,7 +1966,12 @@ async fn join(
         Err(err) => return oops(err),
     }
     match app.start_session(&token.principal, user_agent(&headers)) {
-        Ok(session) => signed_in_to(&app, SESSION_COOKIE, &session, "/you/settings?first=1"),
+        Ok(session) => signed_in_to(
+            &app,
+            SESSION_COOKIE,
+            &session,
+            landing_for(&app, &token.principal),
+        ),
         Err(err) => oops(err),
     }
 }
@@ -3200,7 +3368,7 @@ async fn sign_up(
         }
     }
     match app.start_session(&id, user_agent(&headers)) {
-        Ok(session) => signed_in_to(&app, SESSION_COOKIE, &session, "/you/settings?first=1"),
+        Ok(session) => signed_in_to(&app, SESSION_COOKIE, &session, landing_for(&app, &id)),
         Err(err) => oops(err),
     }
 }
@@ -3679,7 +3847,7 @@ async fn signin_with_link(
 ) -> Response {
     match app.with_store(|s| s.redeem_signin_link(query.token.trim())) {
         Ok(Some(who)) => match app.start_session(&who, user_agent(&headers)) {
-            Ok(session) => signed_in(&app, SESSION_COOKIE, &session),
+            Ok(session) => signed_in_to(&app, SESSION_COOKIE, &session, landing_for(&app, &who)),
             Err(err) => oops(err),
         },
         Ok(None) => Redirect::to("/login?error=That+link+has+expired+or+been+used").into_response(),
@@ -3728,7 +3896,12 @@ async fn login_submit(
         .unwrap_or(false);
         return if matches {
             match app.start_session(&principal, user_agent(&headers)) {
-                Ok(session) => signed_in(&app, SESSION_COOKIE, &session),
+                Ok(session) => signed_in_to(
+                    &app,
+                    SESSION_COOKIE,
+                    &session,
+                    landing_for(&app, &principal),
+                ),
                 Err(err) => oops(err),
             }
         } else {
@@ -3739,25 +3912,37 @@ async fn login_submit(
     let token = form.token.trim();
     if !token.is_empty() {
         return match app.with_store(|s| s.principal_for_token(token)) {
-            Ok(Some(_)) => signed_in(&app, TOKEN_COOKIE, token),
+            Ok(Some(who)) => signed_in_to(&app, TOKEN_COOKIE, token, landing_for(&app, &who)),
             Ok(None) => {
                 Redirect::to("/login?error=That+token+is+unknown+or+revoked").into_response()
             }
             Err(err) => oops(err),
         };
     }
-    if app.dev_identity() && PrincipalId::new(name).is_some() {
-        return signed_in(&app, DEV_COOKIE, name);
+    if let Some(who) = PrincipalId::new(name).filter(|_| app.dev_identity()) {
+        return signed_in_to(&app, DEV_COOKIE, name, landing_for(&app, &who));
     }
     Redirect::to("/login?error=Enter+your+name+and+password%2C+or+paste+an+API+token")
         .into_response()
 }
 
-pub(crate) fn signed_in(app: &AppState, name: &str, value: &str) -> Response {
-    signed_in_to(app, name, value, "/")
+/// Where a person lands once signed in: the welcome page, until it has
+/// had its say once; Home after that. Agents and anyone the forge does
+/// not know go Home. Existing accounts are asked too, the first time.
+pub(crate) fn landing_for(app: &AppState, who: &PrincipalId) -> &'static str {
+    let person = app
+        .with_store(|s| s.principal(who))
+        .ok()
+        .flatten()
+        .is_some_and(|p| p.kind == ambolt_core::PrincipalKind::Human);
+    let welcomed = app
+        .with_store(|s| s.profile_of(who))
+        .map(|p| p.welcomed)
+        .unwrap_or(true);
+    if person && !welcomed { "/welcome" } else { "/" }
 }
 
-fn signed_in_to(app: &AppState, name: &str, value: &str, to: &str) -> Response {
+pub(crate) fn signed_in_to(app: &AppState, name: &str, value: &str, to: &str) -> Response {
     let secure = if app.secure_cookies() { "; Secure" } else { "" };
     let cookie = format!("{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000{secure}");
     ([(header::SET_COOKIE, cookie)], Redirect::to(to)).into_response()

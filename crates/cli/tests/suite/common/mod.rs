@@ -512,6 +512,39 @@ pub async fn sign_in_as(forge: &Forge, who: &str) -> (StatusCode, String) {
     (status, cookie)
 }
 
+/// Post the sign-in form with the shared test password and return where
+/// it sends the person.
+pub async fn sign_in_redirect(
+    app: &Router,
+    principal: &str,
+    password: &str,
+) -> (StatusCode, String) {
+    let body = format!(
+        "principal={principal}&password={}",
+        password.replace(' ', "+")
+    );
+    let response = tower::ServiceExt::oneshot(
+        app.clone(),
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/login")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("origin", "http://localhost")
+            .header("sec-fetch-site", "same-origin")
+            .body(axum::body::Body::from(body))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+    let location = response
+        .headers()
+        .get("location")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    (response.status(), location)
+}
+
 /// Post the sign-in form. Returns the status and the Set-Cookie header,
 /// which is what actually matters about a successful sign-in.
 pub async fn sign_in(

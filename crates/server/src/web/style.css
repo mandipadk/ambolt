@@ -840,6 +840,41 @@ details.alt .field { margin-bottom: 10px; }
 .pref .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 14px 18px; }
 .field label .optional { color: var(--ink3); font-weight: var(--wbody); margin-left: 6px; }
 .field .input + .input { margin-top: 8px; }
+
+/* the welcome page: the whole page, no card */
+.hour { background: var(--bg); min-height: 100vh; padding: 56px var(--gutter) 72px; display: grid; place-items: start center; }
+.welcome { width: 100%; max-width: 980px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 72px; }
+.welcome .brand { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 600; font-size: 17px; margin-bottom: 48px; }
+.welcome .brand .orgmark { width: 30px; height: 30px; }
+.welcome .steps { display: flex; flex-direction: column; gap: 28px; padding-top: 6px; }
+.welcome .steps .st { display: flex; gap: 14px; align-items: flex-start; color: var(--ink3); font-size: 14.5px; }
+.welcome .steps .st i { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--hair2); display: grid; place-items: center; font-style: normal; font-size: 12.5px; flex: none; font-variant-numeric: tabular-nums; }
+.welcome .steps .st i .ic { width: 12px; height: 12px; }
+.welcome .steps .st.on { color: var(--ink); font-weight: var(--wmed); }
+.welcome .steps .st.on i { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.welcome .steps .st.done i { background: var(--good-soft); border-color: transparent; color: var(--good-ink); }
+.welcome .steps .st span { display: block; font-size: 13px; color: var(--ink3); font-weight: var(--wbody); margin-top: 2px; }
+.welcome .body, .welcome .body form { display: flex; flex-direction: column; gap: 36px; max-width: 640px; }
+.welcome .body h2 { font-size: 30px; letter-spacing: -0.02em; }
+.welcome .body .fact .k { font-size: 13px; }
+.welcome .body .fact .v code { font-size: 15px; }
+.welcome .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 24px 32px; }
+.welcome .acts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding-top: 8px; }
+.welcome .acts .skip { margin-left: auto; color: var(--ink3); font-size: 14px; background: none; border: none; font-family: inherit; }
+.welcome .choices { display: flex; flex-direction: column; gap: 28px; }
+.welcome .choices .ch { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.welcome .choices .ch .input.sm { width: auto; flex: 1; min-width: 200px; }
+.welcome .choices form.password { gap: 20px; }
+.welcome .sentence { font-size: 15px; color: var(--ink2); }
+.welcome .doors { display: flex; flex-direction: column; }
+.welcome .li.door { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; gap: 20px; align-items: center; padding: 22px 0; border: none; border-top: 1px solid var(--hair); background: none; font-family: inherit; text-align: left; color: var(--ink); cursor: pointer; }
+.welcome .li.door:first-child { border-top: none; padding-top: 0; }
+.welcome .li.door .ic { color: var(--ink3); }
+.welcome .li.door:hover .t { color: var(--accent); }
+.welcome .li.door .tt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.welcome .li.door .t { font-weight: var(--wmed); font-size: 15.5px; }
+.welcome .li.door .s { color: var(--ink2); font-size: 13.5px; }
+@media (max-width: 760px) { .welcome { grid-template-columns: 1fr; gap: 32px; } .welcome .steps { flex-direction: row; gap: 20px; } .welcome .steps .st span { display: none; } }
 .pagehead .chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .clone { position: relative; }
 .clone > summary { list-style: none; cursor: pointer; }

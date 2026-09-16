@@ -5576,6 +5576,186 @@ impl Says {
     }
 }
 
+/// The welcome page: what it needs to draw one of its three steps.
+pub struct WelcomePage<'a> {
+    pub theme: Theme,
+    pub viewer: &'a Viewer,
+    pub profile: &'a ambolt_core::Profile,
+    pub step: u8,
+    pub marks_page: u32,
+    /// Whether this forge can register passkeys at all.
+    pub passkeys_on: bool,
+    /// How many the person already has.
+    pub passkeys: usize,
+    pub has_password: bool,
+    pub orgs: &'a [(String, ambolt_core::TeamRole)],
+    pub error: Option<&'a str>,
+}
+
+/// The first hour, in three steps a person may skip: who they are, how
+/// they sign in next time, and what brought them here. The page uses its
+/// width; nothing is explained that a control does not say.
+pub fn welcome_steps(page: WelcomePage<'_>) -> Markup {
+    let WelcomePage {
+        theme,
+        viewer,
+        profile,
+        step,
+        marks_page,
+        passkeys_on,
+        passkeys,
+        has_password,
+        orgs,
+        error,
+    } = page;
+    let id = viewer.0.as_str();
+    let steps = [
+        ("This is you", "Mark, name, one line"),
+        ("Next time you sign in", "Passkey or password"),
+        ("What brought you here", "Your first page"),
+    ];
+    layout(
+        theme,
+        None,
+        None,
+        None,
+        "Welcome",
+        html! {
+            div class="hour" {
+                div class="welcome" {
+                    div class="brand" { span class="orgmark" { (mark()) } "ambolt" }
+                    div class="steps" {
+                        @for (index, (name, what)) in steps.iter().enumerate() {
+                            @let n = index as u8 + 1;
+                            div class={ "st" @if n == step { " on" } @else if n < step { " done" } } {
+                                i { @if n < step { (ic("check", "sm")) } @else { (n) } }
+                                div { (name) span { (what) } }
+                            }
+                        }
+                    }
+                    div class="body" {
+                        @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
+                        @match step {
+                            1 => {
+                                form method="post" action="/welcome" {
+                                    input type="hidden" name="step" value="you";
+                                    h2 { "This is you" }
+                                    div class="fact" {
+                                        span class="k" { "Username" }
+                                        span class="v" { code { (id) } }
+                                        span class="k" { "Cannot be changed" }
+                                    }
+                                    div class="field" {
+                                        label { "Your mark" }
+                                        div class="marks" {
+                                            @for seed in marks_offered(profile.mark, marks_page) {
+                                                label class="m" {
+                                                    input type="radio" name="mark" value=(seed) checked[seed == profile.mark];
+                                                    img class="av" alt="" src={ "/avatars/" (super::avatars::GENERATION) "/person/" (id) @if seed != 0 { "." (seed) } ".svg" };
+                                                }
+                                            }
+                                            a class="ghost" href={ "/welcome?step=1&marks=" (marks_page + 1) } { (ic("rerun", "sm")) "Six more" }
+                                        }
+                                    }
+                                    div class="two" {
+                                        div class="field" {
+                                            label for="display" { "Shown as" }
+                                            input id="display" class="input" name="display" type="text" value=(viewer.1.display) required maxlength="300";
+                                        }
+                                        div class="field" {
+                                            label for="zone" { "Time zone" }
+                                            input id="zone" class="input" name="zone" type="text" list="zones" value=[profile.zone.as_deref()] placeholder="Europe/London";
+                                            datalist id="zones" { @for zone in ZONES { option value=(zone) {} } }
+                                        }
+                                    }
+                                    div class="field" {
+                                        label for="line" { "One line about you" }
+                                        input id="line" class="input" name="line" type="text" value=[profile.line.as_deref()] maxlength="120" placeholder="What you work on";
+                                    }
+                                    div class="two" {
+                                        div class="field" {
+                                            label for="pronouns" { "Pronouns" span class="optional" { "Optional" } }
+                                            input id="pronouns" class="input" name="pronouns" type="text" value=[profile.pronouns.as_deref()] maxlength="24";
+                                        }
+                                        div class="field" {
+                                            label for="link1" { "A link" span class="optional" { "Optional" } }
+                                            input id="link1" class="input" name="link1" type="url" value=[profile.links.first().map(String::as_str)] placeholder="https://";
+                                        }
+                                    }
+                                    div class="acts" {
+                                        button class="btn" type="submit" { "Next" }
+                                        a class="skip" href="/welcome?step=2" { "Skip" }
+                                    }
+                                }
+                            }
+                            2 => {
+                                h2 { "Next time you sign in" }
+                                div class="choices" {
+                                    @if passkeys_on {
+                                        @if passkeys > 0 {
+                                            div class="ch" { span class="chip good" { (ic("check", "")) "Passkey added" } span class="sentence" { "This device signs you in." } }
+                                        } @else {
+                                            div class="ch" {
+                                                input class="input sm" id="passkey-label" type="text" placeholder="A name for this device" autocomplete="off" aria-label="Passkey name";
+                                                button class="btn" type="button" data-passkey="register" data-say="passkey-note" { (ic("key", "sm")) "Add a passkey" }
+                                            }
+                                            span class="hint" id="passkey-note" { "Your device confirms it is you." }
+                                        }
+                                    }
+                                    form class="password" method="post" action="/welcome" {
+                                        input type="hidden" name="step" value="password";
+                                        @if has_password { span class="chip good" { (ic("check", "")) "Password set" } }
+                                        div class="two" {
+                                            div class="field" {
+                                                label for="password" { @if has_password { "New password" } @else { "Set a password" } }
+                                                input id="password" class="input" name="password" type="password" autocomplete="new-password" minlength="12";
+                                            }
+                                            div class="field" {
+                                                label for="confirm" { "Again" }
+                                                input id="confirm" class="input" name="confirm" type="password" autocomplete="new-password" minlength="12";
+                                            }
+                                        }
+                                        div class="acts" { button class="btn2" type="submit" { "Set a password" } }
+                                    }
+                                }
+                                div class="acts" {
+                                    a class="btn" href="/welcome?step=3" { "Next" }
+                                    a class="skip" href="/welcome?step=3" { "Skip" }
+                                }
+                            }
+                            _ => {
+                                form method="post" action="/welcome" {
+                                    input type="hidden" name="step" value="door";
+                                    h2 { "What brought you here?" }
+                                    div class="list doors" {
+                                        button class="li door" type="submit" name="door" value="agents" {
+                                            (ic("terminal", "")) span class="tt" { span class="t" { "I run agents" } span class="s" { "Connect Claude Code or Cursor" } } (ic("chev", "sm"))
+                                        }
+                                        button class="li door" type="submit" name="door" value="code" {
+                                            (ic("repo", "")) span class="tt" { span class="t" { "I have code to bring" } span class="s" { "Make a repository, or import one" } } (ic("chev", "sm"))
+                                        }
+                                        @for (org, _) in orgs {
+                                            button class="li door" type="submit" name="door" value={ "org:" (org) } {
+                                                (ic("agents", "")) span class="tt" { span class="t" { "I was invited to " (org) } span class="s" { "See the organisation" } } (ic("chev", "sm"))
+                                            }
+                                        }
+                                        button class="li door" type="submit" name="door" value="explore" {
+                                            (ic("globe", "")) span class="tt" { span class="t" { "Just looking" } span class="s" { "Explore what is public" } } (ic("chev", "sm"))
+                                        }
+                                    }
+                                    div class="acts" {
+                                        button class="skip" type="submit" name="door" value="me" { "Skip to my page" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
 /// Time zones offered as the field is typed; any IANA name is accepted.
 const ZONES: &[&str] = &[
     "UTC",
