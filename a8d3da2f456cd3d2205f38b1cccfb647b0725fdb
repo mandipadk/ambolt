@@ -1,0 +1,148 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "I2146440ec7a0b5bddd00e918443cda65235f0fef",
+      "id": "c-7d6s93s0q7230emyyfryc1vwct",
+      "landed_oid": "a8d3da2f456cd3d2205f38b1cccfb647b0725fdb",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 157,
+      "opened_at": "2026-09-16T03:37:34.968111765Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": null,
+      "title": "Let anyone say what brought them here, and tell agents how",
+      "updated_at": "2026-09-16T03:39:50.003423542Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-7d6s93s0q7230emyyfryc1vwct",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-1jwaqvgdmcp6298s3ggzh2f38w",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1482,
+        "summary": "clippy -D warnings clean and the whole suite green: 378 tests, 0 failures, on the laptop before pushing.",
+        "unchecked": [
+          "the pages were looked at in both themes at 1440px, not at phone width",
+          "no client renders the forge mail; unrelated to this change"
+        ]
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "a8d3da2f456cd3d2205f38b1cccfb647b0725fdb",
+    "landed_at": "2026-09-16T03:39:50.003423542Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-7d6s93s0q7230emyyfryc1vwct",
+      "commit_oid": "a8d3da2f456cd3d2205f38b1cccfb647b0725fdb",
+      "message": "Let anyone say what brought them here, and tell agents how\n\nThe graph began at a task, which somebody holding authority writes. But\nintent comes from somewhere - a person hit a bug, wanted something, or\ncould not work out how a thing was meant to go - and that column was\nmissing. A repository can now take reports: a bug carrying the version\nand the command that shows it, a request saying what somebody was\ntrying to do and what they do instead, or a question. The kind is a\ncommitment rather than a label, so only a bug keeps a reproduction.\n\nThe bar is on the report, not on the reporter. Prose files fine, costs\nnothing and blocks nothing; what prose cannot do is reach a\nmaintainer's day on its own, and anybody may sharpen somebody else's\nreport afterwards - another user, a maintainer, or an agent. Nothing is\never closed for being old: a settlement says which kind of closure it\nwas, and none of them means we stopped looking. Discarding is the\nexception, for what should never have arrived, and it keeps the number\nand the reason while losing the text.\n\nThe door is the owner's switch, off unless said, open to anyone signed\nin while the repository is public - the shape `proposals` already has,\nwith a reporter's room bounded the same way. Reporting is deliberately\nnot a capability: asking permission to say a thing is broken is not\nsomething a forge should make anyone do.\n\nAgents are told, in the five places an agent looks. The guide endpoint\nanswers without a token and carries a ready-to-paste AGENTS.md block\nwritten from what is actually true of the repository, since that file\nis what reaches an agent nobody connected to this forge. `ambolt\nreport` and `ambolt guide` read the git remote from inside a clone and\nneed to be told nothing else. The MCP adapter gained five tools, and\nwhat it says on connect now names them - and says not to file on a\nmirror, which is what an agent assuming another forge's conventions\ndoes. A refusal to write intent names the way to say it instead. This\nrepository grew an AGENTS.md of its own.\n\nSchema 37: the origins and origin_replies projections.\n\nChange-Id: I2146440ec7a0b5bddd00e918443cda65235f0fef\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "AGENTS.md",
+        "crates/cli/src/main.rs",
+        "crates/cli/tests/suite/community_flow.rs",
+        "crates/cli/tests/suite/main.rs",
+        "crates/client/src/lib.rs",
+        "crates/client/src/mcp.rs",
+        "crates/client/src/report.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/event.rs",
+        "crates/core/src/id.rs",
+        "crates/core/src/lib.rs",
+        "crates/core/src/queries.rs",
+        "crates/core/src/store.rs",
+        "crates/core/src/types.rs",
+        "crates/core/tests/suite/lifecycle.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/views.rs",
+        "docs/agents.md",
+        "docs/architecture.md"
+      ],
+      "session": null
+    },
+    "seq": 1487,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-1jwaqvgdmcp6298s3ggzh2f38w",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "1 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-1jwaqvgdmcp6298s3ggzh2f38w",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 211 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 18 path(s) outside docs/, *.md: crates/cli/src/main.rs, crates/cli/tests/suite/community_flow.rs, crates/cli/tests/suite/main.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-7d6s93s0q7230emyyfryc1vwct",
+        "claim": "cl-1jwaqvgdmcp6298s3ggzh2f38w",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-5fzta9e8gmhrceczxv48xj8xm3",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1484
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "pK3ElMdvq8HKDKXgDievpCAjo70LzOf9z6COt3BvwxxVGyFwzwbkd0C4FEttZv9y4jEtK99nLs2lwAmaDYdpBg=="
+  }
+}
