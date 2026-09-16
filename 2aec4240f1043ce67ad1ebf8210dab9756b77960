@@ -1,0 +1,165 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Iprofile0161",
+      "id": "c-4dk9etxfwavderjkz6qwfw2h4t",
+      "landed_oid": "2aec4240f1043ce67ad1ebf8210dab9756b77960",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 164,
+      "opened_at": "2026-09-16T18:39:11.136712021Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-3mjv51dd3sqfp156fs8zt4wzyr",
+      "title": "Let a person say who they are, and keep every word of it in the log",
+      "updated_at": "2026-09-16T18:41:52.541094707Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-4dk9etxfwavderjkz6qwfw2h4t",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-065n6jqdn859ghgy5tptx0ntkt",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1556,
+        "summary": "the whole suite, on the box: green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-4dk9etxfwavderjkz6qwfw2h4t",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-6jf2b66yvyx94tnxj9t5pa5dgz",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1557,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "2aec4240f1043ce67ad1ebf8210dab9756b77960",
+    "landed_at": "2026-09-16T18:41:52.541094707Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-4dk9etxfwavderjkz6qwfw2h4t",
+      "commit_oid": "2aec4240f1043ce67ad1ebf8210dab9756b77960",
+      "message": "Let a person say who they are, and keep every word of it in the log\n\nA person's page gets the one strip that is theirs to write: the name\nthey are shown by, a line, up to three links, a time zone, pronouns,\nand which of the drawn marks is theirs. Each change is an event, so\nthe page is the log applied and fsck covers it; nothing in the strip\nis counted, and the record beside it still is. The name was already an\nevent that only an operator could append, for an account nobody had\nbeen yet; now the person appends it too, and an agent's holder names\nthe agent. Only a person has the strip: an agent's facts are its\nmodel, its harness and who holds it, and an organisation's are its\npeople.\n\nNobody uploads a picture, still. The drawings an id offers are numbered,\nand the number a person chose folds into the drawing and rides in the\nfile's name, so every picture stays an immutable file and the same id\nand number draw the same mark everywhere. Every page that names\nsomebody now draws them from the same map it names them from, so the\nchosen mark is the one they are shown by in a row, in the sidebar and\non their page.\n\nThe page reads what the strip says: the time where they are, the city,\nthe month they arrived, the organisations they are on, the links. The\nAccount panel in Settings is the same strip as a form, with seven\ndrawings to pick from and six more a click away; GET and PATCH\n/api/you/profile are it for a machine. A zone that is not one and a\nlink that is not a web address are refused; an empty string clears a\nfield. Schema 38, for the projection this adds.\n\nChange-Id: Iprofile0161\nTask: t-3mjv51dd3sqfp156fs8zt4wzyr\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/profile_flow.rs",
+        "crates/core/src/commands.rs",
+        "crates/core/src/event.rs",
+        "crates/core/src/lib.rs",
+        "crates/core/src/queries.rs",
+        "crates/core/src/store.rs",
+        "crates/core/src/types.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/routes.rs",
+        "crates/server/src/web/avatars.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1561,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-065n6jqdn859ghgy5tptx0ntkt, cl-6jf2b66yvyx94tnxj9t5pa5dgz",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-6jf2b66yvyx94tnxj9t5pa5dgz",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 221 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 13 path(s) outside docs/, *.md: crates/cli/tests/suite/profile_flow.rs, crates/core/src/commands.rs, crates/core/src/event.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-4dk9etxfwavderjkz6qwfw2h4t",
+        "claim": "cl-065n6jqdn859ghgy5tptx0ntkt",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-25nfajn3sy6s3h0k1tamgh6v7g",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1558
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-4dk9etxfwavderjkz6qwfw2h4t",
+        "claim": "cl-6jf2b66yvyx94tnxj9t5pa5dgz",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-7ckavscm8wgxnptm4dfwjy3zrs",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.36s",
+        "revision": 1,
+        "seq": 1559
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "uOPsziJecB2s19vl8tGGTAAq6Ydfq1ASAaKuEME37scgeHq2ZqereyiSR49jDTnN/dKiirSK9kVqNdR0ilHJBg=="
+  }
+}
