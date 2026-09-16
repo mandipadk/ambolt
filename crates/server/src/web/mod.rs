@@ -2514,6 +2514,11 @@ struct OwnerQuery {
     repo: Option<String>,
     #[serde(default)]
     all: Option<String>,
+    /// The window Standing and Judgement count: the last ninety days
+    /// unless this says `joining`, which counts everything since they
+    /// arrived.
+    #[serde(default)]
+    since: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -3046,7 +3051,21 @@ async fn person_page(
             return not_found();
         }
     }
-    let record = match app.with_store(|s| s.record_of(&owner_id, 90)) {
+    let joining = query.since.as_deref() == Some("joining");
+    let days = if joining {
+        app.with_store(|s| s.registered_at(&owner_id))
+            .ok()
+            .flatten()
+            .and_then(|ts| ts.parse::<jiff::Timestamp>().ok())
+            .map(|ts| {
+                (ts.duration_until(jiff::Timestamp::now()).as_hours() / 24 + 1).clamp(1, 3650)
+                    as u32
+            })
+            .unwrap_or(3650)
+    } else {
+        90
+    };
+    let record = match app.with_store(|s| s.record_of(&owner_id, days)) {
         Ok(record) => record,
         Err(err) => return oops(err),
     };
@@ -3059,7 +3078,7 @@ async fn person_page(
     let judgement = if agent {
         ambolt_core::Judgement::default()
     } else {
-        app.with_store(|s| s.judgement_of(&owner_id, 90))
+        app.with_store(|s| s.judgement_of(&owner_id, days))
             .unwrap_or_default()
     };
     let agent_ids: Vec<String> = if agent {
@@ -3131,12 +3150,26 @@ async fn person_page(
         let (display, _) = people.name(holder);
         (holder.to_string(), display.to_owned())
     });
+    let orgs = app
+        .with_store(|s| s.memberships_of(&owner_id))
+        .unwrap_or_default();
+    let org_repos = orgs
+        .iter()
+        .map(|(org, _)| {
+            let seen = app
+                .with_store(|s| s.repos_of_owner(&PrincipalId(org.clone())))
+                .unwrap_or_default()
+                .iter()
+                .filter(|r| may_read(&r.name))
+                .count();
+            (org.clone(), seen)
+        })
+        .collect();
     let rail = views::Rail {
         last_landed: landed.first().map(|row| row.change.updated_at.clone()),
         at_work,
-        orgs: app
-            .with_store(|s| s.memberships_of(&owner_id))
-            .unwrap_or_default(),
+        orgs,
+        org_repos,
         granted,
         runs_forge,
         held_by,
@@ -3248,6 +3281,7 @@ async fn person_page(
         theme,
         who: who.reading(),
         owner: &owner,
+        joining,
         tab,
         says: &says,
         standing: &standing,

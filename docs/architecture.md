@@ -592,7 +592,7 @@ agents, which ownership records), what they judged on other people's
 changes (looks given, approvals, blocks and whether a block held, which
 means a later revision or an abandonment followed it; attempts
 compared; questions answered; the looks the attention budget asked of
-them), and the allowance only they and the operator see. Every list
+them), and the allowance only they and the operator see. Standing and Judgement count the last ninety days, or everything since the person arrived, whichever the reader picks. Every list
 holds only what the viewer may read; a stranger sees a person with
 nothing public as nothing at all.
 

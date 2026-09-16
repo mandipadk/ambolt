@@ -284,6 +284,9 @@ fn layout_section(
 pub struct Head {
     pub count: Option<String>,
     pub acts: Option<Markup>,
+    /// What sits under the head row and above the columns: a page's own
+    /// head, when it has one, so the rail starts below it.
+    pub below: Option<Markup>,
 }
 
 fn layout_section_head(
@@ -369,6 +372,7 @@ fn frame_in(
                                 @if let Some(repo) = repo {
                                     (repohead(repo, active, viewer, who.chrome()))
                                 }
+                                @if let Some(below) = head.below.clone() { (below) }
                                 div class={ "cols" @if rail.is_some() { " railed" } } {
                                     div class="content" id="content" { (body) }
                                     @if let Some(rail) = rail {
@@ -1506,6 +1510,7 @@ pub fn you(theme: Theme, viewer: &Viewer, mine: &[(String, Change)]) -> Markup {
         "you",
         "Your changes",
         Head {
+            below: None,
             count: Some(format!("{} open", mine.len())),
             acts: None,
         },
@@ -1558,6 +1563,7 @@ pub fn inbox(
         "inbox",
         "Inbox",
         Head {
+            below: None,
             count: Some(format!("{unread} unread")),
             acts: (unread > 0).then(|| {
                 html! {
@@ -1777,6 +1783,7 @@ pub fn tasks(
         "tasks",
         "Tasks",
         Head {
+            below: None,
             count: Some(tasks.len().to_string()),
             acts: None,
         },
@@ -2128,6 +2135,7 @@ pub fn forge_log(
         "log",
         "Forge log",
         Head {
+            below: None,
             count: Some("everything, newest last".to_owned()),
             acts: None,
         },
@@ -2937,6 +2945,7 @@ pub fn teams(
         "teams",
         "Teams",
         Head {
+            below: None,
             count: Some(teams.len().to_string()),
             acts: Some(html! { a class="btn sm" href="#add" { (ic("plus", "sm")) "Add a team" } }),
         },
@@ -3106,6 +3115,7 @@ pub fn owner(
     // The head row's one action makes the repository under this owner,
     // when the viewer may; otherwise the shell's usual one stands.
     let head = may_create.then(|| Head {
+        below: None,
         count: None,
         acts: Some(html! {
             a class="btn2 sm" href={ "/new?owner=" (owner.id.as_str()) } { (ic("plus", "sm")) "New repository" }
@@ -3430,6 +3440,8 @@ pub struct Rail {
     /// viewer may see where.
     pub at_work: Vec<(String, Option<String>)>,
     pub orgs: Vec<(String, ambolt_core::TeamRole)>,
+    /// How many repositories of each the viewer may read.
+    pub org_repos: std::collections::HashMap<String, usize>,
     pub granted: Vec<ambolt_core::Grant>,
     pub runs_forge: bool,
     /// For an agent: who holds it, id and display.
@@ -3473,6 +3485,9 @@ pub struct PersonPage<'a> {
     pub may_allowance: bool,
     pub may_create: bool,
     pub people: &'a People,
+    /// Whether Standing and Judgement count since they arrived rather
+    /// than the last ninety days.
+    pub joining: bool,
 }
 
 /// Thirteen weekly bars in one drawing, labelled where the month turns.
@@ -3544,21 +3559,16 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
         may_allowance,
         may_create,
         people,
+        joining,
     } = page;
     let id = owner.id.as_str();
     let agent = owner.kind == ambolt_core::PrincipalKind::Agent;
     let record = &standing.record;
     let nothing_yet =
         record.landed == 0 && record.abandoned == 0 && record.claims == 0 && counts.2 == 0;
-    let head = may_create.then(|| Head {
-        count: None,
-        acts: Some(html! {
-            a class="btn2 sm" href={ "/new?owner=" (id) } { (ic("plus", "sm")) "New repository" }
-        }),
-    });
     let tab_link = |which: OwnerTab, label: &str, count: Option<String>| {
         html! {
-            a class={ "tab" @if tab == which { " on" } } href={ "/" (id) (which.segment()) } {
+            a class={ "tab" @if tab == which { " on" } } href={ "/" (id) (which.segment()) @if joining { "?since=joining" } } {
                 (label)
                 @if let Some(count) = count { span class="n" { (count) } }
             }
@@ -3598,7 +3608,10 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
                 @for (org, role) in &rail.orgs {
                     div class="row member" {
                         span class="av org" title=(org) { (initials(org)) }
-                        span class="tt" { a class="t" href={ "/" (org) } { (org) } }
+                        span class="tt" {
+                            a class="t" href={ "/" (org) } { (org) }
+                            @if let Some(n) = rail.org_repos.get(org) { span class="s" { (n) " repositor" @if *n == 1 { "y" } @else { "ies" } } }
+                        }
                         span class="tags" {
                             @match role {
                                 ambolt_core::TeamRole::Owner => { span class="chip acc" { "Owner" } }
@@ -3652,12 +3665,53 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
                 header { h2 { "Reach" } }
                 div class="kv rail-facts" {
                     @for link in &says.profile.links {
-                        @let shown = link.trim_start_matches("https://").trim_start_matches("http://").trim_end_matches('/');
-                        span class="pair" { span class="k" { "Link" } span class="v" { a href=(link) rel="me nofollow" { (shown) } } }
+                        @let (label, shown) = link_fact(link);
+                        span class="pair" { span class="k" { (label) } span class="v" { a href=(link) rel="me nofollow" { (shown) } } }
                     }
                     span class="pair" { span class="k" { "Mention" } span class="v" { code { "@" (id) } " " button class="ghost sm" type="button" data-copy={ "@" (id) } { (ic("copy", "sm")) "Copy" } } }
                 }
             }
+        }
+    };
+    // The window Standing and Judgement count in: the last ninety days,
+    // or everything since they arrived.
+    let window = |which: OwnerTab| {
+        html! {
+            span class="seg" {
+                a class=[(!joining).then_some("on")] href={ "/" (id) (which.segment()) } { "90 days" }
+                a class=[joining.then_some("on")] href={ "/" (id) (which.segment()) "?since=joining" } { "Since joining" }
+            }
+        }
+    };
+    // The head and the tabs sit above the columns, so the rail starts
+    // under them; the mark is large and level with the name.
+    let above = html! {
+        div class="pagehead own" {
+            div class="who" {
+                span class="av xl" { (avatar_of_marked(id, &owner.display, owner.kind, !rail.at_work.is_empty() && agent, says.profile.mark)) }
+                div {
+                    h1 { (owner.display) }
+                    @if let Some(line) = &says.profile.line { p class="says" { (line) } }
+                    @if !owner.active { div class="meta" { span class="chip bad" { "Deactivated" } } }
+                    @if !facts.is_empty() { div class="facts" { (kv(&facts)) } }
+                }
+            }
+            div class="acts" {
+                @if is_self { a class="btn2 sm" href="/you/settings#account" { "Edit profile" } }
+                @else if who.viewer().is_some_and(|v| v.1.admin) && agent { a class="btn2 sm" href="/agents" { "Manage on Agents" } }
+                @if who.viewer().is_none_or(|v| v.0 != owner.id) {
+                    a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (id) } title="Report this account to whoever runs the forge" { "Report" }
+                }
+            }
+        }
+        nav class="tabs own" {
+            (tab_link(OwnerTab::Overview, "Overview", None))
+            (tab_link(OwnerTab::Landed, "Landed", Some(counts.0.to_string())))
+            @if !agent {
+                (tab_link(OwnerTab::Agents, "Agents", Some(counts.1.to_string())))
+                (tab_link(OwnerTab::Judgement, "Judgement", Some(counts.2.to_string())))
+            }
+            @if may_allowance { (tab_link(OwnerTab::Allowance, "Allowance", None)) }
         }
     };
     frame_in(
@@ -3668,40 +3722,10 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
         None,
         id,
         html! {
-            div class="pagehead" {
-                div class="who" {
-                    span class="av lg" { (avatar_of_marked(id, &owner.display, owner.kind, !rail.at_work.is_empty() && agent, says.profile.mark)) }
-                    div {
-                        h1 { (owner.display) }
-                        @if let Some(line) = &says.profile.line { p class="says" { (line) } }
-                        div class="meta" {
-                            @if agent { span class="chip" { (ic("agents", "")) "Agent" } } @else { span class="chip" { (ic("user", "")) "Person" } }
-                            @if !owner.active { span class="chip bad" { "Deactivated" } }
-                        }
-                        @if !facts.is_empty() { div class="facts" { (kv(&facts)) } }
-                    }
-                }
-                div class="acts" {
-                    @if is_self { a class="btn2 sm" href="/you/settings#account" { "Edit profile" } }
-                    @else if who.viewer().is_some_and(|v| v.1.admin) && agent { a class="btn2 sm" href="/agents" { "Manage on Agents" } }
-                    @if who.viewer().is_none_or(|v| v.0 != owner.id) {
-                        a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (id) } title="Report this account to whoever runs the forge" { "Report" }
-                    }
-                }
-            }
-            nav class="tabs own" {
-                (tab_link(OwnerTab::Overview, "Overview", None))
-                (tab_link(OwnerTab::Landed, "Landed", Some(counts.0.to_string())))
-                @if !agent {
-                    (tab_link(OwnerTab::Agents, "Agents", Some(counts.1.to_string())))
-                    (tab_link(OwnerTab::Judgement, "Judgement", Some(counts.2.to_string())))
-                }
-                @if may_allowance { (tab_link(OwnerTab::Allowance, "Allowance", None)) }
-            }
             @match body {
                 TabBody::Overview => {
                     div class="sec" {
-                        div class="sh" { h2 { "Standing" } span class="n" { "the last " (record.window_days) " days" } }
+                        div class="sh" { h2 { "Standing" } span class="right" { (window(OwnerTab::Overview)) } }
                         @if nothing_yet {
                             div class="ghostfigs" {
                                 div class="g" { span { "Landed" } i {} }
@@ -3783,7 +3807,7 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
                                     @let most = tree.iter().map(|(_, n)| *n).max().unwrap_or(1).max(1);
                                     div class="tally" {
                                         @for (dir, n) in tree.iter().take(6) { (bar(html! { code { (dir) } }, f64::from(*n) / f64::from(most), html! { (n) " file" @if *n != 1 { "s" } })) }
-                                        div class="foot" { (tree_total) " paths in " (record.window_days) " days" }
+                                        div class="foot" { (tree_total) " paths" @if joining { " since joining" } @else { " in " (record.window_days) " days" } }
                                     }
                                 }
                             }
@@ -3875,7 +3899,7 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
                 }
                 TabBody::Judgement(judgement) => {
                     div class="sec" {
-                        div class="sh" { h2 { "On other people's changes" } span class="n" { "the last " (judgement.window_days) " days" } }
+                        div class="sh" { h2 { "On other people's changes" } span class="right" { (window(OwnerTab::Judgement)) } }
                         div class="stats three" {
                             div class="stat" { span class="k" { "Looks given" } span class="v" { (judgement.looks) } span class="d" { "on " (judgement.changes) " change" @if judgement.changes != 1 { "s" } } }
                             div class="stat" { span class="k" { "Approved" } span class="v" { (judgement.approved) } span class="d" { "of " (judgement.looks) " look" @if judgement.looks != 1 { "s" } } }
@@ -3906,7 +3930,13 @@ pub fn person_page(page: PersonPage<'_>) -> Markup {
             }
         },
         Some(rail_markup),
-        head,
+        Some(Head {
+            count: None,
+            acts: may_create.then(|| {
+                html! { a class="btn2 sm" href={ "/new?owner=" (id) } { (ic("plus", "sm")) "New repository" } }
+            }),
+            below: Some(above),
+        }),
     )
 }
 
@@ -4113,6 +4143,7 @@ pub fn reports(
         "reports",
         "Reports",
         Head {
+            below: None,
             count: Some(reports.len().to_string()),
             acts: None,
         },
@@ -4201,6 +4232,7 @@ pub fn people(
         "people",
         "People",
         Head {
+            below: None,
             count: Some(people.len().to_string()),
             acts: Some(
                 html! { a class="btn sm" href="#add" { (ic("plus", "sm")) "Add a person" } },
@@ -4342,6 +4374,7 @@ pub fn agents(
         "agents",
         "Agents",
         Head {
+            below: None,
             count: Some(agents.len().to_string()),
             acts: Some(
                 html! { a class="btn sm" href="#add" { (ic("plus", "sm")) "Add an agent" } },
@@ -6076,6 +6109,20 @@ pub struct Says {
     pub orgs: Vec<(String, ambolt_core::TeamRole)>,
 }
 
+/// A link as a fact: the site it points at, without its scheme; a GitHub
+/// profile by its handle.
+fn link_fact(link: &str) -> (&'static str, &str) {
+    let bare = link
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_start_matches("www.")
+        .trim_end_matches('/');
+    match bare.strip_prefix("github.com/") {
+        Some(handle) if !handle.is_empty() && !handle.contains('/') => ("GitHub", handle),
+        _ => ("Site", bare),
+    }
+}
+
 impl Says {
     /// The facts, each a label and a value, in the order the head shows.
     pub fn facts(&self) -> Vec<(&str, Markup)> {
@@ -6087,9 +6134,6 @@ impl Says {
         if let Some(since) = &self.since {
             facts.push(("Here since", html! { (since) }));
         }
-        if let Some(pronouns) = &self.profile.pronouns {
-            facts.push(("Pronouns", html! { (pronouns) }));
-        }
         for (org, role) in &self.orgs {
             let what = match role {
                 ambolt_core::TeamRole::Owner => "Owner of",
@@ -6097,15 +6141,8 @@ impl Says {
             };
             facts.push((what, html! { a href={ "/" (org) } { (org) } }));
         }
-        for link in &self.profile.links {
-            let shown = link
-                .trim_start_matches("https://")
-                .trim_start_matches("http://")
-                .trim_end_matches('/');
-            facts.push((
-                "Link",
-                html! { a href=(link) rel="me nofollow" { (shown) } },
-            ));
+        if let Some(pronouns) = &self.profile.pronouns {
+            facts.push(("Pronouns", html! { (pronouns) }));
         }
         facts
     }

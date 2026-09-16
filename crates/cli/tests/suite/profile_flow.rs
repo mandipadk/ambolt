@@ -295,3 +295,44 @@ async fn a_persons_page_has_tabs_and_each_counts_from_the_log() {
     .await;
     assert!(!status.is_success(), "{body}");
 }
+
+/// Standing and Judgement count the last ninety days unless the reader
+/// asks for everything since the person arrived; the tabs keep the
+/// choice, and the head shows no chip for a person.
+#[tokio::test(flavor = "multi_thread")]
+async fn standing_counts_since_joining_when_asked() {
+    let forge = boot().await;
+    let app = &forge.app;
+    let (_, cookie) = sign_in_as(&forge, "ada").await;
+    let (status, page) = page_with_cookie(app, "/ada", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        page.contains(r#"class="on" href="/ada">90 days</a>"#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"href="/ada?since=joining">Since joining</a>"#),
+        "{page}"
+    );
+    assert!(
+        !page.contains(">Person</span>"),
+        "no kind chip on a person: {page}"
+    );
+    assert!(page.contains(r#"class="av xl""#), "{page}");
+    let (status, page) = page_with_cookie(app, "/ada?since=joining", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        page.contains(r#"class="on" href="/ada?since=joining">Since joining</a>"#),
+        "{page}"
+    );
+    assert!(
+        page.contains(r#"href="/ada/judgement?since=joining""#),
+        "the tabs keep the window: {page}"
+    );
+    let (status, page) = page_with_cookie(app, "/ada/judgement?since=joining", &cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        page.contains(r#"class="on" href="/ada/judgement?since=joining">Since joining</a>"#),
+        "{page}"
+    );
+}

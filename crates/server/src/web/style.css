@@ -96,6 +96,7 @@ b, strong { font-weight: var(--wbold); }
 .av { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: var(--wbold); color: #fff; flex: none; letter-spacing: 0.02em; }
 .av.sm { width: 20px; height: 20px; font-size: 9.5px; }
 .av.lg { width: 36px; height: 36px; font-size: 14px; }
+.av.xl { width: 88px; height: 88px; font-size: 28px; }
 img.av { object-fit: cover; background: var(--raise); border: 0; }
 .av.agent { border-radius: 27%; position: relative; background: none; }
 .av.agent.live { box-shadow: 0 0 0 2px var(--good-soft); }
@@ -323,7 +324,7 @@ a.row:hover .t { color: var(--accent); }
 .tab:hover { color: var(--ink); background: var(--raise); }
 .tab.on, .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
 .tab.on .ic { color: var(--accent); }
-.tab .n { font-size: 12px; color: var(--ink3); background: var(--raise); padding: 1px 7px; border-radius: 10px; }
+.tab .n { font-size: 12.5px; color: var(--ink3); background: var(--raise); padding: 1px 7px; border-radius: 10px; }
 
 /* The rail: a stack of panels beside the page. */
 .rail { display: flex; flex-direction: column; gap: 24px; position: sticky; top: 78px; min-width: 0; }
@@ -842,7 +843,26 @@ details.alt .field { margin-bottom: 10px; }
 .field .input + .input { margin-top: 8px; }
 
 /* a person's page: tabs under the head, figures, bars, the diary */
-.tabs.own { padding: 0; margin-top: 24px; border-bottom: 1px solid var(--hair); }
+.tabs.own { margin-top: 28px; border-bottom: 1px solid var(--hair); }
+.tabs.own + .cols { padding-top: 40px; gap: 0 56px; }
+.tabs.own + .cols.railed { grid-template-columns: minmax(0, 1fr) 280px; }
+.tabs.own + .cols .content > * + * { margin-top: 56px; }
+.tabs.own + .cols .content > .sec:first-child { margin-top: 0; }
+.tabs.own + .cols .rail { gap: 28px; }
+.tabs.own + .cols .rail .panel + .panel { padding-top: 28px; }
+.tabs.own + .cols .rail .panel > header h2 { font-size: 13px; font-weight: var(--wmed); color: var(--ink3); }
+.tabs.own + .cols .rail .kv.rail-facts .v { font-size: 14.5px; }
+.pagehead.own { padding: 40px var(--gutter) 0; }
+.pagehead.own .who { gap: 24px; align-items: flex-start; }
+.pagehead.own .who .av.xl .av { width: 100%; height: 100%; font-size: inherit; }
+.pagehead.own h1 { font-size: 28px; line-height: 1.15; }
+.pagehead.own .says { font-size: 15px; margin-top: 8px; }
+.pagehead.own .meta { margin-top: 12px; }
+.pagehead.own .facts { margin-top: 20px; }
+.pagehead.own .facts .kv { gap: 14px 40px; }
+.pagehead.own .facts .kv .k { font-size: 13px; font-weight: var(--wbody); }
+.pagehead.own .facts .kv .v { font-size: 14.5px; }
+.pagehead.own .facts .kv .v a { color: var(--accent); }
 .stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .stats.three .stat:nth-child(4) { border-left: none; padding-left: 0; }
 .stats.three .stat:nth-child(n+4) { border-top: 1px solid var(--hair); }
@@ -859,7 +879,7 @@ details.alt .field { margin-bottom: 10px; }
 .bar-row .key span { display: inline-flex; gap: 8px; align-items: center; }
 .bar-row .key .sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 .bar-row .key b { color: var(--ink); font-weight: var(--wmed); font-variant-numeric: tabular-nums; }
-.bar-row.weeks { grid-template-columns: 1fr; gap: 10px; }
+.bar-row.weeks { grid-template-columns: 1fr; gap: 12px; }
 .weeks svg { width: 100%; height: auto; aspect-ratio: 640 / 72; display: block; }
 .weeks svg rect { fill: var(--good); }
 .weeks svg rect.zero { fill: var(--raise2); }
@@ -1005,11 +1025,11 @@ a.row.fv:hover code { color: var(--accent); }
 @media (max-width: 760px) { .thead.fv, .row.fv { grid-template-columns: minmax(0, 1fr) 90px 56px 56px; } }
 
 /* Home and Review: numbers first, then what needs you, then what happened. */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0; margin-top: 8px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
-.stat { padding: 20px 24px 22px; display: grid; grid-template-rows: subgrid; grid-row: span 3; row-gap: 6px; border-left: 1px solid var(--hair); min-width: 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0; margin-top: 0; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+.stat { padding: 22px 24px 24px; display: grid; grid-template-rows: subgrid; grid-row: span 3; row-gap: 6px; border-left: 1px solid var(--hair); min-width: 0; }
 .stat:first-child { border-left: none; padding-left: 0; }
 .stat .k { font-size: 14px; color: var(--ink2); display: flex; align-items: center; gap: 6px; }
-.stat .v { font-family: var(--display); font-size: 30px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; padding: 4px 0 2px; }
+.stat .v { font-family: var(--display); font-size: 32px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; padding: 6px 0 2px; }
 .stat .v small { font-family: var(--sans); font-size: 14px; color: var(--ink3); font-weight: var(--wmed); margin-left: 6px; letter-spacing: 0; }
 .stat .v.bad-t { color: var(--bad); }
 .stat .d { font-size: 13.5px; color: var(--ink3); }
@@ -1018,11 +1038,11 @@ a.row.fv:hover code { color: var(--accent); }
 .how p { margin-top: 10px; color: var(--ink2); font-size: 14px; max-width: 66ch; }
 .stat .d a { color: var(--accent); }
 .sec { margin-top: 40px; }
-.sec > .sh { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
-.sec > .sh h2 { font-size: 17px; margin: 0; }
+.sec > .sh { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; }
+.sec > .sh h2 { font-size: 18px; margin: 0; }
 .sec > .sh .n { font-size: 13.5px; color: var(--ink3); }
 .sec > .sh .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
-.sec > .sh .right a:not(.btn):not(.btn2) { font-size: 13.5px; color: var(--accent); font-weight: var(--wmed); }
+.sec > .sh .right > a:not(.btn):not(.btn2) { font-size: 13.5px; color: var(--accent); font-weight: var(--wmed); }
 .row.need { grid-template-columns: auto minmax(0, 1fr) auto auto; }
 .row.feed { grid-template-columns: 26px minmax(0, 1fr) auto; }
 .row.ls { grid-template-columns: 26px minmax(0, 1fr) auto; }
