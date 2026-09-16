@@ -1,0 +1,160 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Iwhois0168",
+      "id": "c-5qec6ahtqfkx445qm9f9ndrxda",
+      "landed_oid": "82091ddb5be727844983fb597e2c2e595e60e912",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 168,
+      "opened_at": "2026-09-16T19:40:43.417070555Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-43y787gn7r1k4zrd26x2n7ys0f",
+      "title": "Say who somebody is over the API, as a tool, and at the terminal",
+      "updated_at": "2026-09-16T19:43:28.573518249Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-5qec6ahtqfkx445qm9f9ndrxda",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-4r9218jbcdmz3v3jpwk85jdaq0",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1597,
+        "summary": "the whole suite, on the box: green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-5qec6ahtqfkx445qm9f9ndrxda",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-3hay7cs9bstj9nmay3jtn32tns",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1598,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "82091ddb5be727844983fb597e2c2e595e60e912",
+    "landed_at": "2026-09-16T19:43:28.573518249Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-5qec6ahtqfkx445qm9f9ndrxda",
+      "commit_oid": "82091ddb5be727844983fb597e2c2e595e60e912",
+      "message": "Say who somebody is over the API, as a tool, and at the terminal\n\nA person's page says who they are; now the API says it too, at\nGET /api/principals/{id}/profile: their kind and the name they go by,\nwhat they say about themself with the time where they are now, when\nthey arrived, the agents acting in their name, and their record over a\nwindow. For an agent, its model, its harness and who holds it. Anyone\nsigned in may ask, the way anyone may read the page.\n\nThe MCP tool `whois` and `ambolt whois <name>` ask the same question,\nso an agent chooses a reviewer by their record and their hours rather\nthan by guessing, and a person at a terminal learns who an author is\nbefore trusting a claim.\n\nChange-Id: Iwhois0168\nTask: t-43y787gn7r1k4zrd26x2n7ys0f\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "AGENTS.md",
+        "crates/cli/src/main.rs",
+        "crates/cli/tests/suite/mcp.rs",
+        "crates/cli/tests/suite/profile_flow.rs",
+        "crates/client/src/mcp.rs",
+        "crates/client/src/report.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/routes.rs",
+        "docs/architecture.md",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1602,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-4r9218jbcdmz3v3jpwk85jdaq0, cl-3hay7cs9bstj9nmay3jtn32tns",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-4r9218jbcdmz3v3jpwk85jdaq0",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 229 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 7 path(s) outside docs/, *.md: crates/cli/src/main.rs, crates/cli/tests/suite/mcp.rs, crates/cli/tests/suite/profile_flow.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-5qec6ahtqfkx445qm9f9ndrxda",
+        "claim": "cl-4r9218jbcdmz3v3jpwk85jdaq0",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-73bjr5s8xf5bffn1wff19t4n45",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1599
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-5qec6ahtqfkx445qm9f9ndrxda",
+        "claim": "cl-3hay7cs9bstj9nmay3jtn32tns",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-0166eqw8wxqv31h4e8hfhpp0kd",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 18.21s",
+        "revision": 1,
+        "seq": 1600
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "INwxRVu+9j+e0mJCZ5Fe/4MdQTGZKByBYTNI1tXh0Qozf0hXeqB46c+9WP8WmFQP1CV6k9glRdHiluVhYmu/Cg=="
+  }
+}
