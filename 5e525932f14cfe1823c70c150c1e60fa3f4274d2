@@ -1,0 +1,155 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Ihead0167",
+      "id": "c-0ebqes6gfzejd092bbe35aw5dy",
+      "landed_oid": "5e525932f14cfe1823c70c150c1e60fa3f4274d2",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 167,
+      "opened_at": "2026-09-16T19:36:54.847485497Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-1qwx5byrk2wdj5zwc7f7bc3rb6",
+      "title": "Give a person's head the mockup's shape, and a window to count in",
+      "updated_at": "2026-09-16T19:39:38.206293442Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-0ebqes6gfzejd092bbe35aw5dy",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-5q2s4fvngxb0hdypeg4czscm86",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1587,
+        "summary": "the whole suite, on the box: green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-0ebqes6gfzejd092bbe35aw5dy",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-74k73cxgp71ee87rz0bg1cd2es",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1588,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "5e525932f14cfe1823c70c150c1e60fa3f4274d2",
+    "landed_at": "2026-09-16T19:39:38.206293442Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-0ebqes6gfzejd092bbe35aw5dy",
+      "commit_oid": "5e525932f14cfe1823c70c150c1e60fa3f4274d2",
+      "message": "Give a person's head the mockup's shape, and a window to count in\n\nThe mockup put an 88px mark level with a 28px name, the facts as\nlabels over values, and no chip saying \"Person\": the face says it. The\npage had a 48px mark centred on the whole block, a smaller name, and\nthe chip. Now the head is the mockup's, and it sits above the columns\nwith the tabs, so the rail starts under them rather than beside the\nname. Links leave the head for Reach in the rail, each named by what it\npoints at; the organisations there say how many repositories the\nreader may see.\n\nStanding and Judgement count the last ninety days unless the reader\nasks for everything since the person arrived; the toggle sits where\nthe caption was, and the tabs keep the choice. The figures, the section\nheadings and the tab counts take the sizes the mockup set.\n\nChange-Id: Ihead0167\nTask: t-1qwx5byrk2wdj5zwc7f7bc3rb6\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/tests/suite/profile_flow.rs",
+        "crates/server/src/web/mod.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md"
+      ],
+      "session": null
+    },
+    "seq": 1592,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-5q2s4fvngxb0hdypeg4czscm86, cl-74k73cxgp71ee87rz0bg1cd2es",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-74k73cxgp71ee87rz0bg1cd2es",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 227 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 4 path(s) outside docs/, *.md: crates/cli/tests/suite/profile_flow.rs, crates/server/src/web/mod.rs, crates/server/src/web/style.css",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-0ebqes6gfzejd092bbe35aw5dy",
+        "claim": "cl-5q2s4fvngxb0hdypeg4czscm86",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-1fq6e0rjd3k2214nk31hy9cr5p",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1589
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-0ebqes6gfzejd092bbe35aw5dy",
+        "claim": "cl-74k73cxgp71ee87rz0bg1cd2es",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-4hyw8ff32rscnf1cenq21kzxs5",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.05s",
+        "revision": 1,
+        "seq": 1590
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "FB31tcf0rHItJ7g623+MI43+1l7LmDLBHKGrwsha7qODadWRzk5IirwexyWzjhhd/62hKrxSdb82NtpyHk3rDA=="
+  }
+}
