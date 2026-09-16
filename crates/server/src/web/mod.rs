@@ -1415,6 +1415,9 @@ pub struct PersonRow {
     pub admin: bool,
     /// The open invitation, if one is out.
     pub invitation: Option<ambolt_core::TokenInfo>,
+    /// Whether anybody has ever been this account. Until somebody has,
+    /// the name it shows is the operator's to correct.
+    pub claimed: bool,
     /// The live agents they hold, which stop with them.
     pub agents: usize,
 }
@@ -1441,6 +1444,7 @@ async fn people_page(
                 has_password: store.has_password(&principal.id),
                 contact: store.contact_of(&principal.id)?,
                 admin: store.is_admin(&principal.id),
+                claimed: store.is_claimed(&principal.id)?,
                 agents: store.active_agents_of(&principal.id)?.len(),
                 invitation: {
                     let now = jiff::Timestamp::now().to_string();
@@ -1552,21 +1556,22 @@ async fn people_action(
                 Ok(_) => return back(&format!("{id} is not a person here")),
                 Err(err) => return oops(err),
             }
-            // Only one invitation is ever live: a new link kills the old,
-            // and cancelling kills it without a new one.
-            let open: Vec<ambolt_core::TokenInfo> = app
-                .with_store(|s| s.tokens_of(&id))
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|t| !t.revoked && is_invitation(t))
-                .collect();
-            for token in open {
-                match app.with_store(|s| s.revoke_token(&viewer.0, &token.id)) {
-                    Ok(env) => app.publish(&env),
-                    Err(err) => return back(&humane(&err)),
-                }
-            }
+            // Cancelling kills the open invitation and mints nothing.
+            // A new link kills the old too, but that is the minting's
+            // own doing now, so only cancelling does it here.
             if form.action == "cancel" {
+                let open: Vec<ambolt_core::TokenInfo> = app
+                    .with_store(|s| s.tokens_of(&id))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|t| !t.revoked && is_invitation(t))
+                    .collect();
+                for token in open {
+                    match app.with_store(|s| s.revoke_token(&viewer.0, &token.id)) {
+                        Ok(env) => app.publish(&env),
+                        Err(err) => return back(&humane(&err)),
+                    }
+                }
                 return Redirect::to("/people").into_response();
             }
         }
@@ -1581,12 +1586,15 @@ async fn people_action(
         s.mint_invitation(
             &viewer.0,
             &id,
+            Some(form.display.trim()),
             will_mail,
             Some(&ambolt_core::until_in_days(INVITATION_DAYS)),
         )
     }) {
-        Ok((_, secret, env)) => {
-            app.publish(&env);
+        Ok((_, secret, envs)) => {
+            for env in &envs {
+                app.publish(env);
+            }
             secret
         }
         Err(err) => return back(&humane(&err)),

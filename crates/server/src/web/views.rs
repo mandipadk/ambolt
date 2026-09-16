@@ -3628,9 +3628,16 @@ pub fn people(
                             }
                             span class="acts" {
                                 @if row.principal.active {
-                                    form method="post" action="/people" {
+                                    form class="relink" method="post" action="/people" {
                                         input type="hidden" name="action" value="relink";
                                         input type="hidden" name="id" value=(id);
+                                        // Nobody has been this account yet, so the
+                                        // name it shows is still the operator's to
+                                        // put right, and the invitation carries it.
+                                        @if !row.claimed {
+                                            label class="lab" for={ "shown-" (id) } { "Shown as" }
+                                            input class="input sm" id={ "shown-" (id) } name="display" type="text" value=(row.principal.display);
+                                        }
                                         button class="ghost sm" type="submit" {
                                             (ic("send", "sm"))
                                             @if can_mail && (row.contact.email.is_some() || row.contact.pending.is_some()) { "Send a new sign-in link" } @else { "Make a sign-in link" }
@@ -6293,6 +6300,10 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
             "dot ok",
             html! { b { (actor) } " reactivated " (people.name(principal).0) },
         ),
+        Event::PrincipalDisplayChanged { principal, display } => (
+            "dot idle",
+            html! { b { (actor) } " set the name " (principal) " is shown as to " b { (display) } },
+        ),
         Event::RepoRenamed { repo, to } => (
             "dot idle",
             html! { b { (actor) } " renamed " (repo) " to " (to) },
@@ -6488,6 +6499,7 @@ pub fn named_in(envelope: &Envelope) -> Vec<&str> {
         | Event::WorkloadUnbound { principal, .. }
         | Event::PrincipalDeactivated { principal, .. }
         | Event::PrincipalReactivated { principal, .. }
+        | Event::PrincipalDisplayChanged { principal, .. }
         | Event::PrincipalRegistered { principal, .. }
         | Event::TokenMinted { principal, .. } => ids.push(principal.as_str()),
         Event::RepoTransferOffered { to, .. } => ids.push(to.as_str()),

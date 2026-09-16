@@ -97,6 +97,13 @@ pub enum Event {
     PrincipalReactivated {
         principal: PrincipalId,
     },
+    /// The name shown for somebody changes. Their username never does —
+    /// it is what every reference to them is made of; this is the name
+    /// beside it, which is theirs to be known by and can be corrected.
+    PrincipalDisplayChanged {
+        principal: PrincipalId,
+        display: String,
+    },
     PasswordSet {
         principal: PrincipalId,
         #[serde(default, skip_serializing)]
@@ -599,6 +606,7 @@ impl Event {
             Event::QuotaOverridden { .. } => "quota_overridden",
             Event::PasswordSet { .. } => "password_set",
             Event::PrincipalDeactivated { .. } => "principal_deactivated",
+            Event::PrincipalDisplayChanged { .. } => "principal_display_changed",
             Event::PrincipalReactivated { .. } => "principal_reactivated",
             Event::TokenMinted { .. } => "token_minted",
             Event::TokenRevoked { .. } => "token_revoked",

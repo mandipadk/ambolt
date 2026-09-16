@@ -6046,13 +6046,23 @@ impl Store {
     /// Whoever runs the forge does this, in person; `mailed` marks one
     /// that went to the person's address, so following it proves the
     /// address. Not a credential, and not counted as one.
+    /// An invitation for somebody: the one-time link that signs them
+    /// in. Any invitation they already held is revoked in the same
+    /// breath — one at a time is the rule, and every caller inherits it
+    /// here rather than remembering it. A `display` names them anew
+    /// while the account is still nobody's; once somebody has been it,
+    /// the name they are known by is theirs and an invitation does not
+    /// touch it. Returns the revocations and any renaming first, then
+    /// the minting.
     pub fn mint_invitation(
         &mut self,
         actor: &PrincipalId,
         principal: &PrincipalId,
+        display: Option<&str>,
         mailed: bool,
         until: Option<&str>,
-    ) -> CoreResult<(TokenId, String, Envelope)> {
+    ) -> CoreResult<(TokenId, String, Vec<Envelope>)> {
+        let claimed = self.is_claimed(principal)?;
         let tx = self.conn.transaction()?;
         not_under_a_scope(
             Acting::of(&self.scope, self.admin_elsewhere),
@@ -6076,14 +6086,42 @@ impl Store {
                 "{principal} is deactivated; bring them back before inviting them"
             )));
         }
+        let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
+        let mut envs = Vec::new();
+        if let Some(display) = shown_as(display, &subject, claimed) {
+            envs.push(append(
+                &tx,
+                actor,
+                via,
+                Event::PrincipalDisplayChanged {
+                    principal: principal.clone(),
+                    display,
+                },
+            )?);
+        }
+        for token in raw::tokens_of(&tx, principal.as_str())? {
+            let invitation = token
+                .label
+                .as_deref()
+                .is_some_and(|l| l.starts_with(INVITATION_LABEL));
+            if !token.revoked && invitation {
+                envs.push(append(
+                    &tx,
+                    actor,
+                    via,
+                    Event::TokenRevoked { token: token.id },
+                )?);
+            }
+        }
         let label = if mailed {
             MAILED_INVITATION_LABEL
         } else {
             INVITATION_LABEL
         };
         let (token, secret, env) = append_token(&tx, actor, principal, Some(label), until)?;
+        envs.push(env);
         tx.commit()?;
-        Ok((token, secret, env))
+        Ok((token, secret, envs))
     }
 
     /// An invitation minted by one of the organisation's owners for
@@ -6096,9 +6134,11 @@ impl Store {
         actor: &PrincipalId,
         team: &PrincipalId,
         principal: &PrincipalId,
+        display: Option<&str>,
         mailed: bool,
         until: Option<&str>,
     ) -> CoreResult<(TokenId, String, Vec<Envelope>)> {
+        let claimed = self.is_claimed(principal)?;
         let tx = self.conn.transaction()?;
         Self::may_manage_team(
             &tx,
@@ -6123,6 +6163,17 @@ impl Store {
         }
         let via = self.scope.as_ref().and_then(|s| s.session.as_ref());
         let mut envs = Vec::new();
+        if let Some(display) = shown_as(display, &subject, claimed) {
+            envs.push(append(
+                &tx,
+                actor,
+                via,
+                Event::PrincipalDisplayChanged {
+                    principal: principal.clone(),
+                    display,
+                },
+            )?);
+        }
         for token in raw::tokens_of(&tx, principal.as_str())? {
             let invitation = token
                 .label
@@ -6415,6 +6466,15 @@ impl Store {
 pub const INVITATION_LABEL: &str = "invitation";
 /// An invitation that went out by mail: following it proves the address.
 pub const MAILED_INVITATION_LABEL: &str = "invitation:mailed";
+
+/// The name an invitation may set: one that was given, differs from what
+/// the account already shows, and belongs to an account nobody has been
+/// yet. A claimed account's name is its person's, whatever an operator
+/// types into the form.
+fn shown_as(display: Option<&str>, subject: &Principal, claimed: bool) -> Option<String> {
+    let display = display.map(str::trim).filter(|d| !d.is_empty())?;
+    (!claimed && display != subject.display).then(|| display.to_owned())
+}
 
 /// Write a token into the log and hand back the one copy of its secret.
 fn append_token(

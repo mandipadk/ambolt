@@ -1157,7 +1157,8 @@ fn record_scope(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
         | WorkloadUnbound { principal, .. }
         | WorkloadCredentialMinted { principal, .. }
         | PrincipalDeactivated { principal }
-        | PrincipalReactivated { principal } => (None, Some(principal.as_str().to_owned())),
+        | PrincipalReactivated { principal }
+        | PrincipalDisplayChanged { principal, .. } => (None, Some(principal.as_str().to_owned())),
         TokenMinted { principal, .. } => (None, Some(principal.as_str().to_owned())),
         TokenRevoked { token } => {
             let owner: Option<String> = tx
@@ -2284,6 +2285,10 @@ fn apply(tx: &Transaction, env: &Envelope) -> CoreResult<()> {
                 "UPDATE tokens SET revoked = 1 WHERE session = ?",
                 params![session.as_str()],
             )?;
+        }
+        Event::PrincipalDisplayChanged { principal, display } => {
+            tx.prepare_cached("UPDATE principals SET display = ? WHERE id = ?")?
+                .execute(params![display, principal.as_str()])?;
         }
         Event::PrincipalDeactivated { principal } => {
             tx.execute(

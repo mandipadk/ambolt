@@ -2256,7 +2256,7 @@ fn an_unclaimed_invitation_into_an_organisation_is_purged_with_its_membership() 
     // An invitation that lapsed: the purge lets eve go, and off crew.
     let yesterday = (jiff::Timestamp::now() - jiff::Span::new().hours(24)).to_string();
     store
-        .mint_invitation_into(&bee, &crew, &eve, false, Some(&yesterday))
+        .mint_invitation_into(&bee, &crew, &eve, None, false, Some(&yesterday))
         .unwrap();
     let gone = store.purge_unclaimed(&human).unwrap();
     assert_eq!(gone, vec![eve.clone()]);

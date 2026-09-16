@@ -3216,39 +3216,23 @@ pub(crate) async fn invite_into(
     app.with_store(|s| s.request_email(id, email))?;
     let will_mail = app.mailer().is_some();
     let until = ambolt_core::until_in_days(crate::web::INVITATION_DAYS);
-    // One invitation at a time: a new one kills the old.
-    let secret = match organisation {
-        Some(team) => {
-            let (_, secret, envs) = app.with_store(|s| {
-                s.acting_as(actor.1.as_ref()).mint_invitation_into(
-                    &actor.0,
-                    team,
-                    id,
-                    will_mail,
-                    Some(&until),
-                )
-            })?;
-            for env in &envs {
-                app.publish(env);
-            }
-            secret
-        }
-        None => {
-            let open: Vec<ambolt_core::TokenInfo> = app
-                .with_store(|s| s.tokens_of(id))?
-                .into_iter()
-                .filter(|t| !t.revoked && crate::web::is_invitation(t))
-                .collect();
-            for token in open {
-                let env = app.with_store(|s| s.revoke_token(&actor.0, &token.id))?;
-                app.publish(&env);
-            }
-            let (_, secret, env) =
-                app.with_store(|s| s.mint_invitation(&actor.0, id, will_mail, Some(&until)))?;
-            app.publish(&env);
-            secret
-        }
-    };
+    // One invitation at a time, and the name shown put right while the
+    // account is still nobody's: both are the minting's own doing, so
+    // every way in gets them.
+    let (_, secret, envs) = app.with_store(|s| match organisation {
+        Some(team) => s.acting_as(actor.1.as_ref()).mint_invitation_into(
+            &actor.0,
+            team,
+            id,
+            Some(display),
+            will_mail,
+            Some(&until),
+        ),
+        None => s.mint_invitation(&actor.0, id, Some(display), will_mail, Some(&until)),
+    })?;
+    for env in &envs {
+        app.publish(env);
+    }
     let link = crate::web::join_link(app, headers, &secret);
     let mailed = if will_mail {
         match crate::web::mail_invitation(app, email, &link, &actor.0, id, organisation).await {

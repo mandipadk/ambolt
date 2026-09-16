@@ -147,3 +147,75 @@ async fn an_invitation_can_be_cancelled_and_only_the_newest_link_works() {
     let (_, page) = page_with_cookie(app, "/people", &ada).await;
     assert!(!page.contains("invited, link good until"), "{page}");
 }
+
+/// One invitation at a time, whichever way it was asked for: the People
+/// page's own button kills the link it replaces, the same as the API
+/// does, because the minting revokes what is open rather than each
+/// caller remembering to.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_second_invitation_kills_the_first_link() {
+    let forge = boot().await;
+    let app = &forge.app;
+    let (_, ada) = sign_in_as(&forge, "ada").await;
+
+    let (_, location) = post_form(app, "/people", &ada, "action=register&id=bee&display=Bee").await;
+    let first = shown_once(app, &location, &ada).await;
+    let first = first.split("token=").nth(1).unwrap().to_owned();
+
+    let (_, location) = post_form(app, "/people", &ada, "action=relink&id=bee").await;
+    let second = shown_once(app, &location, &ada).await;
+    let second = second.split("token=").nth(1).unwrap().to_owned();
+    assert_ne!(first, second, "a new invitation is a new link");
+
+    let (status, where_to) = get_redirect(app, &format!("/join?token={first}"), "").await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert!(
+        where_to.starts_with("/login?error="),
+        "the link the second invitation replaced is dead: {where_to}"
+    );
+    let (status, where_to) = get_redirect(app, &format!("/join?token={second}"), "").await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert_eq!(where_to, "/you/settings?first=1", "the newest link works");
+}
+
+/// A name can be put right while nobody has been the account yet, and
+/// only until then: once somebody has arrived, what they are shown as
+/// is theirs, and an invitation does not rename them.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_invitation_may_correct_the_name_until_somebody_arrives() {
+    let forge = boot().await;
+    let app = &forge.app;
+    let (_, ada) = sign_in_as(&forge, "ada").await;
+
+    let (_, location) = post_form(app, "/people", &ada, "action=register&id=bee&display=Be").await;
+    let _ = shown_once(app, &location, &ada).await;
+
+    // Still nobody's: the invitation carries the better name.
+    let (_, location) = post_form(
+        app,
+        "/people",
+        &ada,
+        "action=relink&id=bee&display=Bee%20Okoro",
+    )
+    .await;
+    let link = shown_once(app, &location, &ada).await;
+    let (_, page) = page_with_cookie(app, "/people", &ada).await;
+    assert!(page.contains("Bee Okoro"), "{page}");
+
+    // Bee arrives; the account is hers now.
+    let secret = link.split("token=").nth(1).unwrap().to_owned();
+    let (status, _) = get_redirect(app, &format!("/join?token={secret}"), "").await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+
+    // A later invitation leaves her name alone.
+    let (_, _) = post_form(
+        app,
+        "/people",
+        &ada,
+        "action=relink&id=bee&display=Somebody%20Else",
+    )
+    .await;
+    let (_, page) = page_with_cookie(app, "/people", &ada).await;
+    assert!(page.contains("Bee Okoro"), "her name is hers: {page}");
+    assert!(!page.contains("Somebody Else"), "{page}");
+}

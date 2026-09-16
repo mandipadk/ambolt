@@ -220,7 +220,13 @@ the unscoped admin grant:
   address, set a password — is refused a new address with `409`: a
   mailed invitation proves the address it went to and signs its holder
   in, so it would hand the account over. The address already on the
-  account may be sent a fresh link.
+  account may be sent a fresh link. A new invitation revokes any the
+  person still held: one link is live at a time, whichever way it was
+  asked for. `display` names them, and while nobody has been the account
+  yet it corrects the name already on it; once somebody has arrived the
+  name they are shown by is theirs, and an invitation leaves it alone.
+  Their username never changes: it is what every reference to them is
+  made of.
 - `POST /api/teams/{org}/invitations` — the same, by one of the
   organisation's owners, on the public listener: the person is put on
   the organisation as they are made and counts against its members,

@@ -780,6 +780,9 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .keyrow code { font-size: 12px; }
 .keyrow form { display: contents; }
 .row.person { grid-template-columns: 26px minmax(0, 1fr) auto; }
+.row.person .relink { display: flex; align-items: center; gap: 6px; }
+.row.person .relink .lab { font-size: 12.5px; color: var(--ink3); white-space: nowrap; }
+.row.person .relink .input { width: 15ch; }
 .row .acts { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .row .acts form { display: contents; }
 .row.allow { grid-template-columns: minmax(110px, 160px) minmax(0, 1fr) auto; }
