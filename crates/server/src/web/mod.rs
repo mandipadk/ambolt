@@ -2664,6 +2664,27 @@ async fn owner_page(
         return not_found();
     }
     let organisation = principal.kind == ambolt_core::PrincipalKind::Team;
+    // Where their changes landed, in repositories the viewer may read.
+    let works_in: Vec<(String, u32)> = if organisation {
+        Vec::new()
+    } else {
+        let all: std::collections::HashMap<String, Repo> = app
+            .with_store(|s| s.repos())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|r| (r.name.clone(), r))
+            .collect();
+        app.with_store(|s| s.repos_landed_in(&owner_id))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(name, _)| match &who {
+                Who::Anonymous(_) => all
+                    .get(name)
+                    .is_some_and(|r| r.visibility == ambolt_core::Visibility::Public),
+                Who::Signed(viewer) => readable(&app, viewer, name).is_ok(),
+            })
+            .collect()
+    };
     // Who is on an organisation is not a secret among the forge's own
     // principals, and the API says so; to a stranger it is a list of
     // names, which nothing else on the forge hands out for free.
@@ -2752,6 +2773,7 @@ async fn owner_page(
         who.reading(),
         &principal,
         &repos,
+        &works_in,
         &members,
         &invited,
         members_act,

@@ -19,7 +19,7 @@ async fn an_invitation_signs_somebody_in_exactly_once() {
     assert!(link.contains("/join?token="), "{link}");
     let secret = link.split("token=").nth(1).unwrap().to_owned();
     let (_, page) = page_with_cookie(app, "/people", &ada).await;
-    assert!(page.contains("no password yet"));
+    assert!(page.contains("No password yet"));
     assert!(
         !page.contains(r#"class="repohead""#),
         "a section page is not a repository"
@@ -85,7 +85,7 @@ async fn an_invitation_signs_somebody_in_exactly_once() {
     let redirect = redirect_of(app, "bee", "a perfectly ordinary password").await;
     assert_eq!(redirect, "/", "a password set from an invitation signs in");
     let (_, page) = page_with_cookie(app, "/people", &ada).await;
-    assert!(page.contains("can sign in"), "{page}");
+    assert!(page.contains("Can sign in"), "{page}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -123,7 +123,7 @@ async fn an_invitation_can_be_cancelled_and_only_the_newest_link_works() {
         .unwrap()
         .to_owned();
     let (_, page) = page_with_cookie(app, "/people", &ada).await;
-    assert!(page.contains("invited, link good until"), "{page}");
+    assert!(page.contains("Invited, until"), "{page}");
 
     // A new link retires the old one.
     let (_, second) = post_form(app, "/people", &ada, "action=relink&id=bee").await;
@@ -145,7 +145,7 @@ async fn an_invitation_can_be_cancelled_and_only_the_newest_link_works() {
     let (_, location) = get_redirect(app, &format!("/join?token={second}"), "").await;
     assert!(location.starts_with("/login?error="), "{location}");
     let (_, page) = page_with_cookie(app, "/people", &ada).await;
-    assert!(!page.contains("invited, link good until"), "{page}");
+    assert!(!page.contains("Invited, until"), "{page}");
 }
 
 /// One invitation at a time, whichever way it was asked for: the People

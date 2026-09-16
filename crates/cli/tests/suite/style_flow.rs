@@ -4,6 +4,32 @@
 //! six-pixel bar. Every rule is declared once.
 
 const STYLE: &str = include_str!("../../../server/src/web/style.css");
+const VIEWS: &str = include_str!("../../../server/src/web/views.rs");
+
+/// Labels read in sentence case; nothing on a page is set in capitals.
+#[test]
+fn no_label_is_set_in_capitals() {
+    assert!(
+        !STYLE.contains("text-transform: uppercase"),
+        "a rule sets text in capitals; labels read in sentence case here"
+    );
+}
+
+/// Two facts are two lines or two columns, never one line with a dot
+/// between them.
+#[test]
+fn no_fact_is_joined_to_another_with_a_dot() {
+    let joins: Vec<usize> = VIEWS
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains(" · "))
+        .map(|(i, _)| i + 1)
+        .collect();
+    assert!(
+        joins.is_empty(),
+        "facts joined with a dot at views.rs lines {joins:?}; give each its own line or column"
+    );
+}
 
 /// Top-level selectors and the at-rule scope they sit in, one entry per
 /// selector in a comma-separated list. Declarations are skipped, comments

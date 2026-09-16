@@ -62,7 +62,7 @@ async fn a_file_a_diff_and_a_readme_are_highlighted_on_the_server() {
 
     // The README: a panel of prose whose fenced code is highlighted too.
     let (_, repo) = page_with_cookie(app, "/ada/demo", &ada).await;
-    assert!(repo.contains(r#"class="panel readme""#), "{repo}");
+    assert!(repo.contains(r#"class="panel lift readme""#), "{repo}");
     assert!(repo.contains(r#"<h1>Demo</h1>"#), "{repo}");
     assert!(
         repo.contains(r#"<pre><code class="src"><span class="hl-source hl-rust">"#),

@@ -31,20 +31,17 @@ async fn a_persons_page_carries_the_record_and_an_organisations_does_not() {
 
     let (status, page) = page_with_cookie(app, "/ada", &cookie).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(
-        page.contains("the last 90 days, counted from the log"),
-        "{page}"
-    );
+    assert!(page.contains("How this is counted"), "{page}");
     let (_, record) = api(app, "GET", "/api/principals/ada/record", "ada", None).await;
     assert_eq!(record["abandoned"], 1, "{record}");
     assert!(
-        page.contains(r#"<div class="v">1</div><div class="k">abandoned</div>"#),
+        page.contains(r#"<span class="d">1 abandoned</span>"#),
         "{page}"
     );
 
     // An agent has one too; an organisation does not.
     let (_, page) = page_with_cookie(app, "/scout", &cookie).await;
-    assert!(page.contains("counted from the log"), "{page}");
+    assert!(page.contains("How this is counted"), "{page}");
     let (status, body) = api(
         app,
         "POST",
@@ -56,5 +53,5 @@ async fn a_persons_page_carries_the_record_and_an_organisations_does_not() {
     assert!(status.is_success(), "{body}");
     let (status, page) = page_with_cookie(app, "/crew", &cookie).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(!page.contains("counted from the log"), "{page}");
+    assert!(!page.contains("How this is counted"), "{page}");
 }

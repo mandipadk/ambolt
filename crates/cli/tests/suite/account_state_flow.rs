@@ -97,7 +97,7 @@ async fn deactivation_shuts_every_door_at_once_and_reactivation_reopens_them() {
     assert_eq!(status, StatusCode::CONFLICT);
     let (_, ada) = sign_in_as(&forge, "ada").await;
     let (_, people) = page_with_cookie(app, "/people", &ada).await;
-    assert!(people.contains("deactivated"), "{people}");
+    assert!(people.contains("Deactivated"), "{people}");
     assert!(people.contains("Reactivate"), "{people}");
 
     let (status, location) = post_form(app, "/people", &ada, "action=reactivate&id=bee").await;

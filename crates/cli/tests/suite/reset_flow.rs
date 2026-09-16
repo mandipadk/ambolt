@@ -191,14 +191,14 @@ async fn an_invitation_goes_by_mail_when_the_forge_can_send_it() {
     assert!(mail.contains("/join?token="), "{mail}");
     let (_, page) = page_with_cookie(app, &location, &ada).await;
     assert!(page.contains("Sent to bee@example.org"), "{page}");
-    assert!(page.contains("email pending"), "{page}");
+    assert!(page.contains("Email pending"), "{page}");
 
     // Following the mailed invitation proves the address.
     let link = link_in(&mail);
     let (status, _) = get_redirect(app, &path_of(&link), "").await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     let (_, page) = page_with_cookie(app, "/people", &ada).await;
-    assert!(page.contains("email confirmed"), "{page}");
+    assert!(page.contains("Email confirmed"), "{page}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

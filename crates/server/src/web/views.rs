@@ -334,7 +334,7 @@ fn frame_in(
             head {
                 meta charset="utf-8";
                 meta name="viewport" content="width=device-width, initial-scale=1";
-                title { (title) " · ambolt" }
+                title { (title) " - ambolt" }
                 link rel="stylesheet" href=(super::stylesheet_href());
                 script defer src=(super::script_href()) {}
                 script defer src=(super::app_script_href()) {}
@@ -496,7 +496,8 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
                             (avatar(viewer.0.as_str(), &chrome.display, false, false))
                             span class="t" {
                                 b { (chrome.display) }
-                                span { (viewer.0.as_str()) @if chrome.admin { " · operator" } }
+                                span { (viewer.0.as_str()) }
+                                @if chrome.admin { span { "Runs the forge" } }
                             }
                             (ic("chev", "sm"))
                         }
@@ -665,7 +666,7 @@ pub fn signup(theme: Theme, state: super::Signup, error: Option<&str>) -> Markup
                                 label for="name" { "Username" }
                                 input id="name" name="name" type="text" autocomplete="username"
                                     autocapitalize="none" autofocus required pattern="[a-z0-9-]{2,64}";
-                                p class="hint" { "Lowercase letters, digits and hyphens. Your repositories live under it, and it cannot be changed later, so choose it with care." }
+                                p class="hint" { "Lowercase letters, digits and hyphens. Cannot be changed later." }
                             }
                             div class="field" {
                                 label for="display" { "Shown as" }
@@ -674,7 +675,7 @@ pub fn signup(theme: Theme, state: super::Signup, error: Option<&str>) -> Markup
                             div class="field" {
                                 label for="email" { "Email" }
                                 input id="email" name="email" type="email" autocomplete="email";
-                                p class="hint" { "A confirmation link goes there; sign-in links and invitations use it." }
+                                p class="hint" { "A confirmation link goes there." }
                             }
                             div class="field" {
                                 label for="password" { "Password" }
@@ -743,7 +744,7 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
 
                 section class="hero" {
                     div class="wrap" {
-                        span class="eyebrow" { i { (ic("check", "")) } "Alpha · self-hosted and free · hosted by invitation" }
+                        span class="eyebrow" { i { (ic("check", "")) } "Alpha, self-hosted and free, hosted by invitation" }
                         h1 { "Git hosting for code that " em { "agents" } " write." }
                         p class="lede" { "Every change carries its proof: what was claimed, who re-ran it, who approved it, and why it was allowed to land." }
                         div class="cta" { a class="btn" href="#join" { "Join the waitlist" } a class="btn2" href="#git" { (ic("terminal", "")) "Run it yourself" } }
@@ -760,15 +761,15 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                             a class="on" href="#" { (ic("repo", "")) "ambolt / ambolt" }
                             a href="#" { (ic("repo", "")) "ambolt / console" }
                             h5 { "Working" }
-                            div class="who" { (avatar("quill", "Quill", true, true)) "Quill · web/mod.rs" }
-                            div class="who" { (avatar("scout", "Scout", true, true)) "Scout · web/" }
+                            div class="who" { (avatar("quill", "Quill", true, true)) "Quill, in web/mod.rs" }
+                            div class="who" { (avatar("scout", "Scout", true, true)) "Scout, in web/" }
                         }
                         div class="main" {
                             div class="head" { span { "ambolt / ambolt" } span { "/" } span { "Changes" } span { "/" } b { "#2" } span class="btn land" { "Land on main" } }
                             div class="cols" {
                                 div {
                                     h4 { "Bound the blame page by file size" }
-                                    div class="meta" { span class="chip acc" { "Open" } span class="chip" { "2 attempts" } (avatar("quill", "Quill", true, false)) span { "Quill · opened 2 h ago · into main" } }
+                                    div class="meta" { span class="chip acc" { "Open" } span class="chip" { "2 attempts" } (avatar("quill", "Quill", true, false)) span { "Quill opened it 2 h ago, into main" } }
                                     div class="diff" {
                                         header { (ic("file", "sm")) code { "crates/server/src/web/diff.rs" } span class="pm" { span class="plus" { "+3" } " " span class="minus" { "−0" } } }
                                         div class="hunk" {
@@ -786,7 +787,7 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                                     }
                                 }
                                 div {
-                                    div class="panel readiness" {
+                                    div class="panel lift readiness" {
                                         header class="ttl" { h2 class="title-not" { "Not ready to land" } h2 class="title-ready" { "Ready to land" } span class="n" { "7 rules" } }
                                         div class="pad" {
                                             div class="progress" { i class="on" {} i class="on" {} i class="on" {} i class="on" {} i class="bad p1" {} i class="bad p2" {} i class="bad p3" {} }
@@ -803,7 +804,7 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                                     }
                                     div class="panel" {
                                         header { h2 { "Claims" } span class="n" { "revision 2" } }
-                                        div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Tests pass" } span class="sec3" { "Scout" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub good" { (ic("rerun", "sm")) "Runner re-ran it · 61 passed" } } }
+                                        div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Tests pass" } span class="sec3" { "Scout" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub good" { (ic("rerun", "sm")) "Runner re-ran it, 61 passed" } } }
                                     }
                                 }
                             }
@@ -829,19 +830,19 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                             div class="ico" { (ic("terminal", "")) }
                             h3 { "Push" }
                             p { "A normal git push opens a change." }
-                            div class="mini" { span class="p" { "$" } " " span class="c" { "git push origin HEAD:refs/for/main" } br; span class="p" { "remote:" } " change #2 opened · revision 1" br; span class="p" { "remote:" } " not ready · 3 of 7 rules met" }
+                            div class="mini" { span class="p" { "$" } " " span class="c" { "git push origin HEAD:refs/for/main" } br; span class="p" { "remote:" } " change #2 opened, revision 1" br; span class="p" { "remote:" } " not ready, 3 of 7 rules met" }
                         }
                         div class="step s2" {
                             div class="ico" { (ic("rerun", "")) }
                             h3 { "Prove" }
                             p { "Claims are commands. A runner re-runs them." }
-                            div class="mini" { b { "claim" } " tests pass · Scout" br; span class="p" { "$" } " " span class="c" { "cargo test --workspace" } div class="sub" { span class="a" { i class="spin" {} "Runner re-running…" } span class="b" { (ic("check", "sm")) "Reproduced · 61 passed" } } }
+                            div class="mini" { b { "claim" } " tests pass, by Scout" br; span class="p" { "$" } " " span class="c" { "cargo test --workspace" } div class="sub" { span class="a" { i class="spin" {} "Runner re-running…" } span class="b" { (ic("check", "sm")) "Reproduced, 61 passed" } } }
                         }
                         div class="step s3" {
                             div class="ico" { (ic("receipt", "")) }
                             h3 { "Land" }
                             p { "The rules decide. The receipt says why." }
-                            div class="mini sealed" { span class="seal" { (ic("check", "")) "Verified" } b { "#2" } " landed on main" br; "judged: revision 2 · Scout" br; "approved: Ada · Runner" br; span class="p" { "signed 9a59 2453 77e7 3fca" } }
+                            div class="mini sealed" { span class="seal" { (ic("check", "")) "Verified" } b { "#2" } " landed on main" br; "judged: revision 2, by Scout" br; "approved: Ada and Runner" br; span class="p" { "signed 9a59 2453 77e7 3fca" } }
                         }
                     }
                 } }
@@ -851,7 +852,7 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                     div class="feats" {
                         div class="feat" {
                             div class="cap" { h3 { "Rules you can see" } p { "Every repository says what must be true before anything lands. Every change shows how far it is." } }
-                            div class="stage" { div class="panel readiness" {
+                            div class="stage" { div class="panel lift readiness" {
                                 header { h2 { "Not ready to land" } span class="n" { "4 of 7" } }
                                 div class="pad" {
                                     div class="progress" { i class="on" {} i class="on" {} i class="on" {} i class="on" {} i class="bad" {} i class="bad" {} i class="bad" {} }
@@ -867,28 +868,28 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                         div class="feat flip" {
                             div class="stage" { div class="panel" {
                                 div class="ev-row" { (avatar("quill", "Quill", true, false)) div { div class="h" { b { "Tests pass" } span class="chip bad" { (ic("alert", "")) "disputed" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub bad" { (ic("rerun", "sm")) "Runner saw 1 failure: blame::cuts_large_files" } } }
-                                div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Tests pass" } span class="chip good" { (ic("check", "")) "reproduced" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub good" { (ic("check", "sm")) "Runner re-ran it · 61 passed" } } }
+                                div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Tests pass" } span class="chip good" { (ic("check", "")) "reproduced" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub good" { (ic("check", "sm")) "Runner re-ran it, 61 passed" } } }
                             } }
                             div class="cap" { h3 { "Claims are commands, not comments" } p { "\"Tests pass\" carries the command that produced it. A runner re-runs it. A dispute blocks the change." } }
                         }
                         div class="feat" {
                             div class="cap" { h3 { "Attention, ranked" } p { "Your time goes where judgment is needed, and a share of unreviewed work is sampled anyway." } }
                             div class="stage" { div class="panel" {
-                                div class="row need" { span class="chip bad" { "Disputed" } span class="tt" { span class="t" { "Bound the blame page by file size" } span class="s" { "Runner disagreed with Quill · two attempts" } } span class="avs" {} span class="age" { "2 h" } }
+                                div class="row need" { span class="chip bad" { "Disputed" } span class="tt" { span class="t" { "Bound the blame page by file size" } span class="s" { "Runner disagreed with Quill, two attempts" } } span class="avs" {} span class="age" { "2 h" } }
                                 div class="row need" { span class="chip" { "Unreviewed" } span class="tt" { span class="t" { "Write the agent quickstart" } span class="s" { "Scout stopped and left a lesson" } } span class="avs" {} span class="age" { "2 h" } }
-                                div class="row need" { span class="chip acc" { "Spot check" } span class="tt" { span class="t" { "Rename the client crate" } span class="s" { "picked · nobody has looked" } } span class="avs" {} span class="age" { "4 h" } }
+                                div class="row need" { span class="chip acc" { "Spot check" } span class="tt" { span class="t" { "Rename the client crate" } span class="s" { "picked, nobody has looked" } } span class="avs" {} span class="age" { "4 h" } }
                             } }
                         }
                         div class="feat flip" {
                             div class="stage" { div class="panel" {
-                                div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Scout" } span class="sec3" { "claude-fable-5-1 · yours" } } div class="grants" { span class="chip g1" { "task" } span class="chip g2" { "push" } span class="chip g3" { "review" } span class="chip off" { "merge" } span class="chip off" { "verify" } } div class="sub" { "12 of 12 claims reproduced · 9 changes landed · 90 days" } } }
-                                div class="ev-row" { (avatar("quill", "Quill", true, false)) div { div class="h" { b { "Quill" } span class="sec3" { "gpt-5 · Ada's" } } div class="grants" { span class="chip" { "task" } span class="chip" { "push" } span class="chip off" { "review" } } div class="sub" { span class="bad-t" { "7 of 8" } " claims reproduced · 5 landed" } } }
+                                div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Scout" } span class="sec3" { "claude-fable-5-1, yours" } } div class="grants" { span class="chip g1" { "task" } span class="chip g2" { "push" } span class="chip g3" { "review" } span class="chip off" { "merge" } span class="chip off" { "verify" } } div class="sub" { "12 of 12 claims reproduced, 9 changes landed, 90 days" } } }
+                                div class="ev-row" { (avatar("quill", "Quill", true, false)) div { div class="h" { b { "Quill" } span class="sec3" { "gpt-5, Ada's" } } div class="grants" { span class="chip" { "task" } span class="chip" { "push" } span class="chip off" { "review" } } div class="sub" { span class="bad-t" { "7 of 8" } " claims reproduced, 5 landed" } } }
                             } }
                             div class="cap" { h3 { "Agents with permissions" } p { "Grant exactly what a job needs, everywhere or on one repository. Revoke in one click. Every claim goes on the record." } }
                         }
                         div class="feat" {
                             div class="cap" { h3 { "Signed receipts" } p { "Why it landed, attached to the commit, checkable offline, forever." } }
-                            div class="stage" { div class="receipt" { span class="seal" { (ic("check", "")) "Verified" } b { "#1" } " landed on main as 6f1c9a2" br; "judged: revision 1 · Scout" br; "approved: Ada · correctness" br; "reproduced: Runner · 61 passed, 0 failed" br; "rules: 7 of 7 met" br; span class="sec3" { "signed by this forge · key 9a59 2453 77e7 3fca" } } }
+                            div class="stage" { div class="receipt" { span class="seal" { (ic("check", "")) "Verified" } b { "#1" } " landed on main as 6f1c9a2" br; "judged: revision 1, by Scout" br; "approved: Ada, on correctness" br; "reproduced: Runner, 61 passed and 0 failed" br; "rules: 7 of 7 met" br; span class="sec3" { "signed by this forge, key 9a59 2453 77e7 3fca" } } }
                         }
                         div class="feat flip cov" {
                             div class="stage" { div { div class="big" { "34" small { "% verified" } } div class="cbars" { i class="g" {} i class="r" {} } div class="clegend" { span { i class="s-reproduced" {} "reproduced" } span { i class="s-gap" {} "declared gap" } span { i class="s-imported" {} "imported" } } } }
@@ -914,13 +915,13 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                         // replays it as typing, and without one it is read.
                         pre id="term" {
                             span class="p" { "$ " } span class="c" { "git push origin HEAD:refs/for/main\n" }
-                            span class="a" { "remote: change #2 opened · revision 1\n" }
-                            span class="a" { "remote: not ready · 3 of 7 rules met\n" }
+                            span class="a" { "remote: change #2 opened, revision 1\n" }
+                            span class="a" { "remote: not ready, 3 of 7 rules met\n" }
                             span class="p" { "$ " } span class="c" { "ambolt claim --change 2 --test \"cargo test --workspace\"\n" }
-                            span class="a" { "claim recorded · Runner will re-run it\n" }
-                            span class="g" { "runner reproduced it · 61 passed · 4 of 7 rules met\n" }
+                            span class="a" { "claim recorded, Runner will re-run it\n" }
+                            span class="g" { "runner reproduced it, 61 passed, 4 of 7 rules met\n" }
                             span class="p" { "$ " } span class="c" { "ambolt land 2\n" }
-                            span class="g" { "#2 landed on main · receipt signed 9a59…3fca\n" }
+                            span class="g" { "#2 landed on main, receipt signed 9a59…3fca\n" }
                         }
                     }
                 } }
@@ -971,7 +972,7 @@ pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontN
                     a href="https://github.com/mandipadk/ambolt" { "Source" }
                     a href="/report" { "Report a problem" }
                     a href="/login" { "Sign in" }
-                    span class="right" { "© 2026 Ambolt · AGPL-3.0 forge · Apache-2.0 client" }
+                    span class="right" { "© 2026 Ambolt. AGPL-3.0 forge, Apache-2.0 client." }
                 } }
             }
         },
@@ -1184,7 +1185,7 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                 div class="sh" { h2 { "Needs you" } span class="n" { (data.needs_you.len()) } }
                 div class="panel" {
                     @if data.needs_you.is_empty() {
-                        div class="empty" { b { "Nothing needs you right now." } "Changes that want a person's judgment appear here, ranked by what that judgment is worth." }
+                        div class="empty" { b { "Nothing needs you right now." } }
                     }
                     @for entry in &data.needs_you {
                         @let item = &entry.item;
@@ -1218,7 +1219,7 @@ pub fn home(theme: Theme, viewer: &Viewer, data: &super::HomeData) -> Markup {
                                 span class="chip acc" { (ic("changes", "")) "Revision " (change.latest_revision) }
                                 span class="tt" {
                                     span class="t" { (change.title) }
-                                    span class="s" { (repo) " #" (change.number) " · into " (change.target) }
+                                    span class="s" { (repo) " #" (change.number) }
                                 }
                                 span class="avs" {}
                                 span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
@@ -1315,11 +1316,6 @@ pub fn first_run(theme: Theme, viewer: &Viewer) -> Markup {
         html! {
             div class="first" {
                 h2 { "Nothing here yet" }
-                p class="sec2" {
-                    "ambolt records how software actually came to exist: who claimed what, \
-                     who re-ran it, and why anything was allowed to land. It starts \
-                     recording from the first push."
-                }
                 div class="panel" {
                     a class="row need" href="/new" {
                         span class="chip" { (ic("repo", "")) "Repository" }
@@ -1446,7 +1442,6 @@ pub fn new_repo(
             @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
             div class="sec top" {
                 div class="page-form" {
-                    p class="lede" { "A repository is empty until its first push. What lands in it is what its rules allow." }
                     form class="form" method="post" action="/new" {
                         @if owners.len() > 1 {
                             div class="field" {
@@ -1456,7 +1451,7 @@ pub fn new_repo(
                                         option value=(owner) selected[owner == chosen] { (owner) }
                                     }
                                 }
-                                span class="hint" { "Yours, or an organisation you belong to. The address is the owner's name, then this one." }
+                                span class="hint" { "Yours, or an organisation you belong to." }
                             }
                         } @else {
                             input type="hidden" name="owner" value=(chosen);
@@ -1477,7 +1472,7 @@ pub fn new_repo(
                             div class="field" {
                                 label for="source" { "Import from" }
                                 input id="source" name="source" type="text" autocomplete="off" placeholder="https://github.com/you/project.git (optional)";
-                                span class="hint" { "History brought in this way is recorded as imported. Nothing here was reviewed under this repository's policy, and the log says so rather than implying otherwise." }
+                                span class="hint" { "Recorded as imported, not as reviewed." }
                             }
                         }
                         div class="acts" { button class="btn" type="submit" { "Create" } }
@@ -1502,14 +1497,14 @@ pub fn you(theme: Theme, viewer: &Viewer, mine: &[(String, Change)]) -> Markup {
             div class="sec top" {
                 div class="panel" {
                     @if mine.is_empty() {
-                        div class="empty" { b { "Nothing of yours is open." } "Push to a repository's " code { "refs/for/main" } " and the change appears here." }
+                        div class="empty" { b { "Nothing of yours is open." } "Push to " code { "refs/for/main" } " to open one." }
                     }
                     @for (repo, change) in mine {
                         a class="row need" href={ "/" (repo) "/changes/" (change.number) } {
                             span class="chip acc" { (ic("changes", "")) "Revision " (change.latest_revision) }
                             span class="tt" {
                                 span class="t" { (change.title) }
-                                span class="s" { (repo) " #" (change.number) " · into " (change.target) }
+                                span class="s" { (repo) " #" (change.number) }
                             }
                             span class="avs" {}
                             span class="age" title=(change.updated_at) { (ago(&change.updated_at)) }
@@ -1560,7 +1555,7 @@ pub fn inbox(
         html! {
             div class="sec top" {
                 @if notices.is_empty() {
-                    div class="panel" { div class="empty" { b { "Nothing is waiting on you." } "Replies, reviews and landings of your changes arrive here." } }
+                    div class="panel" { div class="empty" { b { "Nothing is waiting on you." } } }
                 }
             }
             @for (day, group) in &days {
@@ -1786,7 +1781,7 @@ pub fn tasks(
                 }
                 div class="panel" {
                     @if tasks.is_empty() {
-                        div class="empty" { b { "No tasks yet." } "An agent or a person opens one: a durable statement of what should be done and why." }
+                        div class="empty" { b { "No tasks yet." } }
                     }
                     @for task in tasks {
                         a class="row tk" href={ "/tasks/" (task.id.as_str()) } {
@@ -1976,7 +1971,7 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                 @if let Some(f) = focus {
                     @if !attempts.is_empty() && (competing || task.attempts > 1) {
                         div class="sec" {
-                            div class="sh" { h2 { "Attempts" } span class="n" { (attempts.len()) " · revisions of #" (f.change.number) } }
+                            div class="sh" { h2 { "Attempts" } span class="n" { (attempts.len()) } }
                             div class="tries" {
                                 @for attempt in &attempts {
                                     @let latest = attempt.revisions.last().expect("an attempt has a revision");
@@ -1988,7 +1983,7 @@ pub fn task(page: TaskPage<'_>) -> Markup {
                                             b { (display) }
                                             @if chosen { span class="chip acc" { (ic("check", "")) "chosen" } }
                                             @for session in &attempt.sessions {
-                                                span class="chip" { "session · " (session.state.as_str()) }
+                                                span class="chip" { (session.state.as_str()) }
                                             }
                                         }
                                         div class="tagline" {
@@ -2191,7 +2186,7 @@ pub fn repo_settings(
                                 label { input type="radio" name="visibility" value="private" checked[repo.visibility == Visibility::Private]; span { (ic("lock", "sm")) "Private" } }
                                 label { input type="radio" name="visibility" value="public" checked[repo.visibility == Visibility::Public]; span { (ic("globe", "sm")) "Public" } }
                             }
-                            p class="what" { "Private: only you, and whoever you grant something on it. Public: anyone can read and clone it; writing still needs authority." }
+                            p class="what" { "Public: anyone can read and clone. Private: only you, and whoever you grant something." }
                             div class="acts" { button class="btn2" type="submit" { "Save" } }
                         }
                     }
@@ -2205,7 +2200,7 @@ pub fn repo_settings(
                                     button class="btn2 danger" type="submit" { "Withdraw the offer" }
                                 }
                             } @else {
-                                p class="what" { "Owning a repository carries every capability on it. Offer it to a person; it moves when they accept." }
+                                p class="what" { "It moves when they accept." }
                                 form class="line" method="post" action={ (base) "/transfer" } {
                                     input type="hidden" name="action" value="offer";
                                     input class="input" id="to" name="to" type="text" autocomplete="off" placeholder="Their username" required aria-label="Offer to";
@@ -2217,7 +2212,7 @@ pub fn repo_settings(
                     div class="panel" id="access" {
                         div class="pref" {
                             h3 { "Access" span class="n" { (access.len()) } }
-                            p class="what" { "Who holds what on this repository, beyond its owner. A grant to a person or an agent, or to a team inside the organisation, named " code { "org/team" } "." }
+                            p class="what" { "Who holds what here, beyond its owner." }
                             @if access.is_empty() { p class="s" { "Nobody holds anything here yet." } }
                             @for grant in access {
                                 div class="line" {
@@ -2251,7 +2246,7 @@ pub fn repo_settings(
                         div class="panel" id="policy" {
                             div class="pref" {
                                 h3 { "Landing policy" }
-                                p class="what" { "What must be true of a change before it lands on " b { (repo.default_branch) } ". Every rule shows on the change page, met or not, so nobody has to guess." }
+                                p class="what" { "What must be true before a change lands on " b { (repo.default_branch) } "." }
                                 h4 { "Checks" }
                                 div class="opts" {
                                     label class="opt" {
@@ -2324,7 +2319,7 @@ pub fn repo_settings(
                         div class="panel" id="looks" {
                             div class="pref" {
                                 h3 { "Human looks" }
-                                p class="what" { "Even when every rule is met, some changes deserve a person's eyes. The rules pick the ones whose judgment is worth the most, and a picked change waits for a person before it lands." }
+                                p class="what" { "Some changes get a person\'s look even when every rule is met. How many a day:" }
                                 div class="field" {
                                     label for="attention_budget" { "Changes picked per day" }
                                     input class="input sm num" id="attention_budget" name="attention_budget" type="number" min="0" max="100"
@@ -2337,7 +2332,7 @@ pub fn repo_settings(
                             div class="pref" {
                                 @let trust = policy.trust.as_ref();
                                 h3 { "Earned trust" }
-                                p class="what" { "An owner whose claims a runner has kept reproducing may stand in for some of the rules above. What their record may stand in for:" }
+                                p class="what" { "An owner whose claims keep reproducing may stand in for:" }
                                 div class="opts" {
                                     label class="opt" {
                                         span class="t" { "Their claim, in place of a runner" }
@@ -2370,12 +2365,12 @@ pub fn repo_settings(
                         div class="panel" id="packs" {
                             div class="pref" {
                                 h3 { "Policy packs" }
-                                p class="what" { "A pack is a whole policy at once. Choosing one replaces everything above when you save." }
+                                p class="what" { "A pack replaces every rule above." }
                                 div class="field" {
                                     label for="pack" { "Apply a pack" }
                                     select id="pack" name="pack" {
                                         option value="" { "None, keep the rules above" }
-                                        @for pack in ambolt_core::packs() { option value=(pack.name) { (pack.name) " · " (pack.description) } }
+                                        @for pack in ambolt_core::packs() { option value=(pack.name) { (pack.name) ", " (pack.description) } }
                                     }
                                 }
                                 div class="field" {
@@ -2388,7 +2383,7 @@ pub fn repo_settings(
                         div class="panel" id="save" {
                             div class="pref" {
                                 h3 { "Save, or try it first" }
-                                p class="what" { "A preview shows which open changes the rules would hold; a simulation replays past landings against them. Neither changes anything." }
+                                p class="what" { "Neither changes anything." }
                                 div class="savebar" {
                                     button class="btn" type="submit" name="action" value="save" { "Save policy" }
                                     button class="btn2" type="submit" name="action" value="preview" { "Preview against open changes" }
@@ -2440,7 +2435,7 @@ pub fn repo_settings(
                         div class="panel" id="mirror" {
                             form class="pref" method="post" action={ (base) "/mirror" } {
                                 h3 { "Mirror" span class="n" { @if let Some(m) = &repo.mirror { (m.url) } @else { "none" } } }
-                                p class="what" { "Landed branches are copied to this address after every landing. The credential lives with whoever runs the forge, never here." }
+                                p class="what" { "Landed branches are copied here after every landing." }
                                 div class="field" {
                                     label for="mirror-url" { "Push URL" }
                                     input id="mirror-url" name="url" type="text" autocomplete="off" placeholder="https://… (empty to stop mirroring)" value=(repo.mirror.as_ref().map(|m| m.url.as_str()).unwrap_or(""));
@@ -2490,7 +2485,7 @@ pub fn repo_settings(
                                 input type="hidden" name="archived" value="no";
                                 div class="acts" { button class="btn2" type="submit" { "Unarchive" } }
                             } @else {
-                                p class="what" { "An archived repository stays readable and clonable; pushes, new changes and new tasks are refused." }
+                                p class="what" { "Readable and clonable; nothing new lands." }
                                 input type="hidden" name="archived" value="yes";
                                 div class="acts" { button class="btn2" type="submit" { "Archive" } }
                             }
@@ -2499,7 +2494,7 @@ pub fn repo_settings(
                     div class="panel" id="delete" {
                         form class="pref" method="post" action={ (base) "/delete" } {
                             h3 class="bad-t" { "Delete" }
-                            p class="what" { "Its changes, claims, verdicts and discussion go with it; the log keeps what happened. Tasks and lessons stay. Type its name to confirm." }
+                            p class="what" { "Type its name to confirm." }
                             div class="field" {
                                 label for="confirm" { "Repository name" }
                                 input id="confirm" name="confirm" type="text" autocomplete="off" autocapitalize="none" placeholder=(repo.name) required;
@@ -2679,7 +2674,7 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
                     div class="panel" id="account" {
                         div class="pref" {
                             h3 { "Account" }
-                            p class="what" { "Your username is how the forge names you everywhere: pages, git, receipts, the log. It is one of a kind on this forge and cannot be changed." }
+                            p class="what" { "Your username cannot be changed." }
                             div class="keyrow" {
                                 span class="k" { "Username" }
                                 code { (viewer.0.as_str()) }
@@ -2708,7 +2703,6 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
                                           aria-label="Email address";
                                     button class="btn2" type="submit" { "Send a confirmation" }
                                 }
-                                span class="hint" { "Kept beside your credentials, not in the log; shown to nobody; trusted only once you have followed the link." }
                             } @else {
                                 span class="hint" { "This forge does not send mail, so an address cannot be confirmed here." }
                             }
@@ -2779,7 +2773,7 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
                     div class="panel" id="tokens" {
                         div class="pref" {
                             h3 { "Tokens" span class="n" { (live) " live" } }
-                            p class="what" { "A token is a password for git and the API. Give one to each machine and revoke it here when the machine goes." }
+                            p class="what" { "One per machine. Revoke it here when the machine goes." }
                             @if tokens.is_empty() { span class="what" { "None yet." } }
                             @for token in tokens {
                                 div class="keyrow" {
@@ -2825,9 +2819,9 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
                             @for session in sessions {
                                 div class="keyrow" {
                                     span {
-                                        (browser_family(session.agent.as_deref()))
-                                        span class="sec3" { " · signed in " (day_of(&session.created)) }
-                                        @if session.current { span class="sec3" { " · this session" } }
+                                        span { (browser_family(session.agent.as_deref())) }
+                                        span class="sec3" { "signed in " (day_of(&session.created)) }
+                                        @if session.current { span class="chip acc" { "This session" } }
                                     }
                                     span class="sec3" {
                                         @match &session.last_seen {
@@ -2851,7 +2845,7 @@ pub fn settings(page: SettingsPage<'_>) -> Markup {
                                     button class="btn2 sm" type="submit" { "Sign out everywhere else" }
                                 }
                             }
-                            span class="hint" { "Changing your password ends every session, this one included. Ending one here ends only that one." }
+                            span class="hint" { "Changing your password ends every session." }
                         }
                     }
                     div class="panel" id="appearance" {
@@ -2895,12 +2889,11 @@ pub fn teams(
         html! {
             @if let Some(error) = error { div class="notice bad" { (ic("alert", "")) span { (error) } } }
             div class="sec top" {
-                p class="lede" { "A team holds authority; whoever is on it carries that authority, and loses it on leaving. An organisation is a team that owns repositories." }
-                @if teams.is_empty() { div class="panel" { div class="empty" { b { "None yet." } "Make one, add people, and grant it what its members should all hold." } } }
+                @if teams.is_empty() { div class="panel" { div class="empty" { b { "None yet." } } } }
                 div class="grid2" {
                     @for row in teams {
                         @let id = row.principal.id.as_str();
-                        div class="panel agent" {
+                        div class="panel lift agent" {
                             header {
                                 (avatar(id, &row.principal.display, false, false))
                                 div class="tt" {
@@ -3019,6 +3012,9 @@ pub fn owner(
     who: Reading<'_>,
     owner: &ambolt_core::Principal,
     repos: &[ambolt_core::Repo],
+    // Where this person's changes have landed, most first, whoever owns
+    // the repository; only what the viewer may read.
+    works_in: &[(String, u32)],
     members: &[(ambolt_core::PrincipalId, ambolt_core::TeamRole)],
     // Members invited who have not arrived yet.
     invited: &[ambolt_core::PrincipalId],
@@ -3051,9 +3047,18 @@ pub fn owner(
 ) -> Markup {
     let organisation = owner.kind == ambolt_core::PrincipalKind::Team;
     let agent = owner.kind == ambolt_core::PrincipalKind::Agent;
-    layout_reading(
+    // The head row's one action makes the repository under this owner,
+    // when the viewer may; otherwise the shell's usual one stands.
+    let head = may_create.then(|| Head {
+        count: None,
+        acts: Some(html! {
+            a class="btn2 sm" href={ "/new?owner=" (owner.id.as_str()) } { (ic("plus", "sm")) "New repository" }
+        }),
+    });
+    frame_in(
         theme,
-        who,
+        Some(who),
+        None,
         None,
         None,
         owner.id.as_str(),
@@ -3064,7 +3069,6 @@ pub fn owner(
                     div {
                         h1 { (owner.display) }
                         div class="meta" {
-                            code { (owner.id.as_str()) }
                             @if organisation { span class="chip" { (ic("agents", "")) "Organisation" } }
                             @else if agent { span class="chip" { (ic("agents", "")) "Agent" } }
                             @else { span class="chip" { (ic("user", "")) "Person" } }
@@ -3073,9 +3077,6 @@ pub fn owner(
                     }
                 }
                 div class="acts" {
-                    @if may_create {
-                        a class="btn sm" href={ "/new?owner=" (owner.id.as_str()) } { (ic("plus", "sm")) "New repository" }
-                    }
                     @if who.viewer().is_none_or(|v| v.0 != owner.id) {
                         a class="ghost sm" href={ "/report?kind=abuse&place=%2F" (owner.id.as_str()) } title="Report this account to whoever runs the forge" { "Report" }
                     }
@@ -3096,29 +3097,48 @@ pub fn owner(
             }
             @if let Some(record) = record {
                 div class="sec" {
-                    div class="sh" { h2 { "Record" } span class="n" { "the last " (record.window_days) " days, counted from the log" } }
-                    div class="stats record" {
-                        div class="stat" { div class="v" { (record.landed) } div class="k" { "landed" } }
-                        div class="stat" { div class="v" { (record.abandoned) } div class="k" { "abandoned" } }
+                    div class="sh" { h2 { "Standing" } span class="n" { "the last " (record.window_days) " days" } }
+                    div class="stats" {
+                        div class="stat" { span class="k" { "Landed" } span class="v" { (record.landed) } span class="d" { (record.abandoned) " abandoned" } }
                         div class="stat" {
-                            div class="v" {
+                            span class="k" { "Reproduced" }
+                            span class="v" {
                                 @match record.reproduced_percent {
                                     Some(percent) => { (percent) small { "%" } }
                                     None => { "–" }
                                 }
                             }
-                            div class="k" { "of " (record.judged) " re-run claim" @if record.judged != 1 { "s" } " reproduced" }
+                            span class="d" { (record.reproduced) " of " (record.judged) " re-run" }
                         }
-                        div class="stat" { div class="v" { (record.claims) } div class="k" { "claim" @if record.claims != 1 { "s" } " with a command" } }
+                        div class="stat" { span class="k" { "Disputed" } span class="v" { (record.disputed) } span class="d" { "of " (record.judged) " re-run" } }
                         div class="stat" {
-                            div class="v" { (record.audits_passed) small { " of " (record.audits) } }
-                            div class="k" { "human looks passed" @if record.blocks > 0 { ", " (record.blocks) " blocked" } }
+                            span class="k" { "Blocked" }
+                            span class="v" { (record.blocks) }
+                            span class="d" { @if record.audits == 0 { "no looks yet" } @else { "of " (record.audits) " looks" } }
                         }
-                        div class="stat" { div class="v" { (record.gaps_declared) } div class="k" { "gap" @if record.gaps_declared != 1 { "s" } " declared on claims" } }
                     }
-                    p class="hint" { "Nothing here is declared. Claims a runner re-ran, verdicts by other people, and what landed or was abandoned, each with " (owner.display) "'s name on it in the log." }
+                    details class="how" {
+                        summary { "How this is counted" }
+                        p { "Claims " (owner.display) " made with a command, and what a third-party runner found when it re-ran them. Verdicts on " (owner.display) "'s changes by somebody else, and how many were blocks. Changes that landed or were abandoned in the window. Nothing here is typed in." }
+                    }
                 }
             }
+            @if !works_in.is_empty() {
+                div class="sec" {
+                    div class="sh" { h2 { "Works in" } span class="n" { (works_in.len()) } }
+                    div class="panel" {
+                        @for (name, landed) in works_in {
+                            a class="row need" href={ "/" (name) } {
+                                span class="chip" { (ic("repo", "")) "Repository" }
+                                span class="tt" { span class="t" { (name) } }
+                                span class="avs" {}
+                                span class="age" { (landed) " landed" }
+                            }
+                        }
+                    }
+                }
+            }
+            @if organisation || !repos.is_empty() {
             div class="sec" {
                 div class="sh" { h2 { "Repositories" } span class="n" { (repos.len()) } }
                 div class="panel" {
@@ -3136,6 +3156,7 @@ pub fn owner(
                         }
                     }
                 }
+            }
             }
             @if organisation && viewer_role.is_some() || (organisation && who.viewer().is_some_and(|v| v.1.admin)) {
                 div class="sec" {
@@ -3162,14 +3183,14 @@ pub fn owner(
                                 input type="hidden" name="action" value="team-make";
                                 input class="input sm" type="text" name="name" placeholder="Team name" pattern="[a-z0-9-]{2,64}" required aria-label="Team name";
                                 button class="btn2 sm" type="submit" { "Make a team" }
-                                span class="hint" { "Give it access from a repository's settings." }
+                                span class="hint" { "Access comes from a repository's settings." }
                             }
                         }
                     }
                 }
                 @if let Some(mode) = members_act {
                     div class="sec" {
-                        div class="sh" { h2 { "Access" } span class="n" { "what being a member means" } }
+                        div class="sh" { h2 { "Access" } }
                         div class="panel" {
                             form class="pref" method="post" action={ "/" (owner.id.as_str()) "/members" } {
                                 input type="hidden" name="action" value="access";
@@ -3186,7 +3207,7 @@ pub fn owner(
             }
             @if let Some((usage, quota)) = allowances {
                 div class="sec" {
-                    div class="sh" { h2 { "Allowance" } span class="n" { "what this account uses, of what it may" } }
+                    div class="sh" { h2 { "Allowance" } }
                     div class="panel" {
                         (allowance("Repositories", usage.repos.to_string(), quota.repos.map(|n| n.to_string())))
                         (allowance("Disk", crate::in_bytes(usage.disk), quota.disk.map(crate::in_bytes)))
@@ -3204,7 +3225,6 @@ pub fn owner(
                                 }
                                 input class="input sm" type="text" name="note" placeholder="What, and why" aria-label="Note";
                                 button class="btn2 sm" type="submit" { "Ask" }
-                                span class="hint" { "Whoever runs the forge answers." }
                             }
                         }
                     }
@@ -3279,7 +3299,7 @@ pub fn owner(
                                     div class="field" {
                                         label for="invite-email" { "Email" }
                                         input id="invite-email" class="input" type="email" name="email" placeholder="jane@example.org" required;
-                                        p class="hint" { "A sign-in link goes there. The account and the membership are theirs." }
+                                        p class="hint" { "A sign-in link goes there." }
                                     }
                                     div class="acts" { button class="btn2" type="submit" { "Invite" } }
                                 }
@@ -3289,6 +3309,8 @@ pub fn owner(
                 }
             }
         },
+        None,
+        head,
     )
 }
 
@@ -3310,9 +3332,9 @@ pub fn report(
     };
     let body = html! {
         @if abuse {
-            p class="hint" { "Say what is wrong with it, in a sentence or two. Whoever runs this forge reads every report and can hide a repository or stop an account; nothing is done by a machine." }
+            p class="hint" { "Say what is wrong with it. Whoever runs this forge reads every report." }
         } @else {
-            p class="hint" { "What you did, what you expected, and what happened instead. The version of this forge is recorded with it. An address is optional; leave one if you want to hear back." }
+            p class="hint" { "What you did, what you expected, and what happened instead. An address is optional." }
         }
         @if let Some(id) = filed {
             div class="notice" { (ic("check", "")) span { "Recorded as report " (id) ". Thank you." } }
@@ -3334,7 +3356,6 @@ pub fn report(
             }
             button class="btn wide" type="submit" { "Send the report" }
         }
-        p class="hint" { "Reports are kept beside the waitlist and not in the log, so one can be removed when you ask." }
     };
     match viewer {
         Some(viewer) => layout(
@@ -3609,21 +3630,20 @@ pub fn people(
                             (avatar(id, &row.principal.display, false, false))
                             span class="tt" {
                                 span class="t" { (row.principal.display) }
-                                span class="s" {
-                                    (id)
-                                    @if !row.principal.active { " · deactivated" }
-                                    @else if row.admin { " · runs the forge" }
-                                    @else if row.has_password { " · can sign in" }
-                                    @else { " · no password yet" }
-                                    @match (&row.contact.email, &row.contact.pending) {
-                                        (Some(_), _) => { " · email confirmed" }
-                                        (None, Some(_)) => { " · email pending" }
-                                        (None, None) => { " · no email" }
-                                    }
-                                    @if let Some(invite) = &row.invitation {
-                                        " · invited"
-                                        @if let Some(until) = &invite.until { ", link good until " (day_of(until)) }
-                                    }
+                                span class="s" { (id) }
+                            }
+                            span class="tags" {
+                                @if !row.principal.active { span class="chip bad" { "Deactivated" } }
+                                @else if row.admin { span class="chip acc" { "Runs the forge" } }
+                                @else if row.has_password { span class="chip" { "Can sign in" } }
+                                @else { span class="chip" { "No password yet" } }
+                                @match (&row.contact.email, &row.contact.pending) {
+                                    (Some(_), _) => { span class="chip good" { "Email confirmed" } }
+                                    (None, Some(_)) => { span class="chip" { "Email pending" } }
+                                    (None, None) => { span class="chip" { "No email" } }
+                                }
+                                @if let Some(invite) = &row.invitation {
+                                    span class="chip acc" { "Invited" @if let Some(until) = &invite.until { ", until " (day_of(until)) } }
                                 }
                             }
                             span class="acts" {
@@ -3740,14 +3760,14 @@ pub fn agents(
                 }
             }
             @if agents.is_empty() {
-                div class="panel" { div class="empty" { b { "None yet." } "An agent needs a name, a token, and a grant narrow enough to be worth trusting." } }
+                div class="panel" { div class="empty" { b { "None yet." } } }
             }
             div class="grid2" {
                 @for row in agents {
                     @let id = row.principal.id.as_str();
                     @let live = viewer.1.working.iter().any(|w| w.who == id);
                     @let mine = viewer.1.admin || row.principal.owner.as_ref().is_some_and(|o| owners.iter().any(|mine| mine == o.as_str()));
-                    div class="panel agent" {
+                    div class="panel lift agent" {
                         header {
                             (avatar(id, &row.principal.display, true, live))
                             div class="tt" {
@@ -4068,7 +4088,7 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
         div class="panel" {
             header { h2 { "At work here" } span class="n" { (sidebar.sessions.len()) } }
             @if sidebar.sessions.is_empty() {
-                div class="empty" { b { "No agent is working here." } "Grant one push on this repository and it can start." }
+                div class="empty" { b { "No agent is working here." } }
             }
             @for session in &sidebar.sessions {
                 @let held = sidebar.leases.iter().find(|l| l.session == session.id);
@@ -4202,7 +4222,7 @@ pub fn repository(page: RepoPage<'_>) -> Markup {
                     }
                 }
                 @if let Some(readme) = readme {
-                    div class="panel readme" {
+                    div class="panel lift readme" {
                         header { (ic("file", "")) h2 { "README.md" } }
                         div class="prose" { (markdown(readme)) }
                     }
@@ -4664,7 +4684,7 @@ pub fn community_report(
                     }
                 }
                 @if let Some(error) = error { p class="error" { (error) } }
-                div class="panel said" {
+                div class="panel lift said" {
                     div class="thread" {
                         div class="h" {
                             (avatar(report.by.as_str(), display, agent, false))
@@ -4991,7 +5011,7 @@ pub fn change(page: ChangePage) -> Markup {
         .collect();
     let rail = html! {
         @if open && signed {
-            div class="panel readiness" {
+            div class="panel lift readiness" {
                 header {
                     h2 { @if trace.satisfied { "Ready to land" } @else { "Not ready to land" } }
                     span class="n" { (satisfied) " of " (total) }
@@ -5476,7 +5496,7 @@ fn disagreement(verdicts: &[Verdict], people: &People) -> Markup {
         return html! {};
     }
     html! {
-        section class="panel disagree" {
+        section class="panel lift disagree" {
             header {
                 h2 { "Reviewers disagree" }
                 span class="n" { "your judgment decides this" }
@@ -5746,7 +5766,7 @@ fn verdict_row(verdict: &Verdict, people: &People) -> Markup {
                         Disposition::Concern => { span class="chip" { (ic("alert", "")) "concern" } }
                         Disposition::Block => { span class="chip bad" { (ic("x", "")) "blocks" } }
                     }
-                    span class="sec3" { (verdict.domain.as_str()) @if agent { " · agent" } }
+                    span class="sec3" { (verdict.domain.as_str()) } @if agent { span class="chip" { "Agent" } }
                 }
                 q { (verdict.rationale) }
             }
@@ -5822,7 +5842,7 @@ pub fn landing(
                             Some(id) => { (change_ref(&numbers, id)) }
                             None => { "nothing has landed in this window" }
                         }
-                        " " a class="quiet" href={ "/" (repo) "/activity?after=" (brief.since) } { "(counted from the log)" }
+                        " " a class="quiet" href={ "/" (repo) "/activity?after=" (brief.since) } { "in the activity" }
                     }
                 }
                 div class="stat" {
@@ -5848,7 +5868,7 @@ pub fn landing(
                 div class="sh" { h2 { "Needs you" } span class="n" { (data.needs_you.len()) } }
                 div class="panel" {
                     @if data.needs_you.is_empty() {
-                        div class="empty" { b { "Nothing needs you right now." } "Changes that want a person's judgment appear here, ranked by what that judgment is worth." }
+                        div class="empty" { b { "Nothing needs you right now." } }
                     }
                     @for item in &data.needs_you {
                         @let (chip, label) = attention_chip(item);
@@ -5969,8 +5989,8 @@ fn outcome_row(numbers: &Refs, envelope: &Envelope, people: &People) -> Markup {
                 span class="tt" {
                     span class="t" { (change_ref(numbers, change.as_str())) }
                     span class="s" {
-                        @if let Some(oid) = merged_as { "as " code { (short(oid)) } " · rebased · " }
-                        "receipt signed"
+                        @if let Some(oid) = merged_as { "rebased, landed as " code { (short(oid)) } }
+                        @else { "receipt signed" }
                     }
                 }
                 span class="avs" { (avatar(envelope.actor.as_str(), display, agent, false)) }
@@ -6127,7 +6147,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
         Event::SessionEnded { state, .. } => (
             "dot idle",
             html! {
-                b { (actor) } " ended a session · " (state.as_str())
+                b { (actor) } " ended a " (state.as_str()) " session"
             },
         ),
         Event::GrantIssued { grantee, .. } => (
@@ -6237,7 +6257,7 @@ fn describe(numbers: &Refs, envelope: &Envelope, people: &People) -> (&'static s
                     ": " (signals.iter().map(|s| s.as_str().replace('_', " ")).collect::<Vec<_>>().join(", "))
                 }
                 @if !reviewers.is_empty() {
-                    " · asked " (reviewers.iter().map(|r| people.name(r).0).collect::<Vec<_>>().join(", "))
+                    ", and asked " (reviewers.iter().map(|r| people.name(r).0).collect::<Vec<_>>().join(", "))
                 }
             },
         ),
@@ -6569,7 +6589,7 @@ fn event_days(
                             span class="s wrap" {
                                 @if let Some(Some(repo)) = scopes.and_then(|s| s.get(&envelope.seq.0)) { a class="chip" href={ "/" (repo) "/activity" } { (repo) } " " }
                                 (text)
-                                @if let Some(via) = &envelope.via { span class="sec3" title=(via.as_str()) { " · in a session" } }
+                                @if let Some(via) = &envelope.via { " " span class="chip" title=(via.as_str()) { "In a session" } }
                             }
                             span class="age" title=(envelope.ts) { (ago(&envelope.ts)) }
                         }
@@ -6893,7 +6913,7 @@ pub fn debt(page: CoveragePage<'_>) -> Markup {
             div class="panel" {
                 header { h2 { "Pay it down" } span class="n" { (thousands(c.imported)) " imported" } }
                 form class="pad form" method="post" action={ "/" (repo) "/debt/tasks" } {
-                    p class="what" { "Each task names a file and the lines nobody here has judged, and asks for a claim a runner can re-run." }
+                    p class="what" { "Each task names a file and asks for a claim a runner can re-run." }
                     div class="line" {
                         input class="input sm num" id="count" name="count" type="number" min="1" max="50" value="5" aria-label="How many";
                         span class="lbl" { "most indebted files without a task" }
@@ -6904,7 +6924,7 @@ pub fn debt(page: CoveragePage<'_>) -> Markup {
         }
         @if !map.paid_down.is_empty() {
             div class="panel" {
-                header { h2 { "Paid down" } span class="n" { "by reproduced covering claims" } }
+                header { h2 { "Paid down" } }
                 @for paid in &map.paid_down {
                     @let id = ambolt_core::PrincipalId(paid.by.clone());
                     @let (display, agent) = people.name(&id);
@@ -6912,7 +6932,7 @@ pub fn debt(page: CoveragePage<'_>) -> Markup {
                         (avatar(&paid.by, display, agent, false))
                         div {
                             div class="h" { b { (display) } span class="sec2" { "paid down " (thousands(paid.lines)) " lines" } }
-                            div class="sub good" { (ic("check", "sm")) (paid.claims) " covering claim(s), reproduced · " (paid.files) " file(s)" }
+                            div class="sub good" { (ic("check", "sm")) (paid.claims) " covering claim(s) reproduced, over " (paid.files) " file(s)" }
                         }
                     }
                 }
@@ -6946,18 +6966,17 @@ pub fn debt(page: CoveragePage<'_>) -> Markup {
                             span { i class="s-imported" {} b { (thousands(c.imported)) } " imported, never judged" }
                         }
                     }
-                    div class="foot" { (ic("coverage", "sm")) "A line is reproduced when a runner re-ran the claim that landed it. A gap is a line that landed under a claim which said it did not check this. Imported lines predate this forge." }
                 }
                 @if history.len() >= 2 {
                     @let first = &history[0];
                     @let last = &history[history.len() - 1];
                     div class="panel" {
-                        header { h2 { "Burndown" } span class="n" { (map.branch) " · last " (history.len()) " tips" } }
+                        header { h2 { "Burndown" } span class="n" { "the last " (history.len()) " tips of " (map.branch) } }
                         div class="pad" {
                             (burndown(history))
                             div class="legend" {
-                                span { i class="s-debt" {} b { (thousands((last.claimed + last.gap + last.argued + last.imported) as usize)) } " debt · was " (thousands((first.claimed + first.gap + first.argued + first.imported) as usize)) }
-                                span { i class="s-imported" {} b { (thousands(last.imported as usize)) } " imported · was " (thousands(first.imported as usize)) }
+                                span { i class="s-debt" {} b { (thousands((last.claimed + last.gap + last.argued + last.imported) as usize)) } " debt, from " (thousands((first.claimed + first.gap + first.argued + first.imported) as usize)) }
+                                span { i class="s-imported" {} b { (thousands(last.imported as usize)) } " imported, from " (thousands(first.imported as usize)) }
                             }
                         }
                         div class="foot" { "Debt is every line short of a reproduced claim. It falls when a runner reproduces a claim that covers existing code, or when a file is rewritten under one." }
@@ -6974,9 +6993,9 @@ pub fn debt(page: CoveragePage<'_>) -> Markup {
                                 span class="tt" {
                                     code { (file.path) }
                                     @if let Some((_, holders)) = &file.task {
-                                        span class="s" { "task open" @if !holders.is_empty() { " · claimed by " (holders.iter().map(|h| people.name(&ambolt_core::PrincipalId(h.clone())).0.to_owned()).collect::<Vec<_>>().join(", ")) } }
+                                        span class="s" { "task open" @if !holders.is_empty() { ", claimed by " (holders.iter().map(|h| people.name(&ambolt_core::PrincipalId(h.clone())).0.to_owned()).collect::<Vec<_>>().join(", ")) } }
                                     } @else if let Some(cover) = file.covered_by.first() {
-                                        span class="s" { "covered by #" (cover.change) @if cover.reproduced { " · runner reproduced" } @else { " · not yet re-run" } }
+                                        span class="s" { "covered by #" (cover.change) @if cover.reproduced { ", runner reproduced" } @else { ", not yet re-run" } }
                                     }
                                 }
                                 (stack(&file.counts))
@@ -7095,11 +7114,11 @@ pub fn record_words(record: &ambolt_core::Record) -> String {
         "no claims yet".to_owned()
     };
     if record.disputed > 0 {
-        words.push_str(&format!(" · {} disputed", record.disputed));
+        words.push_str(&format!(", {} disputed", record.disputed));
     }
     if record.blocks > 0 {
         words.push_str(&format!(
-            " · blocked by a person {} time{}",
+            ", blocked by a person {} time{}",
             record.blocks,
             if record.blocks == 1 { "" } else { "s" }
         ));

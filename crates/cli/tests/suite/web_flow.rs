@@ -305,10 +305,6 @@ async fn web_ui_full_journey() {
     assert_eq!(status, 200);
     assert!(body.contains("Has anyone tried this before?"));
     let (_, body, _) = ada.get("/ada/demo/review");
-    assert!(
-        body.contains("counted from the log"),
-        "the brief should say where its numbers come from"
-    );
     assert!(body.contains("Landed lately"));
 
     // A change nobody argues about shows no disagreement section.

@@ -1966,6 +1966,21 @@ impl Store {
         Ok(repos)
     }
 
+    /// Where somebody's changes have landed, most first: the repositories
+    /// a person works in, whoever owns them.
+    pub fn repos_landed_in(&self, who: &PrincipalId) -> CoreResult<Vec<(String, u32)>> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT repo, COUNT(*) FROM changes WHERE owner = ?1 AND state = 'merged'
+              GROUP BY repo ORDER BY COUNT(*) DESC, repo",
+        )?;
+        let rows = stmt
+            .query_map(rusqlite::params![who.as_str()], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u32))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     /// What a repository once called `old` is called now, if it was renamed.
     pub fn current_name_for(&self, old: &str) -> CoreResult<Option<String>> {
         raw::current_name_for(&self.conn, old)

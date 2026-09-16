@@ -16,7 +16,7 @@ async fn sessions_are_listed_and_ended_from_settings() {
 
     let (status, page) = page_with_cookie(app, "/you/settings", &laptop).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(page.matches("this session").count(), 1, "{page}");
+    assert_eq!(page.matches("This session").count(), 1, "{page}");
     assert_eq!(
         page.matches(r#"name="id""#).count(),
         1,
@@ -72,7 +72,7 @@ async fn sessions_are_listed_and_ended_from_settings() {
         sign_in_as(&forge, "bee").await
     };
     let (_, bee_page) = page_with_cookie(app, "/you/settings", &bee_cookie).await;
-    assert!(bee_page.contains("this session"));
+    assert!(bee_page.contains("This session"));
     let (_, location) = post_form(app, "/you/sessions", &bee_cookie, &format!("id={id}")).await;
     assert_eq!(
         location, "/you/settings?done=1",
