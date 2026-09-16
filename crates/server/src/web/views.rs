@@ -523,6 +523,7 @@ fn sidebar(theme: Theme, who: Reading<'_>, current: Option<&str>) -> Markup {
                             (ic("chev", "sm"))
                         }
                         div class="pop" {
+                            a href={ "/" (viewer.0.as_str()) } { (ic("user", "sm")) "Your page" }
                             a class=[only("you")] href="/you" { (ic("changes", "sm")) "Your changes" @if chrome.yours > 0 { span class="n" { (chrome.yours) } } }
                             a href="/you/settings#tokens" { (ic("key", "sm")) "Tokens" }
                             a href="/you/settings#sessions" { (ic("globe", "sm")) "Sessions" }
@@ -6299,10 +6300,10 @@ pub fn welcome_steps(page: WelcomePage<'_>) -> Markup {
             div class="hour" {
                 div class="welcome" {
                     div class="brand" { span class="orgmark" { (mark()) } "ambolt" }
-                    div class="steps" {
+                    div class="wsteps" {
                         @for (index, (name, what)) in steps.iter().enumerate() {
                             @let n = index as u8 + 1;
-                            div class={ "st" @if n == step { " on" } @else if n < step { " done" } } {
+                            div class={ "ws" @if n == step { " on" } @else if n < step { " past" } } {
                                 i { @if n < step { (ic("check", "sm")) } @else { (n) } }
                                 div { (name) span { (what) } }
                             }
@@ -6315,10 +6316,12 @@ pub fn welcome_steps(page: WelcomePage<'_>) -> Markup {
                                 form method="post" action="/welcome" {
                                     input type="hidden" name="step" value="you";
                                     h2 { "This is you" }
-                                    div class="fact" {
-                                        span class="k" { "Username" }
-                                        span class="v" { code { (id) } }
-                                        span class="k" { "Cannot be changed" }
+                                    div class="kv" {
+                                        span class="pair" {
+                                            span class="k" { "Username" }
+                                            span class="v" { code { (id) } }
+                                            span class="hint" { "Cannot be changed" }
+                                        }
                                     }
                                     div class="field" {
                                         label { "Your mark" }

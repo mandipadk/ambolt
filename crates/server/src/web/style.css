@@ -934,18 +934,23 @@ details.alt .field { margin-bottom: 10px; }
 .welcome { width: 100%; max-width: 980px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 72px; }
 .welcome .brand { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 600; font-size: 17px; margin-bottom: 48px; }
 .welcome .brand .orgmark { width: 30px; height: 30px; }
-.welcome .steps { display: flex; flex-direction: column; gap: 28px; padding-top: 6px; }
-.welcome .steps .st { display: flex; gap: 14px; align-items: flex-start; color: var(--ink3); font-size: 14.5px; }
-.welcome .steps .st i { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--hair2); display: grid; place-items: center; font-style: normal; font-size: 12.5px; flex: none; font-variant-numeric: tabular-nums; }
-.welcome .steps .st i .ic { width: 12px; height: 12px; }
-.welcome .steps .st.on { color: var(--ink); font-weight: var(--wmed); }
-.welcome .steps .st.on i { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.welcome .steps .st.done i { background: var(--good-soft); border-color: transparent; color: var(--good-ink); }
-.welcome .steps .st span { display: block; font-size: 13px; color: var(--ink3); font-weight: var(--wbody); margin-top: 2px; }
+.welcome .wsteps { display: flex; flex-direction: column; padding-top: 6px; }
+.welcome .wsteps .ws { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 0 14px; padding-bottom: 36px; color: var(--ink3); font-size: 14.5px; }
+.welcome .wsteps .ws:last-child { padding-bottom: 0; }
+.welcome .wsteps .ws::before { content: ""; position: absolute; left: 13px; top: 30px; bottom: 2px; width: 2px; border-radius: 1px; background: var(--hair2); }
+.welcome .wsteps .ws:last-child::before { display: none; }
+.welcome .wsteps .ws.past::before { background: var(--accent); }
+.welcome .wsteps .ws i { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--hair2); background: var(--bg); display: grid; place-items: center; font-style: normal; font-size: 13px; font-weight: var(--wmed); font-variant-numeric: tabular-nums; position: relative; }
+.welcome .wsteps .ws i .ic { width: 13px; height: 13px; stroke-width: 2.5; }
+.welcome .wsteps .ws > div { padding-top: 4px; }
+.welcome .wsteps .ws.on { color: var(--ink); font-weight: var(--wmed); }
+.welcome .wsteps .ws.on i { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 4px var(--accent-soft); }
+.welcome .wsteps .ws.past i { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.welcome .wsteps .ws span { display: block; font-size: 13px; color: var(--ink3); font-weight: var(--wbody); margin-top: 3px; }
 .welcome .body, .welcome .body form { display: flex; flex-direction: column; gap: 36px; max-width: 640px; }
 .welcome .body h2 { font-size: 30px; letter-spacing: -0.02em; }
-.welcome .body .fact .k { font-size: 13px; }
-.welcome .body .fact .v code { font-size: 15px; }
+.welcome .body .kv .v code { font-size: 15px; }
+.welcome .body .kv .hint { font-size: 13px; color: var(--ink3); margin-top: 2px; }
 .welcome .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 24px 32px; }
 .welcome .acts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding-top: 8px; }
 .welcome .acts .skip { margin-left: auto; color: var(--ink3); font-size: 14px; background: none; border: none; font-family: inherit; }
@@ -962,7 +967,7 @@ details.alt .field { margin-bottom: 10px; }
 .welcome .li.door .tt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .welcome .li.door .t { font-weight: var(--wmed); font-size: 15.5px; }
 .welcome .li.door .s { color: var(--ink2); font-size: 13.5px; }
-@media (max-width: 760px) { .welcome { grid-template-columns: 1fr; gap: 32px; } .welcome .steps { flex-direction: row; gap: 20px; } .welcome .steps .st span { display: none; } }
+@media (max-width: 760px) { .welcome { grid-template-columns: 1fr; gap: 32px; } .welcome .wsteps { flex-direction: row; gap: 20px; } .welcome .wsteps .ws { padding-bottom: 0; } .welcome .wsteps .ws::before { display: none; } .welcome .wsteps .ws span { display: none; } }
 .pagehead .chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
 .clone { position: relative; }
 .clone > summary { list-style: none; cursor: pointer; }
