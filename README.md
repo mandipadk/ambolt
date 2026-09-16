@@ -205,6 +205,10 @@ embed the protocol without a second thought.
 
 People's marks are composed from [Notionists](https://heyzoish.gumroad.com/l/notionists)
 by Zoish, released under CC0 1.0, vendored as SVG parts in the server.
+The pages are set in Familjen Grotesk, Instrument Sans and JetBrains
+Mono, and the front page in Bricolage Grotesque and Geist; all six are
+under the SIL Open Font License and travel in the binary with their
+licence texts, so no page asks a third party for anything.
 
 Copyright © 2026 Mandip Adhikari. Contributions are welcome under the
 terms in [CONTRIBUTING.md](CONTRIBUTING.md).

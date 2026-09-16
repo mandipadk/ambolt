@@ -720,285 +720,40 @@ pub fn signup(theme: Theme, state: super::Signup, error: Option<&str>) -> Markup
     )
 }
 
-/// What the front page can say in numbers, all counted from this forge
-/// so none of them is a claim. A number that cannot be computed is left
-/// out rather than made up.
-#[derive(Default)]
-pub struct FrontNumbers {
-    pub landed: Option<i64>,
-    pub repos: Option<i64>,
-    pub agents: Option<i64>,
-}
+/// The front page, ported from the design it was signed off as: the
+/// markup in `front.html`, its styles in `front.css`, its motion in
+/// `front.js`, generated together by `.local/design/front/port.py` from
+/// the design export. Everything on it is a story told in the product's
+/// own words; nothing on it is counted from this forge. The waitlist
+/// form posts to `/waitlist`, the theme button to `/theme`.
+const FRONT: &str = include_str!("front.html");
 
-/// One rule row inside the front page's drawn change page. The three
-/// that settle in the story carry a class the stylesheet animates.
-fn story_req(story: Option<&str>, met: bool, rule: &str, evidence: Option<&str>) -> Markup {
+pub fn welcome(theme: Theme, joined: bool, error: Option<&str>) -> Markup {
+    let notice = match error {
+        Some(error) => html! { p class="join-notice" { (error) } }.into_string(),
+        None => String::new(),
+    };
+    let page = FRONT
+        .replace("{{join_notice}}", &notice)
+        .replace("{{join_hidden}}", if joined { "hidden" } else { "" })
+        .replace("{{joined_hidden}}", if joined { "" } else { "hidden" });
     html! {
-        div class={ "req" @if met { " met" } @else { " unmet" } @if let Some(s) = story { " " (s) } } {
-            span class="st" {
-                @if met { (ic("check", "")) } @else { svg class="ic no" { r#use href="#i-x" {} } svg class="ic ok" { r#use href="#i-check" {} } }
+        (DOCTYPE)
+        html lang="en" data-theme=[theme.attr()] {
+            head {
+                meta charset="utf-8";
+                meta name="viewport" content="width=device-width, initial-scale=1";
+                title { "Ambolt" }
+                meta name="description" content="Git hosting that keeps the receipts: what was actually run, who checked it, and why it was allowed to ship, stapled to the commit.";
+                link rel="stylesheet" href=(super::front_stylesheet_href());
+                script defer src=(super::front_script_href()) {}
             }
-            div {
-                b { (rule) }
-                @if let Some(evidence) = evidence { div class="why" { (evidence) } }
+            body {
+                (sprite())
+                (PreEscaped(page))
             }
         }
     }
-}
-
-/// The front page: what this is, shown rather than described, and a way
-/// to be told when it opens up. Everything animated has a resting state
-/// the page shows without a script.
-pub fn welcome(theme: Theme, joined: bool, error: Option<&str>, numbers: &FrontNumbers) -> Markup {
-    layout(
-        theme,
-        None,
-        None,
-        None,
-        "ambolt",
-        html! {
-            div class="landing" {
-                header class="topnav" id="topnav" { div class="wrap" {
-                    a class="brand" href="/" { (mark()) "ambolt" }
-                    nav { a href="#how" { "How it works" } a href="#why" { "Why Ambolt" } a href="#git" { "Git" } a href="https://github.com/mandipadk/ambolt" { "Source" } }
-                    div class="right" { a href="/login" { "Sign in" } a class="btn sm" href="#join" { "Join the waitlist" } }
-                } }
-
-                section class="hero" {
-                    div class="wrap" {
-                        span class="eyebrow" { i { (ic("check", "")) } "Alpha, self-hosted and free, hosted by invitation" }
-                        h1 { "Git hosting for code that " em { "agents" } " write." }
-                        p class="lede" { "Every change carries its proof: what was claimed, who re-ran it, who approved it, and why it was allowed to land." }
-                        div class="cta" { a class="btn" href="#join" { "Join the waitlist" } a class="btn2" href="#git" { (ic("terminal", "")) "Run it yourself" } }
-                        p class="fine" { "Ordinary git on the wire. One binary. AGPL-3.0." }
-                    }
-                    div class="frame" { div class="screen" { div class="ui story" {
-                        aside class="sb" {
-                            div class="org" { i { (mark()) } "Ambolt" }
-                            a href="#" { (ic("home", "")) "Home" }
-                            a href="#" { (ic("inbox", "")) "Inbox" span class="badge" { "5" } }
-                            a href="#" { (ic("tasks", "")) "Tasks" }
-                            a href="#" { (ic("agents", "")) "Agents" }
-                            h5 { "Repositories" }
-                            a class="on" href="#" { (ic("repo", "")) "ambolt / ambolt" }
-                            a href="#" { (ic("repo", "")) "ambolt / console" }
-                            h5 { "Working" }
-                            div class="who" { (avatar("quill", "Quill", true, true)) "Quill, in web/mod.rs" }
-                            div class="who" { (avatar("scout", "Scout", true, true)) "Scout, in web/" }
-                        }
-                        div class="main" {
-                            div class="head" { span { "ambolt / ambolt" } span { "/" } span { "Changes" } span { "/" } b { "#2" } span class="btn land" { "Land on main" } }
-                            div class="cols" {
-                                div {
-                                    h4 { "Bound the blame page by file size" }
-                                    div class="meta" { span class="chip acc" { "Open" } span class="chip" { "2 attempts" } (avatar("quill", "Quill", true, false)) span { "Quill opened it 2 h ago, into main" } }
-                                    div class="diff" {
-                                        header { (ic("file", "sm")) code { "crates/server/src/web/diff.rs" } span class="pm" { span class="plus" { "+3" } " " span class="minus" { "−0" } } }
-                                        div class="hunk" {
-                                            div class="ln ctx" { span class="no" { "150" } span class="no" { "150" } span class="sign" {} code class="cd" { "    }" } }
-                                            div class="ln ctx" { span class="no" { "151" } span class="no" { "151" } span class="sign" {} code class="cd" { "}" } }
-                                            div class="ln add" { span class="no" {} span class="no" { "152" } span class="sign" { "+" } code class="cd" {} }
-                                            div class="ln add" { span class="no" {} span class="no" { "153" } span class="sign" { "+" } code class="cd" { span class="hl-comment" { "/// Files past this many bytes are cut with a note at the top." } } }
-                                            div class="ln add" { span class="no" {} span class="no" { "154" } span class="sign" { "+" } code class="cd" { span class="hl-keyword" { "pub const" } " BLAME_LIMIT: " span class="hl-keyword" { "usize" } " = 2 << 20;" } }
-                                        }
-                                        div class="thread" {
-                                            div class="h" { (avatar("ada", "Ada", false, false)) b { "Ada" } span class="sec2" { "raised a concern on revision 1" } span class="when" { "2 h ago" } }
-                                            p class="body" { "Where is the note rendered? The constant is here but nothing reads it yet." }
-                                            div class="reply" { (avatar("scout", "Scout", true, false)) span { b { "Scout" } p { "Revision 2 renders it at the top of the file view." } } }
-                                        }
-                                    }
-                                }
-                                div {
-                                    div class="panel lift readiness" {
-                                        header class="ttl" { h2 class="title-not" { "Not ready to land" } h2 class="title-ready" { "Ready to land" } span class="n" { "7 rules" } }
-                                        div class="pad" {
-                                            div class="progress" { i class="on" {} i class="on" {} i class="on" {} i class="on" {} i class="bad p1" {} i class="bad p2" {} i class="bad p3" {} }
-                                            div class="reqs" {
-                                                (story_req(Some("s1"), false, "Someone other than the author approves it", Some("No approval yet")))
-                                                (story_req(Some("s2"), false, "Tests pass on revision 2", Some("No claim on revision 2 yet")))
-                                                (story_req(Some("s3"), false, "Every concern is resolved", Some("Ada's concern on line 152 is open")))
-                                                (story_req(None, true, "Runner agrees with every claim", None))
-                                                (story_req(None, true, "Nobody has blocked it", None))
-                                                (story_req(None, true, "One attempt is chosen", None))
-                                            }
-                                            span class="btn wide land" { "Land on main" }
-                                        }
-                                    }
-                                    div class="panel" {
-                                        header { h2 { "Claims" } span class="n" { "revision 2" } }
-                                        div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Tests pass" } span class="sec3" { "Scout" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub good" { (ic("rerun", "sm")) "Runner re-ran it, 61 passed" } } }
-                                    }
-                                }
-                            }
-                        }
-                    } } }
-                }
-
-                section class="works" { div class="wrap" {
-                    p { "Works with what you already use" }
-                    div class="row" {
-                        span { (ic("branch", "")) "Any git client" }
-                        span { (ic("agents", "")) "Claude Code" }
-                        span { (ic("agents", "")) "Cursor" }
-                        span { (ic("globe", "")) "Anything that speaks MCP" }
-                        span { (ic("rerun", "")) "Your CI as a runner" }
-                    }
-                } }
-
-                section class="lsec" id="how" { div class="wrap" {
-                    div class="top" { span class="kicker" { i {} "How it works" } h2 { "Push. Prove. Land." } p class="lede" { "Three steps, all recorded. Nothing lands on trust alone." } }
-                    div class="steps" {
-                        div class="step s1" {
-                            div class="ico" { (ic("terminal", "")) }
-                            h3 { "Push" }
-                            p { "A normal git push opens a change." }
-                            div class="mini" { span class="p" { "$" } " " span class="c" { "git push origin HEAD:refs/for/main" } br; span class="p" { "remote:" } " change #2 opened, revision 1" br; span class="p" { "remote:" } " not ready, 3 of 7 rules met" }
-                        }
-                        div class="step s2" {
-                            div class="ico" { (ic("rerun", "")) }
-                            h3 { "Prove" }
-                            p { "Claims are commands. A runner re-runs them." }
-                            div class="mini" { b { "claim" } " tests pass, by Scout" br; span class="p" { "$" } " " span class="c" { "cargo test --workspace" } div class="sub" { span class="a" { i class="spin" {} "Runner re-running…" } span class="b" { (ic("check", "sm")) "Reproduced, 61 passed" } } }
-                        }
-                        div class="step s3" {
-                            div class="ico" { (ic("receipt", "")) }
-                            h3 { "Land" }
-                            p { "The rules decide. The receipt says why." }
-                            div class="mini sealed" { span class="seal" { (ic("check", "")) "Verified" } b { "#2" } " landed on main" br; "judged: revision 2, by Scout" br; "approved: Ada and Runner" br; span class="p" { "signed 9a59 2453 77e7 3fca" } }
-                        }
-                    }
-                } }
-
-                section class="lsec tight" id="why" { div class="wrap" {
-                    div class="top" { span class="kicker" { i {} "Why Ambolt" } h2 { "Built for the moment most of your code isn't typed by a person." } }
-                    div class="feats" {
-                        div class="feat" {
-                            div class="cap" { h3 { "Rules you can see" } p { "Every repository says what must be true before anything lands. Every change shows how far it is." } }
-                            div class="stage" { div class="panel lift readiness" {
-                                header { h2 { "Not ready to land" } span class="n" { "4 of 7" } }
-                                div class="pad" {
-                                    div class="progress" { i class="on" {} i class="on" {} i class="on" {} i class="on" {} i class="bad" {} i class="bad" {} i class="bad" {} }
-                                    div class="reqs" {
-                                        (story_req(None, false, "Someone other than the author approves it", Some("No approval yet")))
-                                        (story_req(None, false, "Every concern is resolved", Some("Ada's concern on line 152 is open")))
-                                        (story_req(None, true, "Runner agrees with every claim", None))
-                                        (story_req(None, true, "Nobody has blocked it", None))
-                                    }
-                                }
-                            } }
-                        }
-                        div class="feat flip" {
-                            div class="stage" { div class="panel" {
-                                div class="ev-row" { (avatar("quill", "Quill", true, false)) div { div class="h" { b { "Tests pass" } span class="chip bad" { (ic("alert", "")) "disputed" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub bad" { (ic("rerun", "sm")) "Runner saw 1 failure: blame::cuts_large_files" } } }
-                                div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Tests pass" } span class="chip good" { (ic("check", "")) "reproduced" } } span class="cmd" { "cargo test -p ambolt-server" } div class="sub good" { (ic("check", "sm")) "Runner re-ran it, 61 passed" } } }
-                            } }
-                            div class="cap" { h3 { "Claims are commands, not comments" } p { "\"Tests pass\" carries the command that produced it. A runner re-runs it. A dispute blocks the change." } }
-                        }
-                        div class="feat" {
-                            div class="cap" { h3 { "Attention, ranked" } p { "Your time goes where judgment is needed, and a share of unreviewed work is sampled anyway." } }
-                            div class="stage" { div class="panel" {
-                                div class="row need" { span class="chip bad" { "Disputed" } span class="tt" { span class="t" { "Bound the blame page by file size" } span class="s" { "Runner disagreed with Quill, two attempts" } } span class="avs" {} span class="age" { "2 h" } }
-                                div class="row need" { span class="chip" { "Unreviewed" } span class="tt" { span class="t" { "Write the agent quickstart" } span class="s" { "Scout stopped and left a lesson" } } span class="avs" {} span class="age" { "2 h" } }
-                                div class="row need" { span class="chip acc" { "Spot check" } span class="tt" { span class="t" { "Rename the client crate" } span class="s" { "picked, nobody has looked" } } span class="avs" {} span class="age" { "4 h" } }
-                            } }
-                        }
-                        div class="feat flip" {
-                            div class="stage" { div class="panel" {
-                                div class="ev-row" { (avatar("scout", "Scout", true, false)) div { div class="h" { b { "Scout" } span class="sec3" { "claude-fable-5-1, yours" } } div class="grants" { span class="chip g1" { "task" } span class="chip g2" { "push" } span class="chip g3" { "review" } span class="chip off" { "merge" } span class="chip off" { "verify" } } div class="sub" { "12 of 12 claims reproduced, 9 changes landed, 90 days" } } }
-                                div class="ev-row" { (avatar("quill", "Quill", true, false)) div { div class="h" { b { "Quill" } span class="sec3" { "gpt-5, Ada's" } } div class="grants" { span class="chip" { "task" } span class="chip" { "push" } span class="chip off" { "review" } } div class="sub" { span class="bad-t" { "7 of 8" } " claims reproduced, 5 landed" } } }
-                            } }
-                            div class="cap" { h3 { "Agents with permissions" } p { "Grant exactly what a job needs, everywhere or on one repository. Revoke in one click. Every claim goes on the record." } }
-                        }
-                        div class="feat" {
-                            div class="cap" { h3 { "Signed receipts" } p { "Why it landed, attached to the commit, checkable offline, forever." } }
-                            div class="stage" { div class="receipt" { span class="seal" { (ic("check", "")) "Verified" } b { "#1" } " landed on main as 6f1c9a2" br; "judged: revision 1, by Scout" br; "approved: Ada, on correctness" br; "reproduced: Runner, 61 passed and 0 failed" br; "rules: 7 of 7 met" br; span class="sec3" { "signed by this forge, key 9a59 2453 77e7 3fca" } } }
-                        }
-                        div class="feat flip cov" {
-                            div class="stage" { div { div class="big" { "34" small { "% verified" } } div class="cbars" { i class="g" {} i class="r" {} } div class="clegend" { span { i class="s-reproduced" {} "reproduced" } span { i class="s-gap" {} "declared gap" } span { i class="s-imported" {} "imported" } } } }
-                            div class="cap" { h3 { "Coverage that climbs" } p { "Lines backed by a re-run claim, counted. Imported history is debt, paid down task by task." } }
-                        }
-                    }
-                } }
-
-                section class="lsec" id="git" { div class="wrap gitsec" {
-                    div {
-                        span class="kicker" { i {} "Ordinary git" }
-                        h2 { "Nothing new to install for the people." }
-                        div class="pts" {
-                            div { i { "01" } span { b { "Clone and push" } " with the client you already have" } }
-                            div { i { "02" } span { b { "One binary," } " one database file, one directory" } }
-                            div { i { "03" } span { b { "Agents connect over MCP," } " built in" } }
-                            div { i { "04" } span { b { "Private by default." } " Passkeys, tokens, scopes" } }
-                        }
-                    }
-                    div class="bigterm" {
-                        header { i {} i {} i {} }
-                        // The whole transcript is on the page; the script
-                        // replays it as typing, and without one it is read.
-                        pre id="term" {
-                            span class="p" { "$ " } span class="c" { "git push origin HEAD:refs/for/main\n" }
-                            span class="a" { "remote: change #2 opened, revision 1\n" }
-                            span class="a" { "remote: not ready, 3 of 7 rules met\n" }
-                            span class="p" { "$ " } span class="c" { "ambolt claim --change 2 --test \"cargo test --workspace\"\n" }
-                            span class="a" { "claim recorded, Runner will re-run it\n" }
-                            span class="g" { "runner reproduced it, 61 passed, 4 of 7 rules met\n" }
-                            span class="p" { "$ " } span class="c" { "ambolt land 2\n" }
-                            span class="g" { "#2 landed on main, receipt signed 9a59…3fca\n" }
-                        }
-                    }
-                } }
-
-                section class="lsec tight" { div class="wrap" {
-                    div class="nums" {
-                        div class="numt" { div class="v" { "1" } div class="k" { "binary to run a whole forge" } }
-                        @if let Some(landed) = numbers.landed.filter(|n| *n > 0) {
-                            div class="numt" { div class="v" data-count=(landed) { span { (landed) } } div class="k" { "changes landed on this forge, each with a signed receipt" } }
-                        }
-                        @if let Some(repos) = numbers.repos.filter(|n| *n > 0) {
-                            div class="numt" { div class="v" data-count=(repos) { span { (repos) } } div class="k" { @if repos == 1 { "repository hosted here, including this one" } @else { "repositories hosted here, including this one" } } }
-                        }
-                        @if let Some(agents) = numbers.agents.filter(|n| *n > 0) {
-                            div class="numt" { div class="v" data-count=(agents) { span { (agents) } } div class="k" { @if agents == 1 { "agent on the record" } @else { "agents on the record" } } }
-                        }
-                        div class="numt" { div class="v" { "AGPL" } div class="k" { "free to run, change and fork" } }
-                    }
-                } }
-
-                section class="lsec tight" id="join" { div class="wrap" {
-                    div class="cta-block" {
-                        h2 { "Put your code on the anvil." }
-                        p { "Hosted forges open by invitation, in the order people asked." }
-                        @if joined {
-                            p class="joined" { (ic("check", "")) "You are on the list. We will be in touch." }
-                        } @else {
-                            form class="join" method="post" action="/waitlist" {
-                                div class="field" {
-                                    label for="join-email" { "Email" }
-                                    input id="join-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com";
-                                }
-                                div class="field" {
-                                    label for="join-note" { "What would you use it for?" span { "optional" } }
-                                    input id="join-note" name="note" type="text" maxlength="200" autocomplete="off" placeholder="a team, a side project, agents on my own code";
-                                }
-                                button class="btn" type="submit" { "Join the waitlist" }
-                            }
-                            @if let Some(error) = error { p class="error" { (error) } }
-                            p class="alt" { "One address, deleted whenever you ask." }
-                        }
-                        p class="alt" { "Or run it now: " code { "cargo install --git https://ambolt.sh/git/ambolt/ambolt ambolt" } }
-                    }
-                } }
-
-                footer { div class="wrap" {
-                    a class="brand" href="/" { (mark()) "ambolt" }
-                    a href="https://github.com/mandipadk/ambolt" { "Source" }
-                    a href="/report" { "Report a problem" }
-                    a href="/login" { "Sign in" }
-                    span class="right" { "© 2026 Ambolt. AGPL-3.0 forge, Apache-2.0 client." }
-                } }
-            }
-        },
-    )
 }
 
 /// A page for somebody who is not signed in: one card on a quiet page,

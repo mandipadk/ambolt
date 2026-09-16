@@ -34,7 +34,8 @@ const STYLE_SRC: &str = include_str!("style.css");
 /// content-addressed names like the stylesheet, so a page never asks a
 /// third party for anything. Each is a latin-subset variable font under
 /// the SIL Open Font License; the licence text sits beside each file.
-const FONTS: [(&str, &[u8]); 3] = [
+/// The last three are the front page's.
+const FONTS: [(&str, &[u8]); 6] = [
     (
         "familjen-grotesk",
         include_bytes!("fonts/familjen-grotesk.woff2"),
@@ -47,6 +48,12 @@ const FONTS: [(&str, &[u8]); 3] = [
         "jetbrains-mono",
         include_bytes!("fonts/jetbrains-mono.woff2"),
     ),
+    (
+        "bricolage-grotesque",
+        include_bytes!("fonts/bricolage-grotesque.woff2"),
+    ),
+    ("geist", include_bytes!("fonts/geist.woff2")),
+    ("geist-mono", include_bytes!("fonts/geist-mono.woff2")),
 ];
 
 fn short_hash(bytes: &[u8]) -> String {
@@ -268,6 +275,33 @@ pub(crate) fn app_script_href() -> String {
     format!("/assets/app.{}.js", *APP_SCRIPT_HASH)
 }
 
+/// The front page's own stylesheet and script, ported from the design
+/// with the page itself; the sheet names the fonts the way the app's does.
+const FRONT_STYLE_SRC: &str = include_str!("front.css");
+const FRONT_SCRIPT: &str = include_str!("front.js");
+
+static FRONT_STYLE: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    let mut css = FRONT_STYLE_SRC.to_owned();
+    for (slug, href) in FONT_HREFS.iter() {
+        css = css.replace(&format!("{{{{font:{slug}}}}}"), href);
+    }
+    css
+});
+
+static FRONT_STYLE_HASH: std::sync::LazyLock<String> =
+    std::sync::LazyLock::new(|| short_hash(FRONT_STYLE.as_bytes()));
+
+static FRONT_SCRIPT_HASH: std::sync::LazyLock<String> =
+    std::sync::LazyLock::new(|| short_hash(FRONT_SCRIPT.as_bytes()));
+
+pub(crate) fn front_stylesheet_href() -> String {
+    format!("/assets/front.{}.css", *FRONT_STYLE_HASH)
+}
+
+pub(crate) fn front_script_href() -> String {
+    format!("/assets/front.{}.js", *FRONT_SCRIPT_HASH)
+}
+
 pub(crate) fn script_href() -> String {
     format!("/assets/passkeys.{}.js", *SCRIPT_HASH)
 }
@@ -289,6 +323,12 @@ async fn asset(Path(file): Path<String>) -> Response {
     }
     if file == format!("app.{}.js", *APP_SCRIPT_HASH) {
         return served(APP_SCRIPT, "text/javascript; charset=utf-8", FOREVER);
+    }
+    if file == format!("front.{}.css", *FRONT_STYLE_HASH) {
+        return served(FRONT_STYLE.as_str(), "text/css; charset=utf-8", FOREVER);
+    }
+    if file == format!("front.{}.js", *FRONT_SCRIPT_HASH) {
+        return served(FRONT_SCRIPT, "text/javascript; charset=utf-8", FOREVER);
     }
     if file == format!("passkeys.{}.js", *SCRIPT_HASH) {
         return served(
@@ -3699,23 +3739,8 @@ async fn root(
     Query(flash): Query<LandingQuery>,
 ) -> Response {
     let Some(viewer) = viewer_from(&headers, &app) else {
-        // The numbers on the front page are the forge's own; one that
-        // cannot be counted is left off the page.
-        let numbers = match app.with_store(|s| s.metrics()) {
-            Ok(m) => views::FrontNumbers {
-                landed: Some(m.landed_changes),
-                repos: Some(m.repos),
-                agents: Some(m.agents),
-            },
-            Err(_) => views::FrontNumbers::default(),
-        };
-        return views::welcome(
-            theme,
-            flash.joined.is_some(),
-            flash.error.as_deref(),
-            &numbers,
-        )
-        .into_response();
+        return views::welcome(theme, flash.joined.is_some(), flash.error.as_deref())
+            .into_response();
     };
     if viewer.1.repos.is_empty() {
         return views::first_run(theme, &viewer).into_response();
