@@ -4553,21 +4553,10 @@ pub fn community(
         "Community",
         html! {
             div class="sec top" {
-                div class="sh" {
-                    h2 { "Community" }
-                    span class="n" { (reports.len()) }
-                    @if may_report {
-                        span class="grow" {}
-                        @for one in [OriginKind::Bug, OriginKind::Request, OriginKind::Question] {
-                            a class="btn2 sm" href={ "/" (repo) "/community?new=" (one.as_str()) "#new" } {
-                                (ic("plus", "")) (kind_words(one))
-                            }
-                        }
-                    }
-                }
                 @if let Some(error) = error { p class="error" { (error) } }
                 @if let Some(new) = new { (new_form(repo, new)) }
                 div class="filters" {
+                    span class="count" { (reports.len()) }
                     a class=[kind.is_none().then_some("on")] href=(href(None, open_only)) { "All" }
                     @for one in [OriginKind::Bug, OriginKind::Request, OriginKind::Question] {
                         a class=[(kind == Some(one)).then_some("on")] href=(href(Some(one), open_only)) { (kind_words(one)) "s" }
@@ -4575,6 +4564,13 @@ pub fn community(
                     span class="grow" {}
                     a class=[open_only.then_some("on")] href=(href(kind, true)) { "Open" }
                     a class=[(!open_only).then_some("on")] href=(href(kind, false)) { "Everything" }
+                    @if may_report {
+                        @for one in [OriginKind::Bug, OriginKind::Request, OriginKind::Question] {
+                            a class="btn2 sm" href={ "/" (repo) "/community?new=" (one.as_str()) "#new" } {
+                                (ic("plus", "")) (kind_words(one))
+                            }
+                        }
+                    }
                 }
                 div class="panel" {
                     @if reports.is_empty() {
@@ -4798,8 +4794,8 @@ pub fn changes(
         "Changes",
         html! {
             div class="sec top" {
-                div class="sh" { h2 { "Changes" } span class="n" { (changes.len()) @if older.is_some() { " shown" } } }
                 div class="filters" {
+                    span class="count" { (changes.len()) @if older.is_some() { " shown" } }
                     a class=[filter.is_none().then_some("on")] href=(filter_href(None)) { "All" }
                     @for state in [ChangeState::Open, ChangeState::Merged, ChangeState::Abandoned] {
                         a class=[(filter == Some(state)).then_some("on")] href=(filter_href(Some(state))) { (state_words(state)) }

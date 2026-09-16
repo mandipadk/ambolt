@@ -685,7 +685,10 @@ details.thread[open] > summary .chip { visibility: hidden; }
 
 
 /* Work pages: filters, rows of one shape each, cards for agents. */
-.sec.top { margin-top: 22px; }
+/* The first section on a page: `.cols` has already padded the top,
+   so a margin here is that gap charged twice. */
+.sec.top { margin-top: 0; }
+.filters .count { font-size: 13px; color: var(--ink3); margin-right: 4px; }
 .sec .lede { color: var(--ink2); font-size: 14px; max-width: 64ch; margin: -2px 0 14px; }
 .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
 .filters a { height: 30px; padding: 0 11px; border-radius: 8px; font-size: 13.5px; color: var(--ink2); display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
