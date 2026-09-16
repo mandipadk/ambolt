@@ -1,0 +1,161 @@
+{
+  "canonical": "json:sorted-keys,compact,utf-8",
+  "receipt": {
+    "change": {
+      "admitted": false,
+      "competing": false,
+      "discarded": false,
+      "external_key": "Irecord0169",
+      "id": "c-5vefjszwxky0yhbw7f4yn0xdx3",
+      "landed_oid": "b7d0eed1e873a9fe8bb87c8f3a68f2428a4d9b62",
+      "landed_revision": 1,
+      "latest_revision": 1,
+      "number": 169,
+      "opened_at": "2026-09-16T19:45:01.85839184Z",
+      "owner": "mandip",
+      "parent_change": null,
+      "preferred_revision": null,
+      "proposal": false,
+      "repo": "ambolt/ambolt",
+      "state": "merged",
+      "target": "main",
+      "task": "t-7d7rttmrmdaws83rg2rqnc1pc7",
+      "title": "Sign a person's record the way a receipt is signed",
+      "updated_at": "2026-09-16T19:47:35.965569397Z"
+    },
+    "claims": [
+      {
+        "by": "mandip",
+        "change": "c-5vefjszwxky0yhbw7f4yn0xdx3",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "covers": [],
+        "id": "cl-1zzyj45engr56tnd3nk1phg15s",
+        "kind": "test",
+        "passed": true,
+        "revision": 1,
+        "seq": 1607,
+        "summary": "the whole suite, on the box: green",
+        "unchecked": [
+          "the pages by eye on the live forge in both themes: done from the laptop after deploy"
+        ]
+      },
+      {
+        "by": "mandip",
+        "change": "c-5vefjszwxky0yhbw7f4yn0xdx3",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "covers": [],
+        "id": "cl-59trw1g66ycq2wt9yztmtpk4kf",
+        "kind": "lint",
+        "passed": true,
+        "revision": 1,
+        "seq": 1608,
+        "summary": "cargo clippy --workspace --all-targets -D warnings: clean",
+        "unchecked": []
+      }
+    ],
+    "forge": "https://ambolt.sh",
+    "landed_as": "b7d0eed1e873a9fe8bb87c8f3a68f2428a4d9b62",
+    "landed_at": "2026-09-16T19:47:35.965569397Z",
+    "merged_by": "mandip",
+    "repo": "ambolt/ambolt",
+    "revision": {
+      "by": "mandip",
+      "change": "c-5vefjszwxky0yhbw7f4yn0xdx3",
+      "commit_oid": "b7d0eed1e873a9fe8bb87c8f3a68f2428a4d9b62",
+      "message": "Sign a person's record the way a receipt is signed\n\nA landing carries a receipt anyone can check without the forge. A\nperson's record now travels the same way: GET\n/api/principals/{id}/record/signed is the figures their page shows,\nfiled under `record` with the forge's Ed25519 signature over the same\ncanonical form, and `ambolt record verify` checks it offline, against\nthe key the document carries or the one you were told to expect. A\nchanged figure fails. The page offers the document in the rail as\n\"Verify this record\".\n\nThe signer learnt to sign any document under a name, and the client to\ncheck any such document, so a receipt and a record are one mechanism\nrather than two.\n\nChange-Id: Irecord0169\nTask: t-7d7rttmrmdaws83rg2rqnc1pc7\nSigned-off-by: Mandip Adhikari <92096340+mandipadk@users.noreply.github.com>",
+      "number": 1,
+      "paths": [
+        "crates/cli/src/main.rs",
+        "crates/cli/tests/suite/profile_flow.rs",
+        "crates/client/src/lib.rs",
+        "crates/client/src/receipt.rs",
+        "crates/client/src/record.rs",
+        "crates/server/src/lib.rs",
+        "crates/server/src/receipts.rs",
+        "crates/server/src/web/style.css",
+        "crates/server/src/web/views.rs",
+        "docs/architecture.md",
+        "docs/operating.md"
+      ],
+      "session": null
+    },
+    "seq": 1612,
+    "target": "main",
+    "trace": {
+      "requirements": [
+        {
+          "description": "change has at least one revision",
+          "evidence": "revision 1 is the one judged",
+          "satisfied": true
+        },
+        {
+          "description": "no concern raised in discussion is left unresolved",
+          "evidence": "no unresolved concerns",
+          "satisfied": true
+        },
+        {
+          "description": "latest revision carries a passing test claim",
+          "evidence": "cl-1zzyj45engr56tnd3nk1phg15s, cl-59trw1g66ycq2wt9yztmtpk4kf",
+          "satisfied": true
+        },
+        {
+          "description": "no claim on the latest revision is disputed by a runner",
+          "evidence": "2 re-run(s), all reproduced",
+          "satisfied": true
+        },
+        {
+          "description": "a runner reproduced a claim on the latest revision",
+          "evidence": "runner reproduced cl-59trw1g66ycq2wt9yztmtpk4kf",
+          "satisfied": true
+        },
+        {
+          "description": "no blocking verdict on the latest revision",
+          "evidence": "no blocks",
+          "satisfied": true
+        },
+        {
+          "description": "no independent approval required",
+          "evidence": "human approvals: []; agent approvals by model: []",
+          "satisfied": true
+        },
+        {
+          "description": "owner's earned trust",
+          "evidence": "mandip: 231 judged claims, 96% reproduced, 0 human block(s) in 90 days; bar is 95% over 20; not applied: 9 path(s) outside docs/, *.md: crates/cli/src/main.rs, crates/cli/tests/suite/profile_flow.rs, crates/client/src/lib.rs",
+          "satisfied": true
+        }
+      ],
+      "satisfied": true
+    },
+    "verdicts": [],
+    "verifications": [
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-5vefjszwxky0yhbw7f4yn0xdx3",
+        "claim": "cl-1zzyj45engr56tnd3nk1phg15s",
+        "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 cargo test -j 2 --workspace --no-fail-fast",
+        "id": "vr-2ne9parphcsmsca6bg3q28xhrb",
+        "observed": "exit 0: Doc-tests ambolt_server",
+        "revision": 1,
+        "seq": 1609
+      },
+      {
+        "agrees": true,
+        "by": "runner",
+        "change": "c-5vefjszwxky0yhbw7f4yn0xdx3",
+        "claim": "cl-59trw1g66ycq2wt9yztmtpk4kf",
+        "command": "cargo clippy --workspace --all-targets -- -D warnings",
+        "id": "vr-34dj626dfzf0rm09qt6veybkav",
+        "observed": "exit 0: Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.08s",
+        "revision": 1,
+        "seq": 1610
+      }
+    ]
+  },
+  "signature": {
+    "alg": "ed25519",
+    "key": "9a59245377e73fca",
+    "public_key": "REClmVlFlFD/5rjqECqBWfRZtrukv5ia8Thd+CqlNxY=",
+    "value": "DbIpxwt6rpKHPpzDO7Bke31qYlMPSHewtRP+PieWNiD0di4HG0+Jg1uljFawauQbwLYcc6VUxnW1ARoA/0WmCQ=="
+  }
+}
